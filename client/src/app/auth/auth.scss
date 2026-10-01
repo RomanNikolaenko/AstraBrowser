@@ -1,0 +1,501 @@
+$motion: var(--transition-duration, 180ms) var(--transition-easing, ease);
+
+// Кільце фокусу «виростає» з краю елемента: прозорий outline анімується в колір і відсувається назовні.
+@mixin focus-ring($offset: 0.1875rem) {
+  outline: 0.1875rem solid transparent;
+  outline-offset: 0;
+
+  &:focus-visible {
+    outline-color: color-mix(in srgb, var(--auth-focus) 70%, transparent);
+    outline-offset: $offset;
+  }
+}
+
+.auth {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  background-color: var(--color-background);
+  background-image: linear-gradient(var(--auth-background-overlay), var(--auth-background-overlay)), url('/assets/images/background.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  color: var(--auth-text);
+  font-family: var(--font-family-base);
+  container: auth / inline-size;
+
+  &__layout {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    max-inline-size: 75rem;
+    grid-template-columns: minmax(0, 1fr) minmax(30rem, 1fr);
+    align-items: center;
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  &__intro {
+    width: min(100%, 34rem);
+    justify-self: center;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-block-end: 2rem;
+  }
+
+  &__brand-logo {
+    width: 5rem;
+    height: 5rem;
+    object-fit: contain;
+  }
+
+  &__brand-name {
+    color: var(--auth-text);
+    font-size: 2.25rem;
+    font-weight: 400;
+    letter-spacing: -0.1rem;
+
+    strong {
+      font-weight: 750;
+    }
+  }
+
+  &__heading {
+    margin-block-end: 1rem;
+    color: var(--auth-heading);
+    font-size: 2.75rem;
+    font-weight: 750;
+    line-height: 1.08;
+    letter-spacing: -0.1rem;
+    text-wrap: balance;
+  }
+
+  &__description {
+    margin-block-end: 2rem;
+    color: var(--auth-muted);
+    font-size: 1.125rem;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+
+  &__benefits {
+    display: grid;
+    gap: 1.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__benefit {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  &__benefit-icon {
+    display: grid;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 1rem;
+    background: var(--auth-soft-surface);
+    color: var(--color-accent-violet);
+
+    app-icon {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+  }
+
+  &__benefit-title {
+    display: block;
+    color: var(--auth-text);
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  &__benefit-description {
+    display: block;
+    color: var(--auth-subtle);
+    font-size: 0.875rem;
+  }
+
+  &__panel {
+    width: min(100%, 39rem);
+    justify-self: center;
+    padding: 2rem 2.5rem 1.5rem;
+    border: 0.0625rem solid var(--auth-panel-border);
+    border-radius: 1.5rem;
+    background: var(--auth-panel);
+    box-shadow: 0 1rem 3rem rgb(58 86 146 / 12%);
+    backdrop-filter: blur(1.25rem);
+  }
+
+  &__tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.375rem;
+    margin-block-end: 1.5rem;
+    padding: 0.25rem;
+    border-radius: 1rem;
+    background: var(--auth-tab-track);
+  }
+
+  &__tab {
+    display: grid;
+    min-height: 2.75rem;
+    place-items: center;
+    border-radius: 0.75rem;
+    color: var(--auth-tab-text);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color $motion, background-color $motion, box-shadow $motion, outline-color $motion, outline-offset $motion;
+    @include focus-ring(0.125rem);
+
+    &:not(.auth__tab--active):hover {
+      background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+      color: var(--auth-accent);
+    }
+
+    &--active {
+      background: var(--color-surface);
+      box-shadow: 0 0.25rem 1rem rgb(69 92 161 / 14%);
+      color: var(--auth-accent);
+    }
+  }
+
+  &__fields {
+    display: grid;
+    gap: 1rem;
+  }
+
+  &__field-label {
+    display: grid;
+    gap: 0.375rem;
+    color: var(--auth-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  &__field-name {
+    display: block;
+  }
+
+  &__input-wrap {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding-inline: 0.875rem;
+    border: 0.0625rem solid var(--auth-field-border);
+    border-radius: 0.75rem;
+    background: var(--auth-field);
+    box-shadow: 0 0.125rem 0.5rem rgb(74 105 184 / 8%);
+    color: var(--auth-icon);
+
+    &:focus-within {
+      border-color: var(--auth-focus);
+      box-shadow: 0 0 0 0.1875rem color-mix(in srgb, var(--auth-focus) 22%, transparent);
+    }
+
+    app-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
+    }
+  }
+
+  &__password-toggle {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--auth-icon);
+    cursor: pointer;
+    transition: color $motion, outline-color $motion, outline-offset $motion;
+    @include focus-ring(0.125rem);
+
+    app-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      transition: transform $motion;
+    }
+
+    &:hover,
+    &:focus-visible {
+      color: var(--auth-accent);
+
+      app-icon {
+        transform: scale(1.12);
+      }
+    }
+
+    &:active app-icon {
+      transform: scale(0.92);
+    }
+  }
+
+  &__input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--auth-input-text);
+    font-size: 0.875rem;
+
+    &::placeholder {
+      color: var(--auth-placeholder);
+    }
+
+    &[type='password'] {
+      &::-ms-reveal,
+      &::-ms-clear {
+        display: none;
+      }
+    }
+  }
+
+  &__inline-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-block-start: 1rem;
+    color: var(--auth-muted);
+    font-size: 0.8125rem;
+  }
+
+  &__consent {
+    display: block;
+    margin-block-start: 0.875rem;
+  }
+
+  &__link {
+    color: var(--auth-accent);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__submit {
+    display: flex;
+    width: 100%;
+    min-height: 2.875rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-block-start: 1.125rem;
+    border: 0.0625rem solid var(--auth-panel-border);
+    border-radius: 0.875rem;
+    background: linear-gradient(105deg, #3e9cff 0%, #4b55ff 60%, #be73ff 100%);
+    box-shadow: 0 0.375rem 1rem rgb(63 104 255 / 25%);
+    color: var(--auth-submit-text);
+    font-size: 1rem;
+    font-weight: 700;
+    transition: transform $motion, box-shadow $motion, filter $motion, outline-color $motion, outline-offset $motion;
+    @include focus-ring;
+
+    app-icon {
+      width: 1.125rem;
+      height: 1.125rem;
+      transition: transform $motion;
+    }
+
+    &:hover,
+    &:focus-visible {
+      box-shadow: 0 0.625rem 1.5rem rgb(63 104 255 / 35%);
+      filter: brightness(1.06);
+      transform: translateY(-0.0625rem);
+
+      app-icon {
+        transform: translateX(0.25rem);
+      }
+    }
+
+    &:active {
+      box-shadow: 0 0.25rem 0.75rem rgb(63 104 255 / 25%);
+      filter: brightness(0.97);
+      transform: translateY(0) scale(0.99);
+    }
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-block: 1rem;
+    color: var(--auth-muted);
+    font-size: 0.8125rem;
+
+    &::before,
+    &::after {
+      height: 0.0625rem;
+      flex: 1;
+      background: var(--auth-divider);
+      content: '';
+    }
+  }
+
+  &__socials {
+    display: grid;
+    gap: 0.625rem;
+  }
+
+  &__social {
+    display: flex;
+    min-height: 2.625rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    border: 0.0625rem solid var(--auth-field-border);
+    border-radius: 0.75rem;
+    background: var(--auth-field);
+    box-shadow: 0 0.125rem 0.625rem rgb(68 97 168 / 9%);
+    color: var(--auth-input-text);
+    font-size: 0.875rem;
+    font-weight: 650;
+    transition: transform $motion, border-color $motion, background-color $motion, box-shadow $motion, outline-color $motion, outline-offset $motion;
+    @include focus-ring;
+
+    app-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      transition: transform $motion;
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--auth-focus);
+      background: var(--color-surface);
+      box-shadow: 0 0.375rem 1rem rgb(68 97 168 / 16%);
+      transform: translateY(-0.0625rem);
+
+      app-icon {
+        transform: scale(1.08);
+      }
+    }
+
+    &:active {
+      box-shadow: 0 0.125rem 0.5rem rgb(68 97 168 / 9%);
+      transform: translateY(0) scale(0.99);
+    }
+  }
+
+  &__notice {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-block-start: 1rem;
+    padding-block-start: 0.875rem;
+    border-top: 0.0625rem solid var(--auth-field-border);
+    color: var(--auth-subtle);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    text-wrap: balance;
+
+    app-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex: 0 0 auto;
+    }
+  }
+
+  //@media (max-width: 70rem) {
+  //  &__layout {
+  //    grid-template-columns: minmax(0, 0.9fr) minmax(28rem, 1.1fr);
+  //    gap: 2rem;
+  //    padding-inline: 2rem;
+  //  }
+
+  //  &__heading {
+  //    font-size: 2.25rem;
+  //  }
+  //}
+
+  // Одна колонка, коли колонка auth__intro стає вужчою за 25rem (400px).
+  // Ширина intro = min(auth, 75rem) − 2 × 2rem (padding) − 2rem (gap) − 30rem (мін. ширина панелі),
+  // тож intro < 25rem ⟺ auth < 61rem.
+  @container auth (width < 61rem) {
+    &__layout {
+      width: min(100%, 40rem);
+      height: auto;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.25rem;
+      padding: 1.25rem;
+    }
+
+    &__intro {
+      width: 100%;
+      text-align: center;
+    }
+
+    &__brand {
+      justify-content: center;
+      margin-block-end: 0.75rem;
+    }
+
+    &__brand-logo {
+      width: 3.25rem;
+      height: 3.25rem;
+    }
+
+    &__brand-name {
+      font-size: 1.75rem;
+    }
+
+    &__heading {
+      max-width: none;
+      margin-block-end: 0.5rem;
+      font-size: 1.75rem;
+    }
+
+    &__description {
+      margin-block-end: 0;
+      font-size: 0.9375rem;
+    }
+
+    &__benefits {
+      display: none;
+    }
+
+    &__panel {
+      width: 100%;
+      padding: 1.25rem;
+    }
+  }
+
+  //@media (max-width: 32rem) {
+  //  padding: 0.75rem;
+
+  //  &__layout {
+  //    padding: 0.875rem;
+  //  }
+
+  //  &__panel {
+  //    padding: 1rem;
+  //  }
+
+  //  &__inline-actions {
+  //    font-size: 0.75rem;
+  //  }
+  //}
+}

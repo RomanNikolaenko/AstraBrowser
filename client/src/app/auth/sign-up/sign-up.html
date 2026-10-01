@@ -1,0 +1,71 @@
+<section class="auth">
+  <div class="auth__layout">
+    <div class="auth__intro">
+      <div class="auth__brand">
+        <img class="auth__brand-logo" src="/logo.png" alt="" />
+        <span class="auth__brand-name"><strong>Astra</strong> Browser</span>
+      </div>
+      <h1 class="auth__heading">Створіть акаунт<br />Astra Browser</h1>
+      <p class="auth__description">Зареєструйтеся, щоб почати користуватися браузером і отримати всі його можливості.</p>
+      <ul class="auth__benefits">
+        <li class="auth__benefit">
+          <span class="auth__benefit-icon"><app-icon name="cloud" /></span>
+          <span><strong class="auth__benefit-title">Синхронізація на всіх пристроях</strong><span class="auth__benefit-description">Закладки, паролі, налаштування — завжди з вами.</span></span>
+        </li>
+        <li class="auth__benefit">
+          <span class="auth__benefit-icon"><app-icon name="shield-check" /></span>
+          <span><strong class="auth__benefit-title">Безпечний і приватний перегляд</strong><span class="auth__benefit-description">Сучасні технології захисту ваших даних.</span></span>
+        </li>
+        <li class="auth__benefit">
+          <span class="auth__benefit-icon"><app-icon name="sparkle" /></span>
+          <span><strong class="auth__benefit-title">Доступ до ексклюзивних функцій</strong><span class="auth__benefit-description">Більше можливостей разом з Astra.</span></span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="auth__panel">
+      <nav class="auth__tabs" aria-label="Авторизація">
+        <a class="auth__tab" routerLink="/sign-in">Увійти</a>
+        <a class="auth__tab auth__tab--active" routerLink="/sign-up">Зареєструватися</a>
+      </nav>
+      <form class="auth__fields" (submit)="$event.preventDefault()">
+        <div class="auth__field-label">
+          <span class="auth__field-name">Ім’я та прізвище</span>
+          <span class="auth__input-wrap"><app-icon name="user" /><input class="auth__input" id="sign-up-name" name="fullName" type="text" aria-label="Ім’я та прізвище" autocomplete="name" placeholder="Іван Петренко" /></span>
+        </div>
+        <div class="auth__field-label">
+          <span class="auth__field-name">Електронна пошта</span>
+          <span class="auth__input-wrap"><app-icon name="email" /><input class="auth__input" id="sign-up-email" name="email" type="email" aria-label="Електронна пошта" autocomplete="email" placeholder="example@domain.com" /></span>
+        </div>
+        <div class="auth__field-label">
+          <span class="auth__field-name">Пароль</span>
+          <span class="auth__input-wrap"><app-icon name="lock" /><input class="auth__input" id="sign-up-password" name="password" [type]="passwordVisible() ? 'text' : 'password'" aria-label="Пароль" autocomplete="new-password" placeholder="Введіть пароль"/><button class="auth__password-toggle" type="button" [attr.aria-label]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" [attr.title]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" (click)="togglePasswordVisibility()">
+            @if (passwordVisible()) {
+              <app-icon name="eye" />
+            } @else {
+              <app-icon name="eye-hide" />
+            }
+          </button></span>
+        </div>
+        <div class="auth__field-label">
+          <span class="auth__field-name">Підтвердіть пароль</span>
+          <span class="auth__input-wrap"><app-icon name="lock" /><input class="auth__input" id="sign-up-password-confirmation" name="passwordConfirmation" [type]="confirmationVisible() ? 'text' : 'password'" aria-label="Підтвердіть пароль" autocomplete="new-password" placeholder="Повторіть пароль"/><button class="auth__password-toggle" type="button" [attr.aria-label]="confirmationVisible() ? 'Приховати пароль' : 'Показати пароль'" [attr.title]="confirmationVisible() ? 'Приховати пароль' : 'Показати пароль'" (click)="toggleConfirmationVisibility()">
+            @if (confirmationVisible()) {
+              <app-icon name="eye" />
+            } @else {
+              <app-icon name="eye-hide" />
+            }
+          </button></span>
+        </div>
+      </form>
+      <app-checkbox class="auth__consent" name="terms" [checked]="true">Я погоджуюся з <a class="auth__link" href="#terms">умовами користування</a> та <a class="auth__link" href="#privacy">політикою конфіденційності</a></app-checkbox>
+      <button class="auth__submit" type="button">Створити акаунт <app-icon name="arrow-right" /></button>
+      <div class="auth__divider">або продовжити з</div>
+      <div class="auth__socials">
+        <button class="auth__social" type="button"><app-icon name="google" />Продовжити з Google</button>
+        <button class="auth__social" type="button"><app-icon name="apple" />Продовжити з Apple</button>
+      </div>
+      <div class="auth__notice"><app-icon name="lock" /><span>Доступ до браузера можливий лише після реєстрації або входу в акаунт Astra Browser.</span></div>
+    </div>
+  </div>
+</section>
