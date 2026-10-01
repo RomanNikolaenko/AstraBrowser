@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AstraBrowser",
+  "version": "0.1.0",
+  "identifier": "com.astrabrowser.desktop",
+  "build": {
+    "beforeDevCommand": "npm --prefix client run start -- --host 127.0.0.1",
+    "devUrl": "http://127.0.0.1:4200",
+    "beforeBuildCommand": "npm --prefix client run build",
+    "frontendDist": "../client/dist/astra-browser/browser"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AstraBrowser",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "capabilities": ["default"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

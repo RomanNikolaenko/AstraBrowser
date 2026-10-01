@@ -1,0 +1,44 @@
+$color-primary: #2563eb;
+$color-primary-dark: #1732a3;
+$color-accent-violet: #7c3aed;
+$color-accent-cyan: #38bdf8;
+$color-text: #101b68;
+$color-text-muted: #7888b7;
+$color-background: #edf3ff;
+$color-surface: #ffffff;
+$color-border: #dbe5ff;
+
+$font-family-base: 'Inter', 'Segoe UI', sans-serif;
+$font-family-heading: 'Inter', 'Segoe UI', sans-serif;
+
+:root {
+  color-scheme: dark;
+  --color-primary: #8ba8ff;
+  --color-primary-dark: #c3d0ff;
+  --color-accent-violet: #bd9aff;
+  --color-accent-cyan: #6bd8ff;
+  --color-text: #f5f7ff;
+  --color-text-muted: #b5c0de;
+  --color-background: #10182c;
+  --color-surface: #1a2540;
+  --color-border: #364568;
+  --background-color: var(--color-background);
+  --text-color: var(--color-text);
+  --font-family-base: #{$font-family-base};
+  --font-family-heading: #{$font-family-heading};
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-primary: #{$color-primary};
+    --color-primary-dark: #{$color-primary-dark};
+    --color-accent-violet: #{$color-accent-violet};
+    --color-accent-cyan: #{$color-accent-cyan};
+    --color-text: #{$color-text};
+    --color-text-muted: #{$color-text-muted};
+    --color-background: #{$color-background};
+    --color-surface: #{$color-surface};
+    --color-border: #{$color-border};
+  }
+}
