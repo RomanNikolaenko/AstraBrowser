@@ -1,26 +1,4 @@
-<div class="app-shell">
-  <header class="titlebar">
-    <div class="titlebar__drag-region" data-tauri-drag-region>
-      <img class="titlebar__logo" src="/logo.png" alt="" />
-      <span class="titlebar__title">Astra Browser</span>
-    </div>
-    <div class="titlebar__controls">
-      <button class="titlebar__control" type="button" aria-label="Згорнути" title="Згорнути" (click)="minimizeWindow()">
-        <app-icon name="minimize" />
-      </button>
-      <button class="titlebar__control" type="button" [attr.aria-label]="isMaximized() ? 'Відновити' : 'Розгорнути'" [attr.title]="isMaximized() ? 'Відновити' : 'Розгорнути'" (click)="toggleMaximizeWindow()">
-        @if (isMaximized()) {
-          <app-icon name="restore" />
-        } @else {
-          <app-icon name="maximize" />
-        }
-      </button>
-      <button class="titlebar__control titlebar__control--close" type="button" aria-label="Закрити" title="Закрити" (click)="closeWindow()">
-        <app-icon name="close" />
-      </button>
-    </div>
-  </header>
-  <main class="app-content">
-    <router-outlet></router-outlet>
-  </main>
-</div>
+<app-titlebar />
+<main class="app-content">
+  <router-outlet />
+</main>

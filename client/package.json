@@ -16,7 +16,6 @@
     "@angular/common": "^22.2.1",
     "@angular/compiler": "^22.2.1",
     "@angular/core": "^22.2.1",
-    "@angular/forms": "^22.2.1",
     "@angular/platform-browser": "^22.2.1",
     "@angular/router": "^22.2.1",
     "@tauri-apps/api": "^2.12.1",
@@ -27,9 +26,9 @@
     "@angular/build": "^22.2.0",
     "@angular/cli": "^22.2.0",
     "@angular/compiler-cli": "^22.2.1",
+    "@tauri-apps/cli": "^2.12.1",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
-    "@tauri-apps/cli": "^2.12.1",
     "typescript": "~6.0.3",
     "vitest": "^5.0.3"
   }

@@ -1,0 +1,42 @@
+@use '../../assets/styles/mixins' as *;
+
+// Кругла кнопка-іконка панелей браузера.
+@mixin icon-button($size: 2.5rem, $icon-size: 1.375rem, $color: var(--browser-icon)) {
+  display: grid;
+  width: $size;
+  height: $size;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: $color;
+  transition: background-color $motion, color $motion, outline-color $motion, outline-offset $motion;
+  @include focus-ring(0.125rem);
+
+  app-icon {
+    width: $icon-size;
+    height: $icon-size;
+    transition: transform $motion;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: var(--browser-hover);
+    color: var(--browser-tab-active-text);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--browser-pressed);
+
+    app-icon {
+      transform: scale(0.9);
+    }
+  }
+
+  &:disabled {
+    color: var(--browser-icon-disabled);
+    cursor: default;
+  }
+}

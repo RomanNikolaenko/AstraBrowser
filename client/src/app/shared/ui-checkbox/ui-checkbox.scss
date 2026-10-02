@@ -66,7 +66,7 @@
   }
 
   &:has(&__input:focus-visible) &__checkmark {
-    outline: 0.1875rem solid color-mix(in srgb, var(--auth-focus) 35%, transparent);
+    outline: 0.1875rem solid var(--color-focus);
     outline-offset: 0.125rem;
   }
 }

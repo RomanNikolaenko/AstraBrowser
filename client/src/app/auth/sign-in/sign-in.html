@@ -2,22 +2,22 @@
   <div class="auth__layout">
     <div class="auth__intro">
       <div class="auth__brand">
-        <img class="auth__brand-logo" src="/logo.png" alt="" />
+        <img class="auth__brand-logo" src="/logo.webp" alt="" width="80" height="80" />
         <span class="auth__brand-name"><strong>Astra</strong> Browser</span>
       </div>
       <h1 class="auth__heading">Ласкаво просимо<br />до Astra Browser</h1>
       <p class="auth__description">Увійдіть у свій акаунт або створіть новий, щоб продовжити користування браузером.</p>
       <ul class="auth__benefits">
         <li class="auth__benefit">
-          <span class="auth__benefit-icon"><app-icon name="cloud" /></span>
+          <span class="auth__benefit-icon"><app-icon icon="cloud" /></span>
           <span><strong class="auth__benefit-title">Синхронізація на всіх пристроях</strong><span class="auth__benefit-description">Закладки, паролі, налаштування — завжди з вами.</span></span>
         </li>
         <li class="auth__benefit">
-          <span class="auth__benefit-icon"><app-icon name="shield-check" /></span>
+          <span class="auth__benefit-icon"><app-icon icon="shield-check" /></span>
           <span><strong class="auth__benefit-title">Безпечний і приватний перегляд</strong><span class="auth__benefit-description">Сучасні технології захисту ваших даних.</span></span>
         </li>
         <li class="auth__benefit">
-          <span class="auth__benefit-icon"><app-icon name="sparkle" /></span>
+          <span class="auth__benefit-icon"><app-icon icon="sparkle" /></span>
           <span><strong class="auth__benefit-title">Доступ до ексклюзивних функцій</strong><span class="auth__benefit-description">Більше можливостей разом з Astra.</span></span>
         </li>
       </ul>
@@ -25,36 +25,38 @@
 
     <div class="auth__panel">
       <nav class="auth__tabs" aria-label="Авторизація">
-        <a class="auth__tab auth__tab--active" routerLink="/sign-in">Увійти</a>
-        <a class="auth__tab" routerLink="/sign-up">Зареєструватися</a>
+        <a class="auth__tab auth__tab--active" [routerLink]="'/sign-in'">Увійти</a>
+        <a class="auth__tab" [routerLink]="'/sign-up'">Зареєструватися</a>
       </nav>
-      <form class="auth__fields" (submit)="$event.preventDefault()">
+      <form class="auth__fields" id="sign-in-form" novalidate (submit)="submit($event)">
         <div class="auth__field-label">
           <span class="auth__field-name">Електронна пошта або ім’я користувача</span>
-          <span class="auth__input-wrap"><app-icon name="email" /><input class="auth__input" id="sign-in-login" name="login" type="text" aria-label="Електронна пошта або ім’я користувача" autocomplete="username" placeholder="example@domain.com" /></span>
+          <app-input class="auth__input" icon="email" inputId="sign-in-login" inputName="login" [(value)]="login.value" [(touched)]="login.touched" [error]="login.visibleError()" ariaLabel="Електронна пошта або ім’я користувача" autocomplete="username" placeholder="example@domain.com" />
         </div>
         <div class="auth__field-label">
           <span class="auth__field-name">Пароль</span>
-          <span class="auth__input-wrap"><app-icon name="lock" /><input class="auth__input" id="sign-in-password" name="password" [type]="passwordVisible() ? 'text' : 'password'" aria-label="Пароль" autocomplete="current-password" placeholder="Введіть пароль" /><button class="auth__password-toggle" type="button" [attr.aria-label]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" [attr.title]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" (click)="togglePasswordVisibility()">
-            @if (passwordVisible()) {
-              <app-icon name="eye" />
-            } @else {
-              <app-icon name="eye-hide" />
-            }
-          </button></span>
+          <app-input class="auth__input" icon="lock" inputId="sign-in-password" inputName="password" [(value)]="password.value" [(touched)]="password.touched" [error]="password.visibleError()" [type]="passwordVisible() ? 'text' : 'password'" ariaLabel="Пароль" autocomplete="current-password" placeholder="Введіть пароль">
+            <button class="auth__password-toggle" type="button" [attr.aria-label]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" [attr.title]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" (click)="togglePasswordVisibility()">
+              @if (passwordVisible()) {
+                <app-icon icon="eye" />
+              } @else {
+                <app-icon icon="eye-hide" />
+              }
+            </button>
+          </app-input>
         </div>
       </form>
       <div class="auth__inline-actions">
-        <app-checkbox name="remember" [checked]="true">Запам’ятати мене</app-checkbox>
+        <app-checkbox inputName="remember" [checked]="true">Запам’ятати мене</app-checkbox>
         <a class="auth__link" href="#forgot-password">Забули пароль?</a>
       </div>
-      <button class="auth__submit" type="button">Увійти <app-icon name="arrow-right" /></button>
+      <button class="auth__submit" type="submit" form="sign-in-form">Увійти <app-icon icon="arrow-right" /></button>
       <div class="auth__divider">або продовжити з</div>
       <div class="auth__socials">
-        <button class="auth__social" type="button"><app-icon name="google" />Продовжити з Google</button>
-        <button class="auth__social" type="button"><app-icon name="apple" />Продовжити з Apple</button>
+        <button class="auth__social" type="button"><app-icon icon="google" />Продовжити з Google</button>
+        <button class="auth__social" type="button"><app-icon icon="apple" />Продовжити з Apple</button>
       </div>
-      <div class="auth__notice"><app-icon name="lock" /><span>Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ до можливостей Astra Browser.</span></div>
+      <div class="auth__notice"><app-icon icon="lock" /><span>Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ до можливостей Astra Browser.</span></div>
     </div>
   </div>
 </section>

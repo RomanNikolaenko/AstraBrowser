@@ -1,0 +1,81 @@
+<!-- Вкладки показуються в спільному заголовку вікна (app-titlebar). -->
+<ng-template appTitlebarContent>
+  <ul class="tab-list" aria-label="Відкриті вкладки" data-tauri-drag-region>
+    @for (tab of tabs(); track tab.id) {
+      <li class="tab" [class.tab--active]="tab.id === activeTabId()">
+        <button class="tab__select" type="button" [attr.aria-current]="tab.id === activeTabId() ? 'page' : null" [title]="tab.title" (click)="selectTab(tab.id)">
+          <app-icon class="tab__favicon" [icon]="tab.favicon" />
+          <span class="tab__title">{{ tab.title }}</span>
+        </button>
+        <button class="tab__close" type="button" [attr.aria-label]="'Закрити вкладку «' + tab.title + '»'" title="Закрити вкладку" (click)="closeTab(tab.id)">
+          <app-icon icon="close" />
+        </button>
+      </li>
+    }
+  </ul>
+
+  <button class="new-tab-button" type="button" aria-label="Нова вкладка" title="Нова вкладка" (click)="openNewTab()">
+    <app-icon icon="plus" />
+  </button>
+</ng-template>
+
+<div class="chrome">
+  <div class="toolbar">
+    <div class="toolbar__group">
+      <button class="toolbar__button" type="button" aria-label="Назад" title="Назад" disabled>
+        <app-icon icon="arrow-left" />
+      </button>
+      <button class="toolbar__button" type="button" aria-label="Вперед" title="Вперед" disabled>
+        <app-icon icon="arrow-right" />
+      </button>
+      <button class="toolbar__button toolbar__button--reload" type="button" aria-label="Оновити" title="Оновити">
+        <app-icon icon="reload" />
+      </button>
+    </div>
+
+    <app-input class="omnibox" shape="pill" inputId="omnibox" inputName="address" [value]="activeTab().url ?? ''" ariaLabel="Адресний рядок" placeholder="Введіть пошуковий запит або адресу сайту..." autocomplete="off" [spellcheck]="false" enterKeyHint="go">
+      <img class="omnibox__logo" data-input-start src="/logo.webp" alt="" width="24" height="24" />
+      <button class="omnibox__action" type="button" aria-label="Додати сторінку в закладки" title="Додати в закладки">
+        <app-icon icon="star" />
+      </button>
+    </app-input>
+
+    <div class="toolbar__group">
+      <button class="toolbar__button" type="button" aria-label="Застосунки" title="Застосунки">
+        <app-icon icon="apps" />
+      </button>
+      <button class="profile" type="button" aria-label="Профіль" title="Профіль">
+        <span class="profile__avatar"><app-icon icon="user" /></span>
+        <app-icon class="profile__chevron" icon="chevron-down" />
+      </button>
+      <button class="toolbar__button toolbar__button--filled" type="button" aria-label="Меню" title="Меню">
+        <app-icon icon="menu" />
+      </button>
+    </div>
+  </div>
+
+  <nav class="bookmarks" aria-label="Закладки">
+    <ul class="bookmarks__list">
+      @for (bookmark of bookmarks; track bookmark.title) {
+        <li class="bookmarks__item">
+          <button class="bookmark" type="button" [title]="bookmark.url ?? bookmark.title">
+            <app-icon class="bookmark__favicon" [icon]="bookmark.favicon" />
+            <span>{{ bookmark.title }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+  </nav>
+</div>
+
+<div class="content">
+  @if (activeTab().url === null) {
+    <app-new-tab />
+  } @else {
+    <div class="content__placeholder">
+      <app-icon class="content__placeholder-favicon" [icon]="activeTab().favicon" />
+      <p class="content__placeholder-title">{{ activeTab().title }}</p>
+      <p>Відображення вебсторінок ще не підключено.</p>
+    </div>
+  }
+</div>

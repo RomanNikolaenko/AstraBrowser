@@ -10,5 +10,9 @@ export const routes: Routes = [
     path: 'sign-up',
     loadComponent: () => import('./auth/sign-up/sign-up').then((module) => module.SignUp),
   },
+  {
+    path: 'home',
+    loadComponent: () => import('./browser/browser').then((module) => module.Browser),
+  },
   { path: '**', redirectTo: 'sign-in' },
 ];

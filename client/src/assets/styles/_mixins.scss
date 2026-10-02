@@ -1,0 +1,13 @@
+$motion: var(--transition-duration, 180ms) var(--transition-easing, ease);
+
+// Кільце фокусу «виростає» з краю елемента: прозорий outline анімується в колір і відсувається.
+// Від'ємний $offset малює кільце всередині — для елементів, які впираються в край або обрізаються overflow.
+@mixin focus-ring($offset: 0.1875rem) {
+  outline: 0.1875rem solid transparent;
+  outline-offset: 0;
+
+  &:focus-visible {
+    outline-color: var(--color-focus);
+    outline-offset: $offset;
+  }
+}

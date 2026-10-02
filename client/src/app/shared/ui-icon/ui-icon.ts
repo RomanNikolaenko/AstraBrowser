@@ -1,7 +1,5 @@
-import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, effect, inject, input } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, of } from 'rxjs';
+import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, input } from '@angular/core';
+import { IconRegistry } from './icon-registry';
 
 @Component({
   selector: 'app-icon',
@@ -13,34 +11,24 @@ import { catchError, of } from 'rxjs';
   },
 })
 export class UiIcon {
-  readonly name = input<string>();
+  readonly icon = input<string>();
 
-  private readonly http = inject(HttpClient);
+  private readonly icons = inject(IconRegistry);
   private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
-    effect(() => {
-      const iconName = this.name();
+    effect((onCleanup) => {
+      const iconName = this.icon();
       if (!iconName) {
         this.el.nativeElement.innerHTML = '';
         return;
       }
 
-      const path = `assets/icons/${iconName}.svg`;
-
-      this.http
-        .get(path, { responseType: 'text' })
-        .pipe(
-          takeUntilDestroyed(this.destroyRef),
-          catchError((err) => {
-            console.error(`Error loading icon: ${path}`, err);
-            return of('');
-          }),
-        )
-        .subscribe((svg) => {
-          this.el.nativeElement.innerHTML = svg;
-        });
+      // Відписка і при зміні назви, і при знищенні: відповідь для старої назви не перезапише нову.
+      const subscription = this.icons.get(iconName).subscribe((svg) => {
+        this.el.nativeElement.innerHTML = svg;
+      });
+      onCleanup(() => subscription.unsubscribe());
     });
   }
 }

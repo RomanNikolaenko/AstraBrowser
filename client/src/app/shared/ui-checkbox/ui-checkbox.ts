@@ -10,5 +10,5 @@ import { UiIcon } from '../ui-icon/ui-icon';
 })
 export class UiCheckbox {
   readonly checked = input(false);
-  readonly name = input('');
+  readonly inputName = input('');
 }

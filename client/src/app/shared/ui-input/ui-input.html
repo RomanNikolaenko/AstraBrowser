@@ -1,0 +1,37 @@
+<div class="ui-input__field">
+  <ng-content select="[data-input-start]">
+    @if (icon(); as iconName) {
+      <app-icon class="ui-input__icon" [icon]="iconName" />
+    }
+  </ng-content>
+  <input
+    #control
+    class="ui-input__control"
+    [attr.id]="inputId() ?? null"
+    [attr.name]="inputName() ?? null"
+    [type]="type()"
+    [value]="value()"
+    [attr.placeholder]="placeholder() ?? null"
+    [attr.aria-label]="ariaLabel() ?? null"
+    [attr.aria-invalid]="error() ? true : null"
+    [attr.aria-describedby]="error() ? errorId : null"
+    [attr.autocomplete]="autocomplete() ?? null"
+    [attr.spellcheck]="spellcheck() ?? null"
+    [attr.enterkeyhint]="enterKeyHint() ?? null"
+    (input)="onInput($event)"
+    (blur)="touched.set(true)"
+  />
+  <ng-content />
+</div>
+
+<!-- Блок помилки є лише в полях, яким прив'язали [error]; у пошукових полях його немає. -->
+@if (error() !== undefined) {
+  <div class="ui-input__message" [class.ui-input__message--visible]="error()" aria-live="polite">
+    <div class="ui-input__message-clip">
+      <p class="ui-input__error" [id]="errorId">
+        <app-icon class="ui-input__error-icon" icon="alert" />
+        <span>{{ shownError() }}</span>
+      </p>
+    </div>
+  </div>
+}

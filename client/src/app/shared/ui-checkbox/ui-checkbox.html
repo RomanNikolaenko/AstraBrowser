@@ -1,7 +1,7 @@
 <label class="checkbox">
-  <input class="checkbox__input" type="checkbox" [checked]="checked()" [attr.name]="name() || null" />
+  <input class="checkbox__input" type="checkbox" [checked]="checked()" [attr.name]="inputName() || null" />
   <span class="checkbox__checkmark" aria-hidden="true">
-    <app-icon name="check" />
+    <app-icon icon="check" />
   </span>
   <span class="checkbox__text"><ng-content></ng-content></span>
 </label>

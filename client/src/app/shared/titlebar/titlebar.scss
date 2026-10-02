@@ -1,0 +1,56 @@
+:host {
+  display: block;
+  flex: 0 0 auto;
+  container: titlebar / inline-size;
+}
+
+// Порожні місця заголовка (з data-tauri-drag-region) тягнуть вікно.
+.titlebar {
+  display: flex;
+  height: 3rem;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding-inline-start: 1rem;
+  background: var(--titlebar-background);
+  color: var(--color-text);
+  user-select: none;
+  -webkit-user-select: none;
+
+  &__brand {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin-inline-end: 1.25rem;
+
+    // Інакше клік по логотипу не потрапить у drag-region.
+    > * {
+      pointer-events: none;
+    }
+  }
+
+  &__logo {
+    width: 2rem;
+    height: 2rem;
+    object-fit: contain;
+  }
+
+  &__title {
+    overflow: hidden;
+    align-self: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__spacer {
+    min-width: 2rem;
+    flex: 1 1 0;
+  }
+}
+
+@container titlebar (width < 60rem) {
+  .titlebar__brand {
+    margin-inline-end: 0.5rem;
+  }
+}

@@ -1,0 +1,14 @@
+<header class="titlebar" data-tauri-drag-region>
+  <div class="titlebar__brand" data-tauri-drag-region>
+    <img class="titlebar__logo" src="/logo.webp" alt="" width="32" height="32" />
+  </div>
+
+  @if (slot.content(); as content) {
+    <ng-container [ngTemplateOutlet]="content" />
+  } @else {
+    <span class="titlebar__title" data-tauri-drag-region>Astra Browser</span>
+  }
+
+  <div class="titlebar__spacer" data-tauri-drag-region></div>
+  <app-window-controls />
+</header>
