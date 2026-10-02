@@ -11,6 +11,19 @@ export const emailFormat = (message: string): Validator => (value) => (EMAIL_PAT
 
 export const minLength = (length: number, message: string): Validator => (value) => (value.length >= length ? null : message);
 
+/** Адреса сайту http(s) у повному вигляді або `null`. Схему https:// можна не вказувати. */
+export function normalizeUrl(value: string): string | null {
+  const trimmed = value.trim();
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname.includes('.') ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+export const urlFormat = (message: string): Validator => (value) => (normalizeUrl(value) ? null : message);
+
 /** Значення має збігатися з іншим полем, наприклад підтвердження пароля. */
 export const matches = (other: () => string, message: string): Validator => (value) => (value === other() ? null : message);
 

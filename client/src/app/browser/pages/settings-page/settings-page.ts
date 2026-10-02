@@ -1,0 +1,47 @@
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { SettingsStore, ThemePreference } from '../../../shared/settings/settings';
+import { UiIcon } from '../../../shared/ui-icon/ui-icon';
+import { DownloadsStore } from '../../data/downloads';
+import { HistoryStore } from '../../data/history';
+
+const plural = new Intl.PluralRules('uk');
+const RECORDS: Record<string, string> = { one: 'запис', few: 'записи', many: 'записів', other: 'запису' };
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [UiIcon],
+  selector: 'app-settings-page',
+  styleUrls: ['../internal-page.scss', './settings-page.scss'],
+  templateUrl: './settings-page.html',
+})
+export class SettingsPage {
+  protected readonly settings = inject(SettingsStore);
+  protected readonly history = inject(HistoryStore);
+  protected readonly downloads = inject(DownloadsStore);
+
+  /** Що зараз чекає підтвердження очищення. */
+  protected readonly confirming = signal<'history' | 'downloads' | null>(null);
+
+  protected readonly themes: readonly { readonly value: ThemePreference; readonly label: string; readonly icon: string }[] = [
+    { value: 'system', label: 'Як у системі', icon: 'monitor' },
+    { value: 'light', label: 'Світла', icon: 'sun' },
+    { value: 'dark', label: 'Темна', icon: 'moon' },
+  ];
+
+  protected records(count: number): string {
+    return count ? `${count} ${RECORDS[plural.select(count)]}` : 'Порожньо';
+  }
+
+  protected setBookmarksBar(event: Event): void {
+    this.settings.showBookmarksBar.set((event.target as HTMLInputElement).checked);
+  }
+
+  protected clear(): void {
+    if (this.confirming() === 'history') {
+      this.history.clear();
+    } else if (this.confirming() === 'downloads') {
+      this.downloads.clear();
+    }
+    this.confirming.set(null);
+  }
+}

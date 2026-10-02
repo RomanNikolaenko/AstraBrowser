@@ -60,6 +60,10 @@ export class UiInput {
     this.control().nativeElement.focus();
   }
 
+  select(): void {
+    this.control().nativeElement.select();
+  }
+
   protected onInput(event: Event): void {
     this.value.set((event.target as HTMLInputElement).value);
   }

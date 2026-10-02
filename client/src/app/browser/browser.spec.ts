@@ -2,8 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
+import { BrowserWindows } from '../shared/browser-windows/browser-windows';
 import { Titlebar } from '../shared/titlebar/titlebar';
 import { Browser } from './browser';
+import { BookmarksStore } from './data/bookmarks';
 
 // Вкладки браузера рендеряться в спільному заголовку вікна, тож тестуємо їх разом, як в App.
 @Component({
@@ -12,65 +15,231 @@ import { Browser } from './browser';
 })
 class Host {}
 
+class FakeWindows {
+  readonly isPrivate = false;
+  readonly opened: boolean[] = [];
+
+  open({ private: isPrivate = false } = {}): void {
+    this.opened.push(isPrivate);
+  }
+}
+
 describe('Browser', () => {
   let fixture: ComponentFixture<Host>;
   let element: HTMLElement;
+  let windows: FakeWindows;
 
-  const tabTitles = () => [...element.querySelectorAll('.tab__title')].map((title) => title.textContent?.trim());
-  const activeTitle = () => element.querySelector('.tab--active .tab__title')?.textContent?.trim();
-  const closeButton = (index: number) => element.querySelectorAll<HTMLButtonElement>('.tab__close')[index];
+  const tabs = () => [...element.querySelectorAll('.tab')];
+  const activeIndex = () => tabs().findIndex((tab) => tab.classList.contains('tab--active'));
+  const menuItem = (label: string) => [...element.querySelectorAll<HTMLButtonElement>('.menu__item')].find((item) => item.textContent?.includes(label));
 
-  const click = async (button: HTMLElement | undefined) => {
+  const click = async (button: HTMLElement | null | undefined) => {
     button?.click();
+    await fixture.whenStable();
+  };
+  const openTab = () => click(element.querySelector<HTMLButtonElement>('.new-tab-button'));
+  const selectTab = (index: number) => click(element.querySelectorAll<HTMLButtonElement>('.tab__select')[index]);
+  const closeTab = (index: number) => click(element.querySelectorAll<HTMLButtonElement>('.tab__close')[index]);
+  const press = async (init: KeyboardEventInit) => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, cancelable: true, ...init }));
     await fixture.whenStable();
   };
 
   beforeEach(async () => {
+    localStorage.clear();
+    delete document.documentElement.dataset['theme'];
     await TestBed.configureTestingModule({
       imports: [Host],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: BrowserWindows, useClass: FakeWindows },
+      ],
     })
       .compileComponents();
 
+    windows = TestBed.inject(BrowserWindows) as unknown as FakeWindows;
     fixture = TestBed.createComponent(Host);
     element = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
   });
 
-  it('should start on the new tab page', () => {
-    expect(activeTitle()).toBe('Нова вкладка');
+  it('should start with a single new tab', () => {
+    expect(tabs().length).toBe(1);
+    expect(element.querySelector('.tab__title')?.textContent?.trim()).toBe('Нова вкладка');
     expect(element.querySelector('app-new-tab')).toBeTruthy();
     expect(element.querySelectorAll('.bookmark').length).toBe(6);
   });
 
   it('should open a new tab and make it active', async () => {
-    await click(element.querySelector<HTMLButtonElement>('.new-tab-button') ?? undefined);
+    await openTab();
 
-    expect(tabTitles().length).toBe(5);
-    expect(element.querySelectorAll('.tab')[4].classList).toContain('tab--active');
+    expect(tabs().length).toBe(2);
+    expect(activeIndex()).toBe(1);
   });
 
-  it('should activate the tab to the right when the active tab is closed', async () => {
-    await click(closeButton(0));
+  it('should activate the tab to the right when the active tab is closed, or the left one if it was last', async () => {
+    await openTab();
+    await openTab();
+    await selectTab(0);
 
-    expect(tabTitles()).toEqual(['Product Ideas', 'Design Research', 'Travel Plans']);
-    expect(activeTitle()).toBe('Product Ideas');
-    expect(element.querySelector('app-new-tab')).toBeNull();
+    await closeTab(0);
+    expect(tabs().length).toBe(2);
+    expect(activeIndex()).toBe(0);
+
+    await selectTab(1);
+    await closeTab(1);
+    expect(tabs().length).toBe(1);
+    expect(activeIndex()).toBe(0);
   });
 
   it('should keep the active tab when another tab is closed', async () => {
-    await click(closeButton(2));
+    await openTab();
+    await closeTab(0);
 
-    expect(tabTitles()).toEqual(['Нова вкладка', 'Product Ideas', 'Travel Plans']);
-    expect(activeTitle()).toBe('Нова вкладка');
+    expect(tabs().length).toBe(1);
+    expect(activeIndex()).toBe(0);
   });
 
   it('should replace the last closed tab with a new one', async () => {
-    for (let i = 0; i < 4; i++) {
-      await click(closeButton(0));
-    }
+    await closeTab(0);
 
-    expect(tabTitles()).toEqual(['Нова вкладка']);
-    expect(activeTitle()).toBe('Нова вкладка');
+    expect(tabs().length).toBe(1);
+    expect(activeIndex()).toBe(0);
+  });
+
+  it('should open a new tab on Ctrl+T in any keyboard layout', async () => {
+    // Українська розкладка: клавіша T дає «е», але code лишається KeyT.
+    await press({ key: 'е', code: 'KeyT' });
+
+    expect(tabs().length).toBe(2);
+    expect(activeIndex()).toBe(1);
+  });
+
+  it('should open a new and a private window from shortcuts', async () => {
+    await press({ key: 'т', code: 'KeyN' });
+    await press({ key: 'Т', code: 'KeyN', shiftKey: true });
+    await press({ key: 'т', code: 'KeyN', altKey: true });
+
+    expect(windows.opened).toEqual([false, true]);
+  });
+
+  it('should open a new and a private window from the menu', async () => {
+    await click(menuItem('Нове вікно'));
+    await click(menuItem('Приватне вікно'));
+
+    expect(windows.opened).toEqual([false, true]);
+  });
+
+  it('should scale the page content with the menu zoom', async () => {
+    await click(element.querySelector<HTMLButtonElement>('[aria-label="Збільшити масштаб"]'));
+
+    expect(element.querySelector<HTMLElement>('.content')?.style.zoom).toBe('1.1');
+  });
+
+  it('should return to the sign-in page on sign out', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    await click(menuItem('Вийти'));
+
+    expect(navigate).toHaveBeenCalledWith(['/sign-in']);
+  });
+
+  describe('internal pages', () => {
+    const titles = () => [...element.querySelectorAll('.tab__title')].map((title) => title.textContent?.trim());
+    const omnibox = () => element.querySelector<HTMLInputElement>('#omnibox')?.value;
+    const tool = (label: string) => [...element.querySelectorAll<HTMLButtonElement>('.tools-menu__tile')].find((tile) => tile.textContent?.includes(label));
+
+    it('should open a page in the empty new tab and show its address', async () => {
+      await click(menuItem('Історія'));
+
+      expect(titles()).toEqual(['Історія']);
+      expect(omnibox()).toBe('astra://history');
+      expect(element.querySelector('app-history-page')).toBeTruthy();
+      expect(element.querySelector('app-new-tab')).toBeNull();
+    });
+
+    it('should switch to an already open page instead of opening it again', async () => {
+      await click(menuItem('Історія'));
+      await openTab();
+      await click(tool('Історія'));
+
+      expect(titles()).toEqual(['Історія', 'Нова вкладка']);
+      expect(activeIndex()).toBe(0);
+    });
+
+    it('should open downloads in a new tab on Ctrl+J when the current tab is busy', async () => {
+      await click(menuItem('Закладки'));
+      await press({ key: 'о', code: 'KeyJ' });
+
+      expect(titles()).toEqual(['Закладки', 'Завантаження']);
+      expect(activeIndex()).toBe(1);
+      expect(omnibox()).toBe('astra://downloads');
+      expect(element.querySelector('app-downloads-page')).toBeTruthy();
+    });
+
+    it('should show the bookmarks bar from the bookmarks store', async () => {
+      TestBed.inject(BookmarksStore).remove('default-youtube');
+      await fixture.whenStable();
+
+      const bar = [...element.querySelectorAll('.bookmark')].map((bookmark) => bookmark.textContent?.trim());
+      expect(bar).toEqual(['Робота', 'GitHub', 'Figma', 'Пошта', 'Документи']);
+    });
+
+    it('should open settings, extensions and help pages from the menu', async () => {
+      await click(menuItem('Налаштування'));
+      expect(element.querySelector('app-settings-page')).toBeTruthy();
+
+      await click(menuItem('Розширення'));
+      expect(element.querySelector('app-extensions-page')).toBeTruthy();
+
+      await click(menuItem('Довідка'));
+      expect(element.querySelector('app-help-page')).toBeTruthy();
+      expect(titles()).toEqual(['Налаштування', 'Розширення', 'Довідка']);
+    });
+
+    it('should hide the bookmarks bar when it is turned off in settings', async () => {
+      await click(menuItem('Налаштування'));
+      await click(element.querySelector<HTMLInputElement>('#settings-bookmarks-bar'));
+
+      expect(element.querySelector('.bookmarks')).toBeNull();
+    });
+  });
+
+  describe('find and print', () => {
+    it('should open the find bar on Ctrl+F and close it with Escape', async () => {
+      await press({ key: 'а', code: 'KeyF' });
+      const input = element.querySelector<HTMLInputElement>('#find-on-page');
+      expect(input).toBeTruthy();
+      expect(document.activeElement).toBe(input);
+
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await fixture.whenStable();
+      expect(element.querySelector('app-find-bar')).toBeNull();
+    });
+
+    it('should search only the current page and close when the tab changes', async () => {
+      await click(menuItem('Знайти на сторінці'));
+      const input = element.querySelector<HTMLInputElement>('#find-on-page') as HTMLInputElement;
+      input.value = 'вкладка';
+      input.dispatchEvent(new Event('input'));
+      await fixture.whenStable();
+
+      // «Нова вкладка» є і в назві вкладки, але шукаємо лише у вмісті сторінки.
+      expect(element.querySelector('.find-bar__status')?.textContent?.trim()).toBe('1 / 1');
+
+      await openTab();
+      expect(element.querySelector('app-find-bar')).toBeNull();
+    });
+
+    it('should print on Ctrl+P and from the menu', async () => {
+      const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      await press({ key: 'з', code: 'KeyP' });
+      await click(menuItem('Друк'));
+
+      expect(print).toHaveBeenCalledTimes(2);
+    });
   });
 });

@@ -1,0 +1,40 @@
+<section class="page">
+  <header class="page__header">
+    <h1 class="page__title">Довідка</h1>
+  </header>
+
+  <h2 class="page__group">Гарячі клавіші</h2>
+  <table class="page__list help-table">
+    <tbody>
+      @for (shortcut of shortcuts; track shortcut.action) {
+        <tr class="help-table__row">
+          <th class="help-table__action" scope="row">{{ shortcut.action }}</th>
+          <td class="help-table__keys">
+            @for (key of shortcut.keys; track key; let last = $last) {
+              <kbd>{{ key }}</kbd>
+              @if (!last) {
+                <span class="help-table__plus" aria-hidden="true">+</span>
+              }
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <h2 class="page__group">Про програму</h2>
+  <dl class="page__list help-about">
+    <div class="help-about__row">
+      <dt>Astra Browser</dt>
+      <dd>{{ appVersion() ? 'Версія ' + appVersion() : 'Версія розробки' }}</dd>
+    </div>
+    <div class="help-about__row">
+      <dt>Tauri</dt>
+      <dd>{{ tauriVersion() ?? '—' }}</dd>
+    </div>
+    <div class="help-about__row">
+      <dt>Рушій</dt>
+      <dd>{{ engineVersion ? 'Chromium ' + engineVersion : '—' }}</dd>
+    </div>
+  </dl>
+</section>

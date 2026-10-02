@@ -40,3 +40,90 @@
     cursor: default;
   }
 }
+
+// Випадна панель на Popover API (відкривається кнопкою з popovertarget, закривається кліком поза нею чи Esc).
+// CSS anchor positioning ставить її під кнопкою з anchor-name: $anchor, вирівнявши по правому краю.
+// $caret-right — «хвостик», що вказує на кнопку: від правого краю панелі до центру кнопки мінус пів хвостика.
+@mixin popover($anchor, $padding: 0.5rem, $caret-right: null) {
+  position-anchor: $anchor;
+  position-area: bottom span-left;
+  inset: auto;
+  margin: 0.625rem 0 0;
+  padding: $padding;
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 1rem;
+  background: var(--browser-popover);
+  box-shadow: var(--browser-popover-shadow);
+  color: var(--browser-text);
+  font-family: var(--font-family-base);
+  opacity: 0;
+  transform: translateY(-0.375rem) scale(0.98);
+  transform-origin: top right;
+  transition: opacity $motion, transform $motion, overlay $motion allow-discrete, display $motion allow-discrete;
+
+  @if $caret-right {
+    overflow: visible;
+  }
+
+  &:popover-open {
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(-0.375rem) scale(0.98);
+    }
+  }
+
+  @if $caret-right {
+    &::before {
+      position: absolute;
+      top: -0.4375rem;
+      right: $caret-right;
+      width: 0.75rem;
+      height: 0.75rem;
+      border-top: 0.0625rem solid var(--browser-popover-border);
+      border-left: 0.0625rem solid var(--browser-popover-border);
+      border-top-left-radius: 0.1875rem;
+      background: var(--browser-popover);
+      content: '';
+      transform: rotate(45deg);
+    }
+  }
+}
+
+@mixin popover-title {
+  margin: 0.5rem 0.5rem 0.75rem;
+  color: var(--browser-heading);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+// Рядок меню: іконка, підпис і необов'язковий хвіст (гаряча клавіша чи стрілка).
+// Кільце фокусу всередині, бо панель може прокручуватися й обрізати все, що виходить за край.
+@mixin popover-item {
+  display: flex;
+  width: 100%;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0.625rem;
+  background: transparent;
+  color: var(--browser-text);
+  font-size: 0.9375rem;
+  text-align: start;
+  text-decoration: none;
+  transition: background-color $motion, outline-color $motion, outline-offset $motion;
+  @include focus-ring(-0.1875rem);
+
+  &:hover,
+  &:focus-visible {
+    background: var(--browser-hover);
+  }
+
+  &:active {
+    background: var(--browser-pressed);
+  }
+}

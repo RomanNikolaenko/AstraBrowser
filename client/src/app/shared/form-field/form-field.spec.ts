@@ -1,4 +1,4 @@
-import { FormField, emailFormat, matches, minLength, required, validateFields } from './form-field';
+import { FormField, emailFormat, matches, minLength, normalizeUrl, required, urlFormat, validateFields } from './form-field';
 
 describe('FormField', () => {
   it('should return the first failing validator message', () => {
@@ -58,5 +58,27 @@ describe('FormField', () => {
 
     login.value.set('user');
     expect(validateFields([login, password])).toBe(true);
+  });
+});
+
+describe('normalizeUrl', () => {
+  it('should accept site addresses with or without a scheme', () => {
+    expect(normalizeUrl('angular.dev')).toBe('https://angular.dev/');
+    expect(normalizeUrl(' http://example.com/path ')).toBe('http://example.com/path');
+  });
+
+  it('should reject non-web and malformed addresses', () => {
+    expect(normalizeUrl('localhost')).toBeNull();
+    expect(normalizeUrl('javascript:alert(1)')).toBeNull();
+    expect(normalizeUrl('ftp://example.com')).toBeNull();
+    expect(normalizeUrl('not a url')).toBeNull();
+  });
+
+  it('should validate through urlFormat', () => {
+    const field = new FormField([urlFormat('Некоректна адреса')]);
+    field.value.set('example');
+    expect(field.error()).toBe('Некоректна адреса');
+    field.value.set('example.com');
+    expect(field.error()).toBeNull();
   });
 });

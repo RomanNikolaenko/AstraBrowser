@@ -1,0 +1,46 @@
+<section class="page">
+  <header class="page__header">
+    <h1 class="page__title">Історія</h1>
+    @if (history.entries().length) {
+      <app-input class="page__search" shape="pill" icon="search" inputId="history-search" inputName="history-search" ariaLabel="Пошук в історії" placeholder="Пошук в історії" autocomplete="off" [(value)]="query" />
+      <button class="page__button page__button--danger" type="button" (click)="confirmingClear.set(true)">Очистити історію</button>
+    }
+  </header>
+
+  @if (confirmingClear()) {
+    <div class="page__confirm" role="alert">
+      <span>Видалити всю історію? Цю дію не можна скасувати.</span>
+      <button class="page__button page__button--danger" type="button" (click)="clear()">Очистити</button>
+      <button class="page__button" type="button" (click)="confirmingClear.set(false)">Скасувати</button>
+    </div>
+  }
+
+  @if (!history.entries().length) {
+    <div class="page__empty">
+      <span class="page__empty-icon"><app-icon icon="clock" /></span>
+      <h2 class="page__empty-title">Історія порожня</h2>
+      <p>Тут з'являться сторінки, які ви відвідаєте. У приватному вікні вона зникає, щойно вікно закрито.</p>
+    </div>
+  } @else if (!groups().length) {
+    <p class="page__no-results">Нічого не знайдено за запитом «{{ query() }}».</p>
+  } @else {
+    @for (group of groups(); track group.label) {
+      <h2 class="page__group">{{ group.label }}</h2>
+      <ul class="page__list">
+        @for (entry of group.items; track entry.id) {
+          <li class="page__row">
+            <time class="page__time" [attr.datetime]="isoTime(entry.visitedAt)">{{ formatTime(entry.visitedAt) }}</time>
+            <app-icon class="page__favicon" icon="globe" />
+            <span class="page__text">
+              <span class="page__name">{{ entry.title }}</span>
+              <span class="page__meta">{{ hostname(entry.url) }}</span>
+            </span>
+            <button class="page__remove" type="button" [attr.aria-label]="'Видалити «' + entry.title + '» з історії'" title="Видалити з історії" (click)="history.remove(entry.id)">
+              <app-icon icon="close" />
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

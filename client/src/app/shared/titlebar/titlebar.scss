@@ -47,6 +47,30 @@
     min-width: 2rem;
     flex: 1 1 0;
   }
+
+  // Мітка приватного вікна: видно на будь-якому екрані, щоб не сплутати з звичайним вікном.
+  &__private {
+    display: flex;
+    flex: 0 0 auto;
+    align-self: center;
+    align-items: center;
+    gap: 0.375rem;
+    margin-inline-end: 0.75rem;
+    padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: var(--titlebar-private-background);
+    color: var(--titlebar-private-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+
+    // Інакше клік по іконці не потрапить у drag-region.
+    app-icon {
+      width: 1.125rem;
+      height: 1.125rem;
+      pointer-events: none;
+    }
+  }
 }
 
 @container titlebar (width < 60rem) {

@@ -21,8 +21,7 @@ body {
   line-height: 1.5;
   background-color: var(--background-color);
   color: var(--text-color);
-  font-family: var(--font-family-base);
-  color-scheme: light dark;
+  font-family: var(--font-family-base);
 }
 
 :where(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd) {

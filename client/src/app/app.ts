@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { SettingsStore } from './shared/settings/settings';
 import { Titlebar } from './shared/titlebar/titlebar';
 
 @Component({
@@ -9,4 +10,9 @@ import { Titlebar } from './shared/titlebar/titlebar';
   styleUrl: './app.scss',
   templateUrl: './app.html',
 })
-export class App {}
+export class App {
+  constructor() {
+    // Тема з налаштувань діє на всіх екранах і стежить за змінами з інших вікон.
+    inject(SettingsStore);
+  }
+}

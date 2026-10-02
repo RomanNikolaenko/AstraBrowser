@@ -1,0 +1,122 @@
+@use '../../../../assets/styles/mixins' as *;
+
+.settings {
+  gap: 0.25rem;
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    min-height: 4rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border: 0;
+    border-radius: 0.75rem;
+  }
+
+  // fieldset без власної рамки й відступів; legend поводиться як звичайний текст рядка.
+  &__fieldset {
+    min-inline-size: 0;
+  }
+
+  &__text {
+    display: grid;
+    float: left;
+    padding: 0;
+  }
+
+  &__confirm {
+    margin-top: 1rem;
+  }
+}
+
+// Перемикач теми: справжні radio, оформлені як сегменти.
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--browser-field);
+
+  &__option {
+    position: relative;
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    color: var(--browser-muted);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: background-color $motion, color $motion, box-shadow $motion;
+
+    &:hover {
+      color: var(--browser-text);
+    }
+
+    &:has(.segmented__input:checked) {
+      background: var(--browser-popover);
+      box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 12%);
+      color: var(--browser-text);
+    }
+
+    &:has(.segmented__input:focus-visible) {
+      outline: 0.1875rem solid var(--color-focus);
+      outline-offset: 0.125rem;
+    }
+  }
+
+  &__input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &__icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}
+
+// Вимикач: справжній checkbox з role="switch". Вимкнений — контурний з кольоровим бігунком,
+// увімкнений — заповнений з білим: стан видно і за положенням, і за контрастом в обох темах.
+.switch {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 0.125rem solid var(--browser-icon);
+  border-radius: 999px;
+  background: var(--browser-field);
+  cursor: pointer;
+  transition: background-color $motion, border-color $motion, outline-color $motion, outline-offset $motion;
+  appearance: none;
+  @include focus-ring(0.1875rem);
+
+  &::before {
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 50%;
+    background: var(--browser-icon);
+    content: '';
+    transition: transform $motion, background-color $motion;
+  }
+
+  &:checked {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+
+    &::before {
+      background: var(--color-on-primary);
+      transform: translateX(1.25rem);
+    }
+  }
+}

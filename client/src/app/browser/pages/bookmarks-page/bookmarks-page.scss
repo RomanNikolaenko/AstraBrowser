@@ -1,0 +1,33 @@
+.bookmark-form {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  border: 0.0625rem solid var(--browser-chrome-border);
+  border-radius: 1rem;
+  background: var(--browser-popover);
+  box-shadow: var(--browser-chrome-shadow);
+
+  &__title {
+    color: var(--browser-heading);
+    font-size: 1.125rem;
+    font-weight: 700;
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  // Ширина від сітки, а не від .page__search.
+  &__field {
+    width: 100%;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+}

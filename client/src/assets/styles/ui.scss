@@ -45,6 +45,8 @@ $font-family-base: 'Inter', 'Segoe UI', sans-serif;
   --page-bubbles: url('/assets/images/background-light.webp');
 
   --titlebar-background: #e7edfa;
+  --titlebar-private-background: #ece6ff;
+  --titlebar-private-text: #5221c4;
   --browser-chrome: #fbfcff;
   --browser-chrome-border: #dfe6f6;
   --browser-chrome-shadow: 0 0.5rem 1.5rem rgb(58 86 146 / 8%);
@@ -69,70 +71,93 @@ $font-family-base: 'Inter', 'Segoe UI', sans-serif;
   --browser-search: rgb(255 255 255 / 88%);
   --browser-search-border: rgb(255 255 255 / 95%);
   --browser-search-shadow: 0 1rem 2.5rem rgb(70 100 190 / 14%);
+  --browser-popover: #ffffff;
+  --browser-popover-border: #d3dcf4;
+  --browser-popover-shadow: 0 1rem 2.5rem rgb(40 60 120 / 18%);
+  --browser-tile: #f3f6fd;
+  --browser-tile-border: #e1e7f6;
+  --browser-icon-accent: #6d3ef0;
+}
+
+// Темна тема: за системою, якщо в налаштуваннях не вибрано світлу, або коли її вибрано явно.
+@mixin dark-theme {
+  color-scheme: dark;
+  --color-primary: #8ba8ff;
+  --color-accent-violet: #bd9aff;
+  --color-accent-cyan: #6bd8ff;
+  --color-text: #f5f7ff;
+  --color-text-muted: #b5c0de;
+  --color-background: #10182c;
+  --color-surface: #1a2540;
+  --color-border: #364568;
+  --color-on-primary: #10182c;
+  --color-on-danger: #ffffff;
+  --color-focus: #90aaff;
+  --color-error: #ff8a80;
+  --background-color: var(--color-background);
+  --text-color: var(--color-text);
+
+  --auth-text: #eef2ff;
+  --auth-heading: #ffffff;
+  --auth-muted: #c0c9e5;
+  --auth-subtle: #c3cdea;
+  --auth-accent: #a8bcff;
+  --auth-panel: rgb(20 31 55 / 88%);
+  --auth-field: rgb(12 22 42 / 72%);
+  --auth-tab-track: rgb(9 19 39 / 62%);
+  --auth-tab-text: #c0cbea;
+  --auth-soft-surface: rgb(24 35 64 / 88%);
+  --auth-field-border: #475981;
+  --auth-divider: #465578;
+  --auth-placeholder: #9eaccd;
+  --auth-icon: #b1c0e8;
+  --auth-panel-border: rgb(180 198 240 / 24%);
+  --auth-input-text: #f2f5ff;
+  --auth-submit-text: #ffffff;
+  --auth-background-overlay: rgb(8 15 32 / 46%);
+  --page-bubbles: url('/assets/images/background-dark.webp');
+
+  --titlebar-background: #0b1222;
+  --titlebar-private-background: rgb(167 139 250 / 18%);
+  --titlebar-private-text: #d6c8ff;
+  --browser-chrome: #161f36;
+  --browser-chrome-border: #26324f;
+  --browser-chrome-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
+  --browser-tab-text: #a3b0d6;
+  --browser-tab-active: var(--browser-chrome);
+  --browser-tab-active-text: #f5f7ff;
+  --browser-tab-hover: rgb(255 255 255 / 6%);
+  --browser-text: #eef2ff;
+  --browser-icon: #b9c5ea;
+  --browser-icon-disabled: #4d5b7f;
+  --browser-hover: rgb(168 188 255 / 12%);
+  --browser-pressed: rgb(168 188 255 / 20%);
+  --browser-field: #0e1628;
+  --browser-field-focus: #0b1222;
+  --browser-placeholder: #8392bd;
+  --browser-divider: #2a3655;
+  --browser-accent: #a8bcff;
+  --browser-page: #0f1729;
+  --browser-page-bubbles-opacity: 0.3;
+  --browser-heading: #ffffff;
+  --browser-muted: #b5c0de;
+  --browser-search: rgb(22 33 58 / 82%);
+  --browser-search-border: rgb(180 198 240 / 18%);
+  --browser-search-shadow: 0 1rem 2.5rem rgb(0 0 0 / 35%);
+  --browser-popover: #131b31;
+  --browser-popover-border: rgb(112 132 230 / 45%);
+  --browser-popover-shadow: 0 1rem 2.5rem rgb(0 0 0 / 45%);
+  --browser-tile: #1a2340;
+  --browser-tile-border: #2b3757;
+  --browser-icon-accent: #a78bfa;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --color-primary: #8ba8ff;
-    --color-accent-violet: #bd9aff;
-    --color-accent-cyan: #6bd8ff;
-    --color-text: #f5f7ff;
-    --color-text-muted: #b5c0de;
-    --color-background: #10182c;
-    --color-surface: #1a2540;
-    --color-border: #364568;
-    --color-on-primary: #10182c;
-    --color-on-danger: #ffffff;
-    --color-focus: #90aaff;
-    --color-error: #ff8a80;
-    --background-color: var(--color-background);
-    --text-color: var(--color-text);
-
-    --auth-text: #eef2ff;
-    --auth-heading: #ffffff;
-    --auth-muted: #c0c9e5;
-    --auth-subtle: #c3cdea;
-    --auth-accent: #a8bcff;
-    --auth-panel: rgb(20 31 55 / 88%);
-    --auth-field: rgb(12 22 42 / 72%);
-    --auth-tab-track: rgb(9 19 39 / 62%);
-    --auth-tab-text: #c0cbea;
-    --auth-soft-surface: rgb(24 35 64 / 88%);
-    --auth-field-border: #475981;
-    --auth-divider: #465578;
-    --auth-placeholder: #9eaccd;
-    --auth-icon: #b1c0e8;
-    --auth-panel-border: rgb(180 198 240 / 24%);
-    --auth-input-text: #f2f5ff;
-    --auth-submit-text: #ffffff;
-    --auth-background-overlay: rgb(8 15 32 / 46%);
-    --page-bubbles: url('/assets/images/background-dark.webp');
-
-    --titlebar-background: #0b1222;
-    --browser-chrome: #161f36;
-    --browser-chrome-border: #26324f;
-    --browser-chrome-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
-    --browser-tab-text: #a3b0d6;
-    --browser-tab-active: var(--browser-chrome);
-    --browser-tab-active-text: #f5f7ff;
-    --browser-tab-hover: rgb(255 255 255 / 6%);
-    --browser-text: #eef2ff;
-    --browser-icon: #b9c5ea;
-    --browser-icon-disabled: #4d5b7f;
-    --browser-hover: rgb(168 188 255 / 12%);
-    --browser-pressed: rgb(168 188 255 / 20%);
-    --browser-field: #0e1628;
-    --browser-field-focus: #0b1222;
-    --browser-placeholder: #8392bd;
-    --browser-divider: #2a3655;
-    --browser-accent: #a8bcff;
-    --browser-page: #0f1729;
-    --browser-page-bubbles-opacity: 0.3;
-    --browser-heading: #ffffff;
-    --browser-muted: #b5c0de;
-    --browser-search: rgb(22 33 58 / 82%);
-    --browser-search-border: rgb(180 198 240 / 18%);
-    --browser-search-shadow: 0 1rem 2.5rem rgb(0 0 0 / 35%);
+  :root:not([data-theme='light']) {
+    @include dark-theme;
   }
+}
+
+:root[data-theme='dark'] {
+  @include dark-theme;
 }

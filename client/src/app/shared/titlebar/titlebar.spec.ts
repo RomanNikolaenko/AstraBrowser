@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { BrowserWindows } from '../browser-windows/browser-windows';
 import { Titlebar } from './titlebar';
 import { TitlebarContent } from './titlebar-content';
 
@@ -37,6 +38,16 @@ describe('Titlebar', () => {
 
     expect(titlebar.querySelector('.titlebar__title')?.textContent).toContain('Astra Browser');
     expect(titlebar.querySelectorAll('.window-control').length).toBe(3);
+  });
+
+  it('should mark a private window only', async () => {
+    const { titlebar } = await setup();
+    expect(titlebar.querySelector('.titlebar__private')).toBeNull();
+
+    TestBed.resetTestingModule();
+    TestBed.overrideProvider(BrowserWindows, { useValue: { isPrivate: true } });
+    const privateWindow = await setup();
+    expect(privateWindow.titlebar.querySelector('.titlebar__private')?.textContent).toContain('Приватне вікно');
   });
 
   it('should show screen content instead of the title while the screen is open', async () => {

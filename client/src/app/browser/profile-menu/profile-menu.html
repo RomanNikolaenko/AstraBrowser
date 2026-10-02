@@ -1,0 +1,17 @@
+<div class="profile-menu" id="profile-menu" popover (toggle)="onToggle($event)">
+  <h2 class="profile-menu__title">Профіль</h2>
+  <span class="profile-menu__avatar" aria-hidden="true"><app-icon icon="user" /></span>
+  <a class="profile-menu__sign-in" [routerLink]="'/sign-in'">Увійти / Синхронізація</a>
+
+  <ul class="profile-menu__list">
+    @for (item of items; track item.label) {
+      <li>
+        <button class="profile-menu__item" type="button" popovertarget="profile-menu" popovertargetaction="hide">
+          <app-icon class="profile-menu__icon" [icon]="item.icon" />
+          <span class="profile-menu__label">{{ item.label }}</span>
+          <app-icon class="profile-menu__chevron" icon="chevron-right" />
+        </button>
+      </li>
+    }
+  </ul>
+</div>

@@ -10,5 +10,11 @@
   }
 
   <div class="titlebar__spacer" data-tauri-drag-region></div>
+  @if (isPrivate) {
+    <span class="titlebar__private" data-tauri-drag-region>
+      <app-icon icon="private" />
+      Приватне вікно
+    </span>
+  }
   <app-window-controls />
 </header>

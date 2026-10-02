@@ -1,0 +1,56 @@
+@use '../browser-ui' as *;
+
+// Плаває над сторінкою праворуч угорі, як у Chrome.
+:host {
+  position: absolute;
+  z-index: 2;
+  top: 0.5rem;
+  right: 1rem;
+  max-width: calc(100% - 2rem);
+}
+
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 1rem;
+  background: var(--browser-popover);
+  box-shadow: var(--browser-popover-shadow);
+
+  &__field {
+    --input-height: 2.5rem;
+    --input-background: var(--browser-field);
+    --input-border: transparent;
+    --input-icon: var(--browser-icon);
+    --input-text: var(--browser-text);
+    --input-placeholder: var(--browser-placeholder);
+    --input-padding-end: 0.75rem;
+
+    width: 19rem;
+    min-width: 0;
+  }
+
+  &__status {
+    color: var(--browser-muted);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+
+    &--empty {
+      color: var(--color-error);
+    }
+  }
+
+  &__divider {
+    width: 0.0625rem;
+    height: 1.5rem;
+    margin-inline: 0.25rem;
+    background: var(--browser-divider);
+  }
+
+  &__button {
+    @include icon-button(2.25rem, 1.125rem);
+  }
+}

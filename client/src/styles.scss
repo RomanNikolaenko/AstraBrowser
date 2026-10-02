@@ -1,2 +1,33 @@
 @use './assets/styles/ui';
 @use './assets/styles/reset';
+
+// Підсвітка пошуку на сторінці (FindBar, CSS Custom Highlight API). Глобально, бо діє на будь-який текст.
+// Темний текст на жовтому/помаранчевому читається в обох темах.
+::highlight(find-matches) {
+  background-color: #ffe066;
+  color: #1a1a1a;
+}
+
+::highlight(find-current) {
+  background-color: #ff9632;
+  color: #1a1a1a;
+}
+
+// Друкується лише вміст сторінки: без заголовка вікна, вкладок, панелі інструментів і пошуку.
+@media print {
+  app-titlebar,
+  .chrome,
+  app-find-bar {
+    display: none !important;
+  }
+
+  app-root,
+  .app-content,
+  app-browser,
+  .viewport,
+  .content {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

@@ -122,6 +122,21 @@
     &--filled {
       background: var(--browser-field);
     }
+
+    // Якорі для випадних панелей (CSS anchor positioning).
+    &--tools {
+      anchor-name: --tools-menu;
+    }
+
+    &--menu {
+      anchor-name: --browser-menu;
+    }
+
+    // Кнопка лишається «натиснутою», поки її панель відкрита (.is-open — на хості меню поруч).
+    &:has(+ .is-open) {
+      background: var(--browser-pressed);
+      color: var(--browser-tab-active-text);
+    }
   }
 }
 
@@ -165,6 +180,7 @@
   @include focus-ring(0.125rem);
 
   &__avatar {
+    anchor-name: --profile-menu;
     display: grid;
     width: 2.125rem;
     height: 2.125rem;
@@ -194,8 +210,13 @@
     }
   }
 
-  &:active {
+  &:active,
+  &:has(+ .is-open) {
     background: var(--browser-pressed);
+  }
+
+  &:has(+ .is-open) .profile__chevron {
+    transform: rotate(180deg);
   }
 }
 
@@ -260,6 +281,15 @@
   }
 }
 
+// Область під панелями: у ній прокручується сторінка, а над нею плаває пошук (position: absolute).
+.viewport {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .content {
   display: flex;
   min-height: 0;
@@ -267,29 +297,6 @@
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-
-  &__placeholder {
-    display: grid;
-    flex: 1;
-    place-content: center;
-    justify-items: center;
-    gap: 0.5rem;
-    padding: 2rem;
-    color: var(--browser-muted);
-    text-align: center;
-  }
-
-  &__placeholder-favicon {
-    width: 3rem;
-    height: 3rem;
-    margin-block-end: 0.5rem;
-  }
-
-  &__placeholder-title {
-    color: var(--browser-heading);
-    font-size: 1.25rem;
-    font-weight: 700;
-  }
 }
 
 // Вікно не вужче за 800px (minWidth у tauri.conf.json): звільняємо місце для вкладок і адресного рядка.
