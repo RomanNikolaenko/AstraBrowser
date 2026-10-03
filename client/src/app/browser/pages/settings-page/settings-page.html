@@ -30,6 +30,24 @@
     </label>
   </div>
 
+  <h2 class="page__group">Пошук</h2>
+  <div class="page__list settings">
+    <fieldset class="settings__row settings__fieldset">
+      <legend class="settings__text">
+        <span class="page__name">Пошукова система</span>
+        <span class="page__meta">Для запитів з адресного рядка й нової вкладки</span>
+      </legend>
+      <div class="segmented">
+        @for (engine of engines; track engine.value) {
+          <label class="segmented__option">
+            <input class="segmented__input" type="radio" name="search-engine" [value]="engine.value" [checked]="settings.searchEngine() === engine.value" (change)="settings.searchEngine.set(engine.value)" />
+            <span>{{ engine.label }}</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+  </div>
+
   <h2 class="page__group">Конфіденційність</h2>
   <div class="page__list settings">
     <div class="settings__row">

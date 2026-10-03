@@ -9,7 +9,7 @@
     <span class="titlebar__title" data-tauri-drag-region>Astra Browser</span>
   }
 
-  <div class="titlebar__spacer" data-tauri-drag-region></div>
+  <div class="titlebar__spacer" data-tauri-drag-region (appMiddleClick)="slot.spacerMiddleClick()"></div>
   @if (isPrivate) {
     <span class="titlebar__private" data-tauri-drag-region>
       <app-icon icon="private" />

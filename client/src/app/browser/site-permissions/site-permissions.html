@@ -1,0 +1,16 @@
+<app-popover class="site-permissions" popoverId="site-permissions" align="start" caret (opened)="onOpened()">
+  <h2 class="site-permissions__title">Дозволи для {{ host() }}</h2>
+
+  <div class="site-permissions__row">
+    <app-icon class="site-permissions__icon" icon="autoplay" />
+    <label class="site-permissions__label" for="site-permissions-autoplay">Автовідтворення</label>
+    <app-select class="site-permissions__select" selectId="site-permissions-autoplay" selectName="autoplay" [options]="choices" [value]="autoplay() ?? 'allow'" [disabled]="autoplay() === null" (valueChange)="setAutoplay($event)" />
+  </div>
+
+  @if (changed()) {
+    <div class="site-permissions__notice" role="status">
+      <span>Зміни діятимуть після перезавантаження сторінки</span>
+      <button class="site-permissions__reload" type="button" (click)="reload()">Перезавантажити</button>
+    </div>
+  }
+</app-popover>

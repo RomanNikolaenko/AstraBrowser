@@ -1,0 +1,13 @@
+<div
+  #panel
+  class="popover"
+  popover
+  [id]="popoverId()"
+  [class.popover--start]="align() === 'start'"
+  [class.popover--caret]="caret()"
+  [style.position-anchor]="'--' + popoverId()"
+  (beforetoggle)="onBeforeToggle($event)"
+  (toggle)="onToggle($event)"
+>
+  <ng-content />
+</div>

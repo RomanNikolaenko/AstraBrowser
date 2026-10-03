@@ -1,0 +1,83 @@
+@use '../../../assets/styles/mixins' as *;
+
+$caret-size: 0.75rem;
+// Стрілка не ближче до краю панелі, ніж заокруглення кута (1rem) плюс пів її діагоналі — інакше лягає на дугу.
+$caret-min-offset: 1.25rem;
+
+// Сам хост не займає місця поруч із кнопкою: панель живе у top layer.
+:host {
+  display: contents;
+}
+
+.popover {
+  // Відступ стрілки від краю панелі, що стоїть під якорем, — так, щоб вона була над його центром,
+  // і на скільки зсунути панель назовні, щоб стрілка не опинилася на заокругленому куті.
+  --popover-caret: calc(var(--popover-anchor-width, 2.5rem) / 2 - #{$caret-size} / 2);
+  --popover-shift: max(0rem, #{$caret-min-offset} - var(--popover-caret));
+
+  position-area: bottom span-left;
+  inset: auto;
+  width: var(--popover-width, auto);
+  // Не вище за вікно: довгий вміст прокручується всередині (--popover-display: flex і min-height: 0 у вмісту).
+  max-height: calc(100% - 0.625rem);
+  // Напрям — і в закритому стані: під час анімації закриття display ще flex, і без цього вміст стрибав би.
+  flex-direction: column;
+  margin: 0.625rem 0 0;
+  padding: var(--popover-padding, 0.5rem);
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 1rem;
+  background: var(--browser-popover);
+  box-shadow: var(--browser-popover-shadow);
+  color: var(--browser-text);
+  font-family: var(--font-family-base);
+  opacity: 0;
+  transform: translateY(-0.375rem) scale(0.98);
+  transform-origin: top right;
+  transition: opacity $motion, transform $motion, overlay $motion allow-discrete, display $motion allow-discrete;
+
+  // display — лише для відкритого стану: інакше перекрив би display: none, яким браузер ховає закриту панель.
+  &:popover-open {
+    display: var(--popover-display, block);
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(-0.375rem) scale(0.98);
+    }
+  }
+
+  &--start {
+    position-area: bottom span-right;
+    transform-origin: top left;
+  }
+
+  &--caret {
+    overflow: visible;
+    margin-right: calc(-1 * var(--popover-shift));
+
+    &::before {
+      position: absolute;
+      top: -0.4375rem;
+      right: calc(var(--popover-caret) + var(--popover-shift));
+      width: $caret-size;
+      height: $caret-size;
+      border-top: 0.0625rem solid var(--browser-popover-border);
+      border-left: 0.0625rem solid var(--browser-popover-border);
+      border-top-left-radius: 0.1875rem;
+      background: var(--browser-popover);
+      content: '';
+      transform: rotate(45deg);
+    }
+  }
+
+  &--caret.popover--start {
+    margin-right: 0;
+    margin-left: calc(-1 * var(--popover-shift));
+
+    &::before {
+      right: auto;
+      left: calc(var(--popover-caret) + var(--popover-shift));
+    }
+  }
+}

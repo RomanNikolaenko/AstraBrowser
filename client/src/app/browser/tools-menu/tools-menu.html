@@ -1,4 +1,4 @@
-<div class="tools-menu" id="tools-menu" popover (toggle)="onToggle($event)">
+<app-popover class="tools-menu" popoverId="tools-menu" caret>
   <h2 class="tools-menu__title">Інструменти</h2>
   <ul class="tools-menu__grid">
     @for (tool of tools; track tool.label) {
@@ -10,4 +10,4 @@
       </li>
     }
   </ul>
-</div>
+</app-popover>

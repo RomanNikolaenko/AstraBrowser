@@ -3,8 +3,8 @@
   <h1 class="new-tab__title">Нова вкладка</h1>
   <p class="new-tab__subtitle">Швидкий доступ до пошуку, закладок і часто відвідуваних сторінок.</p>
 
-  <form class="search-form" role="search" (submit)="$event.preventDefault()">
-    <app-input class="search" size="lg" shape="pill" icon="search" inputId="new-tab-search" inputName="query" ariaLabel="Пошук у Astra або адреса сайту" placeholder="Пошук у Astra або введіть адресу сайту..." autocomplete="off" enterKeyHint="search">
+  <form class="search-form" role="search" (submit)="submit($event)">
+    <app-input class="search" size="lg" shape="pill" icon="search" inputId="new-tab-search" inputName="query" ariaLabel="Пошук у Astra або адреса сайту" placeholder="Пошук у Astra або введіть адресу сайту..." autocomplete="off" enterKeyHint="search" [(value)]="query">
       <span class="search__divider" aria-hidden="true"></span>
       <button class="search__action" type="button" aria-label="Екранна клавіатура" title="Екранна клавіатура">
         <app-icon icon="keyboard" />

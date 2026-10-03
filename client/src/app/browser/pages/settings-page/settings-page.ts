@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { SettingsStore, ThemePreference } from '../../../shared/settings/settings';
+import { SEARCH_ENGINES, SearchEngine, SettingsStore, ThemePreference } from '../../../shared/settings/settings';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { DownloadsStore } from '../../data/downloads';
 import { HistoryStore } from '../../data/history';
@@ -27,6 +27,8 @@ export class SettingsPage {
     { value: 'light', label: 'Світла', icon: 'sun' },
     { value: 'dark', label: 'Темна', icon: 'moon' },
   ];
+
+  protected readonly engines = Object.entries(SEARCH_ENGINES).map(([value, engine]) => ({ value: value as SearchEngine, label: engine.label }));
 
   protected records(count: number): string {
     return count ? `${count} ${RECORDS[plural.select(count)]}` : 'Порожньо';

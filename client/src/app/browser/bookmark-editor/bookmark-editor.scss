@@ -1,0 +1,47 @@
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.bookmark-editor {
+  --popover-width: 22rem;
+  --popover-padding: 1rem;
+
+  &__title {
+    margin-bottom: 0.875rem;
+    color: var(--browser-heading);
+    font-size: 1.125rem;
+    font-weight: 700;
+  }
+
+  &__form {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  &__field {
+    --input-background: var(--browser-field);
+    --input-background-focus: var(--browser-popover);
+    --input-border: var(--browser-chrome-border);
+    --input-icon: var(--browser-icon);
+    --input-text: var(--browser-text);
+    --input-placeholder: var(--browser-placeholder);
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+
+  &__button {
+    @include pill-button(2.5rem);
+  }
+
+  // «Видалити» відсунута ліворуч від «Скасувати» й «Зберегти».
+  &__remove {
+    margin-inline-end: auto;
+  }
+}

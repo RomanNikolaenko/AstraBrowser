@@ -1,34 +1,85 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  linkedSignal,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BrowserWindows } from '../shared/browser-windows/browser-windows';
+import { normalizeUrl } from '../shared/form-field/form-field';
+import { MiddleClick } from '../shared/middle-click/middle-click';
 import { SettingsStore } from '../shared/settings/settings';
 import { UiIcon } from '../shared/ui-icon/ui-icon';
 import { UiInput } from '../shared/ui-input/ui-input';
 import { TitlebarContent } from '../shared/titlebar/titlebar-content';
 import { BrowserMenu } from './browser-menu/browser-menu';
-import { BookmarksStore, bookmarkIcon } from './data/bookmarks';
+import { BookmarkEditor } from './bookmark-editor/bookmark-editor';
+import { Bookmark, BookmarksStore } from './data/bookmarks';
+import { AutoplayStore } from './data/autoplay';
+import { DownloadsStore } from './data/downloads';
+import { FaviconStore } from './data/favicons';
+import { HistoryStore } from './data/history';
 import { FindBar } from './find-bar/find-bar';
 import { NewTab } from './new-tab/new-tab';
+import { PageAudioEvent, PageBounds, PageDownloadEvent, PageFaviconEvent, PageFullscreenEvent, PageNavigationEvent, ReloadMode, PageLoadEvent, PageNewTabEvent, PageTitleEvent, PageViews } from './page-views/page-views';
 import { BookmarksPage } from './pages/bookmarks-page/bookmarks-page';
 import { DownloadsPage } from './pages/downloads-page/downloads-page';
 import { ExtensionsPage } from './pages/extensions-page/extensions-page';
 import { HelpPage } from './pages/help-page/help-page';
 import { HistoryPage } from './pages/history-page/history-page';
-import { InternalPage, TAB_PAGES, TabPage } from './pages/internal-pages';
+import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
 import { ProfileMenu } from './profile-menu/profile-menu';
+import { ReloadMenu } from './reload-menu/reload-menu';
+import { SiteIcon } from './site-icon/site-icon';
+import { SitePermissions } from './site-permissions/site-permissions';
 import { ToolsMenu } from './tools-menu/tools-menu';
 
+/** Стан вкладки із сайтом. */
+interface Site {
+  /** Мітка webview сайту. Нова для кожного webview: старий після «Назад» на внутрішню сторінку ще може закриватися. */
+  readonly label: string;
+  readonly url: string;
+  /** Порожній, доки сайт не повідомив заголовок. */
+  readonly title: string;
+  readonly loading: boolean;
+  /** Історію переходів веде сам WebView2 (page://navigation) — разом зі змінами адреси без перезавантаження. */
+  readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
+  /** Запис історії поточної адреси — йому оновлюємо назву, коли прийде заголовок. */
+  readonly historyEntry?: { readonly id: string; readonly url: string };
+  /** Сторінка зараз грає звук. */
+  readonly playing: boolean;
+  /** Звук вкладки вимкнено. */
+  readonly muted: boolean;
+}
+
+/** Вкладка показує внутрішню сторінку або сайт (тоді page === 'web' і є site). */
 interface BrowserTab {
   readonly id: number;
-  readonly page: TabPage;
+  readonly page: TabPage | 'web';
+  readonly site?: Site;
+  /** Внутрішня сторінка, з якої в цій вкладці перейшли на сайт: «Назад» з першої сторінки сайту повертає на неї. */
+  readonly back?: TabPage;
+  /** Сайт, з якого «Назад» повернув на внутрішню сторінку: «Вперед» відкриває його знову. */
+  readonly forward?: string;
 }
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    BookmarkEditor,
     BookmarksPage,
     BrowserMenu,
     DownloadsPage,
@@ -36,9 +87,13 @@ interface BrowserTab {
     FindBar,
     HelpPage,
     HistoryPage,
+    MiddleClick,
     NewTab,
     ProfileMenu,
+    ReloadMenu,
     SettingsPage,
+    SiteIcon,
+    SitePermissions,
     TitlebarContent,
     ToolsMenu,
     UiIcon,
@@ -54,10 +109,14 @@ interface BrowserTab {
 export class Browser {
   private readonly router = inject(Router);
   private readonly windows = inject(BrowserWindows);
+  private readonly pageViews = inject(PageViews);
+  private readonly history = inject(HistoryStore);
+  private readonly downloads = inject(DownloadsStore);
+  private readonly favicons = inject(FaviconStore);
+  private readonly autoplay = inject(AutoplayStore);
 
   protected readonly settings = inject(SettingsStore);
   protected readonly bookmarks = inject(BookmarksStore);
-  protected readonly bookmarkIcon = bookmarkIcon;
   protected readonly pages = TAB_PAGES;
 
   protected readonly tabs = signal<readonly BrowserTab[]>([{ id: 1, page: 'new-tab' }]);
@@ -70,20 +129,216 @@ export class Browser {
     return tabs.find((tab) => tab.id === this.activeTabId()) ?? tabs[0];
   });
 
+  /** Текст адресного рядка: адреса поточної вкладки, доки користувач не почав її редагувати. */
+  protected readonly omniboxText = linkedSignal(() => this.tabUrl(this.activeTab()));
+
+  /** На сторінці відео YouTube — кнопка «Картинка в картинці» в адресному рядку. */
+  protected readonly canPictureInPicture = computed(() => {
+    const site = this.activeTab().site;
+    return !!site && isYouTubeVideo(site.url);
+  });
+
+  /** Закладка поточної сторінки — тоді зірочка в адресному рядку зафарбована. */
+  protected readonly currentBookmark = computed(() => this.bookmarks.find(this.tabUrl(this.activeTab())));
+
+  protected readonly canGoBack = computed(() => {
+    const tab = this.activeTab();
+    return !!tab.site && (tab.site.canGoBack || !!tab.back);
+  });
+  protected readonly canGoForward = computed(() => {
+    const tab = this.activeTab();
+    return tab.site ? tab.site.canGoForward : !!tab.forward;
+  });
+
   /** Масштаб вмісту сторінки у відсотках; змінюється в головному меню. */
   protected readonly zoom = signal(100);
 
   /** Панель «Знайти на сторінці» шукає в поточній сторінці, тож закривається, щойно сторінка інша. */
   protected readonly findOpen = signal(false);
   private readonly findBar = viewChild(FindBar);
+  private readonly omnibox = viewChild.required<UiInput>('omnibox');
+  private readonly reloadMenu = viewChild.required(ReloadMenu);
+  /** Утримання кнопки «Оновити»: за RELOAD_HOLD_MS відкривається меню, а відпущена кнопка вже не оновлює сторінку. */
+  private reloadHold?: ReturnType<typeof setTimeout>;
+  private reloadHeld = false;
+  /** Webview сайту, для якого відкрито меню оновлення: його дії стосуються саме цього сайту. */
+  private reloadMenuPage: string | null = null;
 
+  /**
+   * Відкрите меню чи панель (popover). Нативний webview сайту малюється поверх HTML інтерфейсу
+   * й закрив би їх, тож поки щось відкрито, сторінка тимчасово ховається.
+   */
+  private readonly overlayOpen = signal(false);
+
+  /** Webview сайту, який зараз має бути видно. */
+  /** Webview сайту в активній вкладці: для нього панель дозволів сайту. */
+  protected readonly activeSitePage = computed(() => {
+    const tab = this.activeTab();
+    return tab.page === 'web' && this.pageViews.available ? this.pageLabel(tab) : null;
+  });
+
+  private readonly visiblePage = computed(() => {
+    const tab = this.activeTab();
+    return tab.page === 'web' && !this.overlayOpen() ? this.pageLabel(tab) : null;
+  });
+
+  /**
+   * Знімок сторінки на місці її webview, поки відкрита панель: сам webview малюється поверх HTML,
+   * тож під панеллю його доводиться ховати, а сторінка при цьому не має зникати.
+   */
+  protected readonly pageCover = signal<{ readonly url: string; readonly width: number; readonly height: number } | null>(null);
+  /** Номер останньої зміни панелей: відповідь на застарілий запит знімка відкидається. */
+  private overlayChange = 0;
+
+  /** Сайт, що показує відео на весь екран: його webview накриває все вікно разом із панелями. */
+  private readonly fullscreenPage = signal<string | null>(null);
+  /** Чи було вікно повноекранним ще до відео — тоді після виходу з відео таким і лишається. */
+  private windowWasFullscreen = false;
+  /**
+   * Входи й виходи з повноекранного відео виконуються по черзі: сайт може надіслати «увійшов» і «вийшов»
+   * швидше, ніж вікно встигне змінитися, і переплетені переходи лишили б вікно на весь екран без сторінки.
+   */
+  private fullscreenQueue = Promise.resolve();
+
+  private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
+  private readonly windowLabel = isTauri() ? getCurrentWindow().label : 'web';
+  private shownPage: string | null = null;
   private nextTabId = 2;
+  /** Скільки webview сайтів уже створила кожна вкладка — для неповторних міток. */
+  private readonly pagesCreated = new Map<number, number>();
 
   constructor() {
+    const destroyRef = inject(DestroyRef);
+    const injector = inject(Injector);
+
+    // Меню оновлення — про сайт, на якому його відкрили: інша вкладка чи не сайт — закриваємо.
     effect(() => {
-      this.activeTab();
+      this.activeSitePage();
+      untracked(() => {
+        clearTimeout(this.reloadHold);
+        if (this.reloadMenu().isOpen()) {
+          this.reloadMenu().hide();
+        }
+      });
+    });
+
+    // Як у Chrome: відкрили нову вкладку (чи перейшли на неї) — курсор в адресному рядку, можна одразу друкувати.
+    const newTabShown = computed(() => (this.activeTab().page === 'new-tab' ? this.activeTab().id : null));
+    effect(() => {
+      if (newTabShown() !== null) {
+        untracked(() => afterNextRender(() => this.omnibox().focus(), { injector }));
+      }
+    });
+
+    const activePage = computed(() => `${this.activeTab().id}:${this.activeTab().page}:${this.activeTab().site?.url ?? ''}`);
+    effect(() => {
+      activePage();
       untracked(() => this.findOpen.set(false));
     });
+
+    effect(() => {
+      const label = this.visiblePage();
+      untracked(() => {
+        if (this.shownPage && this.shownPage !== label) {
+          this.ignore(this.pageViews.setVisible(this.shownPage, false));
+        }
+        if (label) {
+          this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+          this.ignore(this.pageViews.setVisible(label, true));
+        }
+        this.shownPage = label;
+      });
+    });
+
+    // Інша вкладка чи відкрита панель — повноекранне відео попередньої сторінки згортається.
+    effect(() => {
+      const label = this.visiblePage();
+      untracked(() =>
+        this.queueFullscreen(async () => {
+          if (this.fullscreenPage() && this.fullscreenPage() !== label) {
+            await this.exitPageFullscreen();
+          }
+        }),
+      );
+    });
+
+    effect(() => {
+      const scale = this.zoom() / 100;
+      const label = this.visiblePage();
+      if (label) {
+        untracked(() => this.ignore(this.pageViews.setZoom(label, scale)));
+      }
+    });
+
+    // Popover-и не спливають подій toggle, тож ловимо їх на фазі перехоплення.
+    // beforetoggle приходить ще до першого кадру з панеллю: ховаємо її, поки сайт не знято (setPageCovering).
+    const onBeforeToggle = (event: Event) => {
+      if ((event as ToggleEvent).newState === 'open' && !this.overlayOpen() && this.activeTab().page === 'web' && this.pageViews.available) {
+        this.setPageCovering(true);
+      }
+    };
+    const onToggle = () => void this.onOverlayToggle();
+    document.addEventListener('beforetoggle', onBeforeToggle, true);
+    document.addEventListener('toggle', onToggle, true);
+    destroyRef.onDestroy(() => {
+      document.removeEventListener('beforetoggle', onBeforeToggle, true);
+      document.removeEventListener('toggle', onToggle, true);
+      this.setPageCovering(false);
+    });
+
+    if (this.pageViews.available) {
+      // Список сайтів із заблокованим звуком — у скрипти всіх сторінок вікна.
+      effect(() => {
+        const origins = this.autoplay.blockAudio();
+        untracked(() => this.ignore(this.pageViews.setAudioRules(origins)));
+      });
+
+      // Webview сайту лежить поверх області вмісту, тож іде за її розміром.
+      afterNextRender(() => {
+        const observer = new ResizeObserver(() => {
+          const label = this.visiblePage();
+          if (label) {
+            this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+          }
+        });
+        observer.observe(this.viewport().nativeElement);
+        destroyRef.onDestroy(() => observer.disconnect());
+      });
+
+      const listeners = [
+        this.pageViews.on('page://load', (event) => this.onPageLoad(event)),
+        this.pageViews.on('page://navigation', (event) => this.onPageNavigation(event)),
+        this.pageViews.on('page://title', (event) => this.onPageTitle(event)),
+        this.pageViews.on('page://audio', (event) => this.onPageAudio(event)),
+        this.pageViews.on('page://fullscreen', (event) => this.queueFullscreen(() => this.onPageFullscreen(event))),
+        this.pageViews.on('page://favicon', (event) => this.onPageFavicon(event)),
+        this.pageViews.on('page://new-tab', (event) => this.onPageNewTab(event)),
+        this.pageViews.on('page://download', (event) => this.onPageDownload(event)),
+      ];
+      destroyRef.onDestroy(() => {
+        for (const listener of listeners) {
+          void listener.then((unlisten) => unlisten());
+        }
+        // Вихід на сторінку входу: webview сайтів не мають пережити екран браузера.
+        for (const tab of this.tabs()) {
+          if (tab.site) {
+            this.ignore(this.pageViews.close(tab.site.label));
+          }
+        }
+      });
+    }
+  }
+
+  protected tabTitle(tab: BrowserTab): string {
+    return tab.site ? tab.site.title || hostname(tab.site.url) : TAB_PAGES[tab.page as TabPage].title;
+  }
+
+  protected tabFavicon(tab: BrowserTab): string {
+    return TAB_PAGES[tab.page as TabPage].favicon;
+  }
+
+  protected tabUrl(tab: BrowserTab): string {
+    return tab.site ? tab.site.url : TAB_PAGES[tab.page as TabPage].url;
   }
 
   protected selectTab(id: number): void {
@@ -103,6 +358,11 @@ export class Browser {
       return;
     }
 
+    const site = tabs[index].site;
+    if (site) {
+      this.ignore(this.pageViews.close(site.label));
+    }
+
     const remaining = tabs.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
       const tab = this.createNewTab();
@@ -118,23 +378,157 @@ export class Browser {
     }
   }
 
+  /**
+   * Відкриває введене в адресному рядку чи пошуку: astra://… — внутрішню сторінку, адресу — сайт,
+   * будь-який інший текст — пошук в обраній у налаштуваннях пошуковій системі.
+   */
+  protected navigate(input: string): void {
+    const text = input.trim();
+    if (!text) {
+      return;
+    }
+
+    const page = internalPageFor(text);
+    if (page) {
+      this.openPage(page);
+      return;
+    }
+
+    this.openSite(normalizeUrl(text) ?? this.settings.searchUrl(text), this.activeTab(), { back: true });
+  }
+
+  protected onOmniboxKeydown(event: KeyboardEvent): void {
+    // Кнопки всередині рядка (дозволи сайту, зірочка) обробляють Enter самі.
+    if (!(event.target instanceof HTMLInputElement)) {
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.navigate(this.omniboxText());
+      (event.target as HTMLElement).blur();
+    } else if (event.key === 'Escape') {
+      this.omniboxText.set(this.tabUrl(this.activeTab()));
+    }
+  }
+
+  protected goBack(): void {
+    const tab = this.activeTab();
+    if (tab.site?.canGoBack) {
+      this.ignore(this.pageViews.go(tab.site.label, -1));
+    } else if (tab.site && tab.back) {
+      // З першої сторінки сайту — на внутрішню сторінку, з якої на нього перейшли (як на нову вкладку в Chrome).
+      this.ignore(this.pageViews.close(tab.site.label));
+      this.replaceTab({ id: tab.id, page: tab.back, forward: tab.site.url });
+    }
+  }
+
+  protected goForward(): void {
+    const tab = this.activeTab();
+    if (tab.site?.canGoForward) {
+      this.ignore(this.pageViews.go(tab.site.label, 1));
+    } else if (!tab.site && tab.forward) {
+      this.openSite(tab.forward, tab, { back: true });
+    }
+  }
+
+  protected reload(): void {
+    const tab = this.activeTab();
+    if (tab.site) {
+      this.ignore(this.pageViews.reload(tab.site.label));
+    }
+  }
+
+  protected togglePictureInPicture(): void {
+    const tab = this.activeTab();
+    if (tab.site && this.canPictureInPicture()) {
+      this.ignore(this.pageViews.pictureInPicture(tab.site.label));
+    }
+  }
+
+  /** Оновлення з меню кнопки: без кешу, з очищенням кешу, даних чи cookies сайту. */
+  protected reloadWith(mode: ReloadMode): void {
+    const tab = this.reloadMenuPage ? this.tabByLabel(this.reloadMenuPage) : undefined;
+    if (tab?.site) {
+      this.updateSite(tab.id, (site) => ({ ...site, loading: true }));
+      this.ignore(this.pageViews.reloadWith(tab.site.label, mode));
+    }
+  }
+
+  /**
+   * Утримання кнопки «Оновити». Chromium надсилає події вказівника й неактивній кнопці,
+   * тож без сайту у вкладці (нова вкладка, внутрішні сторінки) меню не відкривається.
+   */
+  protected startReloadHold(event: PointerEvent): void {
+    if (event.button !== 0 || !this.activeTab().site) {
+      return;
+    }
+    this.reloadHeld = false;
+    clearTimeout(this.reloadHold);
+    this.reloadHold = setTimeout(() => {
+      this.reloadHeld = true;
+      this.showReloadMenu();
+    }, RELOAD_HOLD_MS);
+  }
+
+  protected cancelReloadHold(): void {
+    clearTimeout(this.reloadHold);
+  }
+
+  /**
+   * Кнопка пов'язана з меню через popovertarget — для доступності й щоб відпускання кнопки миші після
+   * утримання не закрило щойно відкрите меню. Але клік має оновлювати сторінку, а не перемикати меню.
+   */
+  protected onReloadClick(event: MouseEvent): void {
+    event.preventDefault();
+    if (this.reloadHeld) {
+      this.reloadHeld = false;
+    } else if (this.reloadMenu().isOpen()) {
+      this.reloadMenu().hide();
+    } else {
+      this.reload();
+    }
+  }
+
+  /** Правий клік чи клавіша меню — те саме меню без утримання (теж лише на сайті). */
+  protected openReloadMenu(event: MouseEvent): void {
+    event.preventDefault();
+    this.cancelReloadHold();
+    this.showReloadMenu();
+  }
+
+  private showReloadMenu(): void {
+    const site = this.activeTab().site;
+    if (site) {
+      this.reloadMenuPage = site.label;
+      this.reloadMenu().show();
+    }
+  }
+
+  /** Вимикає чи вмикає звук вкладки; значок оновиться з події page://audio. */
+  protected toggleMute(tab: BrowserTab): void {
+    if (tab.site) {
+      this.ignore(this.pageViews.setMuted(this.pageLabel(tab), !tab.site.muted));
+    }
+  }
+
   // Справжньої сесії ще немає: вихід просто повертає на сторінку входу.
   protected signOut(): void {
     void this.router.navigate(['/sign-in']);
   }
 
-  protected async toggleFullscreen(): Promise<void> {
-    if (isTauri()) {
-      const window = getCurrentWindow();
-      await window.setFullscreen(!(await window.isFullscreen()));
-      return;
+  /**
+   * Подвійний клік по порожньому місцю вкладок і панелей розгортає чи відновлює вікно, як по заголовку.
+   * Перетягувати вікно за них не можна — лише за порожні місця заголовка.
+   */
+  protected onChromeDoubleClick(event: MouseEvent): void {
+    const target = event.target;
+    if (target instanceof Element && !target.closest('button, a, input, textarea, select, label, app-input, [popover]')) {
+      void this.windows.toggleMaximize();
     }
+  }
 
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-    } else {
-      await document.documentElement.requestFullscreen();
-    }
+  protected async toggleFullscreen(): Promise<void> {
+    await this.windows.setFullscreen(!(await this.windows.isFullscreen()));
   }
 
   /**
@@ -150,13 +544,40 @@ export class Browser {
 
     const active = this.activeTab();
     if (active.page === 'new-tab') {
-      this.tabs.update((tabs) => tabs.map((tab) => (tab.id === active.id ? { ...tab, page } : tab)));
+      // Нова сторінка у вкладці — і «Вперед» на сайт, з якого повернулися, більше не має сенсу.
+      this.replaceTab({ id: active.id, page });
       return;
     }
 
     const tab: BrowserTab = { id: this.nextTabId++, page };
     this.tabs.update((tabs) => [...tabs, tab]);
     this.activeTabId.set(tab.id);
+  }
+
+  /** Закладка на внутрішню сторінку відкриває її, на сайт — сайт у поточній вкладці. */
+  protected openBookmark(bookmark: Bookmark): void {
+    const page = internalPageFor(bookmark.url);
+    if (page) {
+      this.openPage(page);
+    } else {
+      this.openSite(bookmark.url, this.activeTab(), { back: true });
+    }
+  }
+
+  /** Клік коліщатком по закладці: нова вкладка у фоні, як у звичайних браузерах. */
+  protected openBookmarkInNewTab(bookmark: Bookmark): void {
+    const page = internalPageFor(bookmark.url);
+    if (page) {
+      // Внутрішня сторінка має одну вкладку: вже відкрита — нова не потрібна.
+      if (!this.tabs().some((tab) => tab.page === page)) {
+        this.tabs.update((tabs) => [...tabs, { id: this.nextTabId++, page }]);
+      }
+      return;
+    }
+
+    const tab = this.createNewTab();
+    this.tabs.update((tabs) => [...tabs, tab]);
+    this.openSite(bookmark.url, tab, { background: true });
   }
 
   protected openWindow(isPrivate = false): void {
@@ -173,12 +594,22 @@ export class Browser {
     }
   }
 
-  // Стилі @media print у styles.scss лишають на папері тільки вміст сторінки.
+  /** Пошук на сайті — через window.find у його webview; збіги підсвічує сама сторінка. */
+  protected readonly findOnPage = (query: string, backwards: boolean): Promise<boolean> =>
+    this.pageViews.find(this.pageLabel(this.activeTab()), query, backwards);
+
+  // Сайт друкує свій webview; внутрішні сторінки — стилі @media print у styles.scss.
   protected print(): void {
-    window.print();
+    const tab = this.activeTab();
+    if (tab.page === 'web') {
+      this.ignore(this.pageViews.print(this.pageLabel(tab)));
+    } else {
+      window.print();
+    }
   }
 
   // event.code, а не key: з українською розкладкою клавіша T дає «е», а N — «т».
+  // Коли фокус усередині сайту, клавіші отримує його webview, а не цей документ.
   protected onKeydown(event: KeyboardEvent): void {
     if (!event.ctrlKey || event.altKey || event.metaKey) {
       return;
@@ -203,13 +634,285 @@ export class Browser {
       case 'KeyP':
         this.print();
         break;
+      case 'Shift+BracketRight':
+        this.togglePictureInPicture();
+        break;
       default:
         return;
     }
     event.preventDefault();
   }
 
+  /**
+   * `background` — нова вкладка у фоні (клік коліщатком). `back` — перехід з внутрішньої сторінки цієї
+   * вкладки, на яку потім можна повернутися «Назад» (з посилань у нових вкладках — ні, як у Chrome).
+   */
+  private openSite(url: string, tab: BrowserTab, { background = false, back = false } = {}): void {
+    if (!this.pageViews.available) {
+      // Поза Tauri вбудувати сайт нікуди — відкриваємо його звичайною вкладкою браузера.
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+
+    if (tab.site) {
+      this.updateSite(tab.id, (site) => ({ ...site, url, loading: true }));
+      this.ignore(this.pageViews.navigate(tab.site.label, url));
+      return;
+    }
+
+    const label = this.newPageLabel(tab);
+    const site: Site = { label, url, title: '', loading: true, canGoBack: false, canGoForward: false, playing: false, muted: false };
+    this.replaceTab({ id: tab.id, page: 'web', site, back: back && tab.page !== 'web' ? tab.page : undefined });
+    const blockAudio = this.autoplay.blockAudio();
+    if (background) {
+      // Справжні межі фонова вкладка отримає, коли її відкриють.
+      this.ignore(this.pageViews.open(label, url, { x: 0, y: 0, width: 0, height: 0 }, { background, blockAudio }));
+      return;
+    }
+    this.activeTabId.set(tab.id);
+    this.ignore(this.pageViews.open(label, url, this.pageBounds(), { blockAudio }));
+  }
+
+  private onPageLoad({ label, url, loading }: PageLoadEvent): void {
+    const tab = this.tabByLabel(label);
+    if (tab?.site) {
+      this.updateSite(tab.id, (site) => ({ ...site, url, loading }));
+    }
+  }
+
+  /** Нова адреса (і без перезавантаження) — запис в історії; «Назад» і «Вперед» — як каже WebView2. */
+  private onPageNavigation({ label, url, canGoBack, canGoForward }: PageNavigationEvent): void {
+    const tab = this.tabByLabel(label);
+    // Початкова about:blank нового webview, поки він ще не перейшов на сайт, — не перехід користувача.
+    if (!tab?.site || !/^https?:/i.test(url)) {
+      return;
+    }
+
+    this.updateSite(tab.id, (site) => {
+      // У приватному вікні історія не ведеться; та сама адреса (оновлення, зміна лише історії) не дублює запис.
+      if (this.windows.isPrivate || site.historyEntry?.url === url) {
+        return { ...site, url, canGoBack, canGoForward };
+      }
+      const id = this.history.record(url, site.title || hostname(url));
+      return { ...site, url, canGoBack, canGoForward, historyEntry: { id, url } };
+    });
+  }
+
+  private onPageTitle({ label, title }: PageTitleEvent): void {
+    const tab = this.tabByLabel(label);
+    if (!tab?.site) {
+      return;
+    }
+
+    this.updateSite(tab.id, (site) => ({ ...site, title }));
+    const entry = tab.site.historyEntry;
+    if (entry && entry.url === tab.site.url && title) {
+      this.history.rename(entry.id, title);
+    }
+  }
+
+  private onPageAudio({ label, playing, muted }: PageAudioEvent): void {
+    const tab = this.tabByLabel(label);
+    if (tab?.site) {
+      this.updateSite(tab.id, (site) => ({ ...site, playing, muted }));
+    }
+  }
+
+  /** Відео на весь екран: вікно стає повноекранним, а webview сайту накриває його повністю. */
+  private async onPageFullscreen({ label, fullscreen }: PageFullscreenEvent): Promise<void> {
+    if (!fullscreen) {
+      if (label === this.fullscreenPage()) {
+        await this.exitPageFullscreen();
+      }
+      return;
+    }
+    if (label !== this.visiblePage() || label === this.fullscreenPage()) {
+      return;
+    }
+
+    this.windowWasFullscreen = await this.windows.isFullscreen();
+    this.fullscreenPage.set(label);
+    await this.windows.setFullscreen(true);
+    // Якщо вікно вже було на весь екран, розмір не зміниться, тож межі — одразу.
+    this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+  }
+
+  /**
+   * Відкрилася чи закрилася панель (popover). Перед тим як сховати сайт під панеллю, знімаємо його
+   * й кладемо знімок на те саме місце; після закриття знімок зникає, щойно webview знову на місці.
+   */
+  private async onOverlayToggle(): Promise<void> {
+    const open = !!document.querySelector(':popover-open');
+    const change = ++this.overlayChange;
+
+    if (!open) {
+      this.setPageCovering(false);
+      // Сайт повертається, коли панель уже згасла: інакше webview обірвав би її анімацію.
+      await delay(POPOVER_MOTION_MS);
+      if (change === this.overlayChange) {
+        this.overlayOpen.set(false);
+        // А знімок прибираємо, коли webview точно знову на місці.
+        await delay(150);
+        if (change === this.overlayChange) {
+          this.setPageCover(null);
+        }
+      }
+      return;
+    }
+    if (this.overlayOpen()) {
+      return;
+    }
+
+    const tab = this.activeTab();
+    if (tab.page === 'web' && this.pageViews.available) {
+      this.setPageCovering(true);
+      const bounds = this.pageBounds();
+      const image = await Promise.race([this.pageViews.capture(this.pageLabel(tab)).catch(() => null), delay(400).then(() => null)]);
+      if (image && change === this.overlayChange) {
+        const url = URL.createObjectURL(new Blob([image], { type: 'image/jpeg' }));
+        // Знімок має бути вже розкодований і намальований, коли webview зникне, — інакше блимне порожнеча.
+        await decodeImage(url);
+        this.setPageCover({ url, width: Math.round(bounds.width), height: Math.round(bounds.height) });
+        await nextFrame();
+        await nextFrame();
+      }
+      if (change !== this.overlayChange) {
+        return;
+      }
+    }
+    this.overlayOpen.set(true);
+    this.setPageCovering(false);
+  }
+
+  /**
+   * Поки сайт знімається, відкрита панель невидима (клас page-covering на <html>, styles.scss): інакше її
+   * частину над сайтом на мить закривав би його webview. Клас ставиться одразу, а не через effect —
+   * той спрацьовує вже після кадру, і панель встигала б показатися, зникнути й показатися знову.
+   */
+  private setPageCovering(covering: boolean): void {
+    document.documentElement.classList.toggle('page-covering', covering);
+  }
+
+  private setPageCover(cover: { url: string; width: number; height: number } | null): void {
+    const previous = this.pageCover();
+    if (previous) {
+      URL.revokeObjectURL(previous.url);
+    }
+    this.pageCover.set(cover);
+  }
+
+  private queueFullscreen(change: () => Promise<void>): void {
+    this.fullscreenQueue = this.fullscreenQueue.then(change).catch(() => undefined);
+  }
+
+  private async exitPageFullscreen(): Promise<void> {
+    const label = this.fullscreenPage();
+    this.fullscreenPage.set(null);
+    if (!this.windowWasFullscreen) {
+      await this.windows.setFullscreen(false);
+    }
+    if (label) {
+      this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+    }
+  }
+
+  private onPageFavicon({ label, url, icon }: PageFaviconEvent): void {
+    if (this.tabByLabel(label)) {
+      this.favicons.remember(url, icon);
+    }
+  }
+
+  private onPageNewTab({ label, url }: PageNewTabEvent): void {
+    if (!this.tabByLabel(label)) {
+      return;
+    }
+    const tab = this.createNewTab();
+    this.tabs.update((tabs) => [...tabs, tab]);
+    this.openSite(url, tab);
+  }
+
+  private onPageDownload({ label, url, fileName, size, success }: PageDownloadEvent): void {
+    if (this.tabByLabel(label)) {
+      this.downloads.add({ fileName, url, size, status: success ? 'completed' : 'failed', finishedAt: Date.now() });
+    }
+  }
+
+  private updateSite(tabId: number, update: (site: Site) => Site): void {
+    this.tabs.update((tabs) => tabs.map((tab) => (tab.id === tabId && tab.site ? { ...tab, site: update(tab.site) } : tab)));
+  }
+
+  private tabByLabel(label: string): BrowserTab | undefined {
+    return this.tabs().find((tab) => tab.site?.label === label);
+  }
+
+  /** Мітка webview сайту вкладки (порожня, якщо вкладка зараз не на сайті). */
+  private pageLabel(tab: BrowserTab): string {
+    return tab.site?.label ?? '';
+  }
+
+  /** Мітка для нового webview вкладки: унікальна в застосунку (є мітка вікна) і не повторює попередні цієї вкладки. */
+  private newPageLabel(tab: BrowserTab): string {
+    const created = this.pagesCreated.get(tab.id) ?? 0;
+    this.pagesCreated.set(tab.id, created + 1);
+    const label = `page-${this.windowLabel}-${tab.id}`;
+    return created ? `${label}-${created + 1}` : label;
+  }
+
+  private replaceTab(tab: BrowserTab): void {
+    this.tabs.update((tabs) => tabs.map((item) => (item.id === tab.id ? tab : item)));
+  }
+
+  /** Область вмісту в координатах вікна, без смуги пошуку на сторінці (padding-top). */
+  private pageBounds(): PageBounds {
+    if (this.fullscreenPage()) {
+      return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+    }
+    const viewport = this.viewport().nativeElement;
+    const rect = viewport.getBoundingClientRect();
+    const top = parseFloat(getComputedStyle(viewport).paddingTop) || 0;
+    return { x: rect.left, y: rect.top + top, width: rect.width, height: Math.max(rect.height - top, 0) };
+  }
+
+  /** Показ, межі й масштаб — ідемпотентні: якщо webview ще створюється чи вже закритий, пропускаємо. */
+  private ignore(result: Promise<unknown>): void {
+    result.catch(() => undefined);
+  }
+
   private createNewTab(): BrowserTab {
     return { id: this.nextTabId++, page: 'new-tab' };
+  }
+}
+
+/** Тривалість появи й зникнення панелей ($motion у _mixins.scss). */
+const POPOVER_MOTION_MS = 180;
+
+/** Сторінка відео на YouTube (зокрема Shorts, трансляції й вбудований плеєр). */
+function isYouTubeVideo(url: string): boolean {
+  try {
+    const { hostname, pathname } = new URL(url);
+    return /(^|\.)youtube\.com$/.test(hostname) && /^\/(watch|shorts\/|live\/|embed\/)/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** Скільки тримати кнопку «Оновити», щоб відкрилося меню оновлення. */
+const RELOAD_HOLD_MS = 500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function decodeImage(url: string): Promise<void> {
+  const image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+  } catch {
+    // Не розкодувався — покажемо як є, браузер домалює.
   }
 }

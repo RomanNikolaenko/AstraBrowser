@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { isTauri } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
@@ -12,6 +12,9 @@ const PRIVATE_PREFIX = 'private-';
 @Injectable({ providedIn: 'root' })
 export class BrowserWindows {
   readonly isPrivate = isTauri() && getCurrentWindow().label.startsWith(PRIVATE_PREFIX);
+
+  /** Вікно було розгорнуте до повноекранного режиму. */
+  private restoreMaximized = false;
 
   /**
    * Нове вікно одразу з головним екраном. Приватне — у режимі incognito
@@ -36,5 +39,41 @@ export class BrowserWindows {
       incognito: isPrivate,
     });
     void webview.once('tauri://error', (event) => console.error('Failed to open a window', event.payload));
+  }
+
+  /** Розгортає вікно на весь робочий стіл або повертає попередній розмір; поза Tauri — нічого. */
+  async toggleMaximize(): Promise<void> {
+    if (isTauri()) {
+      await getCurrentWindow().toggleMaximize();
+    }
+  }
+
+  isFullscreen(): Promise<boolean> {
+    return isTauri() ? getCurrentWindow().isFullscreen() : Promise.resolve(!!document.fullscreenElement);
+  }
+
+  /** Поточне вікно на весь екран; поза Tauri — повноекранний режим сторінки. */
+  async setFullscreen(fullscreen: boolean): Promise<void> {
+    if (isTauri()) {
+      const window = getCurrentWindow();
+      // Розгорнутому вікну без рамки Windows лишає відступи розгорнутого стану, і на весь екран
+      // воно не дотягує знизу. Тож спершу знімаємо розгортання, а після виходу повертаємо.
+      if (fullscreen && (await window.isMaximized())) {
+        this.restoreMaximized = true;
+        await window.unmaximize();
+      }
+      await window.setFullscreen(fullscreen);
+      if (fullscreen) {
+        // Поки сторінка сайту сама на весь екран (відео), tao не встигає розтягнути вікно — server/src/fullscreen.rs.
+        await invoke('window_fill_monitor');
+      } else if (this.restoreMaximized) {
+        this.restoreMaximized = false;
+        await window.maximize();
+      }
+    } else if (fullscreen && !document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    } else if (!fullscreen && document.fullscreenElement) {
+      await document.exitFullscreen();
+    }
   }
 }

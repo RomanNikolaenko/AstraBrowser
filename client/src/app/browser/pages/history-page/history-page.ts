@@ -2,11 +2,12 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
 import { HistoryStore } from '../../data/history';
+import { SiteIcon } from '../../site-icon/site-icon';
 import { formatTime, groupByDay, hostname, matchesQuery } from '../internal-pages';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon, UiInput],
+  imports: [SiteIcon, UiIcon, UiInput],
   selector: 'app-history-page',
   styleUrls: ['../internal-page.scss'],
   templateUrl: './history-page.html',

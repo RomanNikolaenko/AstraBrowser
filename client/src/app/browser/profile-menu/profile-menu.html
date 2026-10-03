@@ -1,4 +1,4 @@
-<div class="profile-menu" id="profile-menu" popover (toggle)="onToggle($event)">
+<app-popover class="profile-menu" popoverId="profile-menu" caret>
   <h2 class="profile-menu__title">Профіль</h2>
   <span class="profile-menu__avatar" aria-hidden="true"><app-icon icon="user" /></span>
   <a class="profile-menu__sign-in" [routerLink]="'/sign-in'">Увійти / Синхронізація</a>
@@ -14,4 +14,4 @@
       </li>
     }
   </ul>
-</div>
+</app-popover>

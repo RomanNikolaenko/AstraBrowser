@@ -44,16 +44,28 @@ export function findMatches(root: HTMLElement, query: string): Range[] {
 })
 export class FindBar {
   readonly root = input.required<HTMLElement>();
+  /**
+   * Пошук у сайті (його DOM в окремому webview, сюди недоступний): виділяє наступний чи попередній збіг
+   * і каже, чи знайшовся. Без нього панель шукає й підсвічує збіги в `root` сама.
+   */
+  readonly finder = input<(query: string, backwards: boolean) => Promise<boolean>>();
   readonly closed = output();
 
   protected readonly query = signal('');
   protected readonly current = signal(0);
   private readonly matches = signal<readonly Range[]>([]);
+  /** Результат останнього пошуку в сайті; null — ще не шукали. */
+  private readonly found = signal<boolean | null>(null);
 
   protected readonly total = computed(() => this.matches().length);
+  protected readonly canStep = computed(() => (this.finder() ? !!this.found() : this.total() > 0));
+  protected readonly notFound = computed(() => !!this.query().trim() && (this.finder() ? this.found() === false : !this.total()));
   protected readonly status = computed(() => {
     if (!this.query().trim()) {
       return '';
+    }
+    if (this.finder()) {
+      return this.found() === null ? '' : this.found() ? 'Знайдено' : 'Немає збігів';
     }
     return this.total() ? `${this.current() + 1} / ${this.total()}` : 'Немає збігів';
   });
@@ -64,7 +76,15 @@ export class FindBar {
     effect(() => {
       const query = this.query();
       const root = this.root();
+      const finder = this.finder();
       untracked(() => {
+        if (finder) {
+          this.found.set(null);
+          if (query.trim()) {
+            void finder(query, false).then((found) => this.found.set(found));
+          }
+          return;
+        }
         this.matches.set(findMatches(root, query));
         this.current.set(0);
       });
@@ -82,14 +102,21 @@ export class FindBar {
   }
 
   protected next(): void {
-    if (this.total()) {
-      this.current.update((index) => (index + 1) % this.total());
-    }
+    this.step(false);
   }
 
   protected previous(): void {
-    if (this.total()) {
-      this.current.update((index) => (index - 1 + this.total()) % this.total());
+    this.step(true);
+  }
+
+  private step(backwards: boolean): void {
+    const finder = this.finder();
+    if (finder) {
+      if (this.query().trim()) {
+        void finder(this.query(), backwards).then((found) => this.found.set(found));
+      }
+    } else if (this.total()) {
+      this.current.update((index) => (index + (backwards ? -1 : 1) + this.total()) % this.total());
     }
   }
 

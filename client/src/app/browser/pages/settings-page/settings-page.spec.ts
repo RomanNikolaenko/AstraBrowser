@@ -55,14 +55,14 @@ describe('SettingsPage', () => {
     const now = Date.now();
     localStorage.setItem('astra.history', JSON.stringify([1, 2, 3].map((id) => ({ id: `${id}`, url: 'https://a.example', title: 'A', visitedAt: now }))));
     const { element, click, meta } = await setup();
-    expect(meta()).toEqual(['«Як у системі» стежить за темою Windows', 'Показувати закладки під адресним рядком', '3 записи', 'Порожньо · самі файли лишаються на диску']);
+    expect(meta()).toEqual(['«Як у системі» стежить за темою Windows', 'Показувати закладки під адресним рядком', 'Для запитів з адресного рядка й нової вкладки', '3 записи', 'Порожньо · самі файли лишаються на диску']);
 
     const clearHistory = element.querySelectorAll<HTMLButtonElement>('.settings__row .page__button')[0];
     await click(clearHistory);
-    expect(meta()[2]).toBe('3 записи');
+    expect(meta()[3]).toBe('3 записи');
 
     await click(element.querySelector<HTMLButtonElement>('.page__confirm .page__button--danger'));
-    expect(meta()[2]).toBe('Порожньо');
+    expect(meta()[3]).toBe('Порожньо');
     expect(clearHistory.disabled).toBe(true);
   });
 });

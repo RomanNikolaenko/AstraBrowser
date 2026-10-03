@@ -13,6 +13,12 @@ export const TAB_PAGES: Readonly<Record<TabPage, { readonly title: string; reado
   help: { title: 'Довідка', favicon: 'help', url: 'astra://help' },
 };
 
+/** Внутрішня сторінка за адресою astra://… або `null`, якщо це не вона. */
+export function internalPageFor(url: string): InternalPage | null {
+  const entry = Object.entries(TAB_PAGES).find(([page, info]) => page !== 'new-tab' && info.url === url);
+  return entry ? (entry[0] as InternalPage) : null;
+}
+
 /** Гарячі клавіші, що справді працюють; показуються на сторінці довідки. */
 export const SHORTCUTS: readonly { readonly keys: readonly string[]; readonly action: string }[] = [
   { keys: ['Ctrl', 'T'], action: 'Нова вкладка' },
@@ -20,6 +26,7 @@ export const SHORTCUTS: readonly { readonly keys: readonly string[]; readonly ac
   { keys: ['Ctrl', 'Shift', 'N'], action: 'Приватне вікно' },
   { keys: ['Ctrl', 'J'], action: 'Завантаження' },
   { keys: ['Ctrl', 'F'], action: 'Знайти на сторінці' },
+  { keys: ['Ctrl', 'Shift', ']'], action: 'Картинка в картинці (відео YouTube)' },
   { keys: ['Enter'], action: 'Наступний збіг у пошуку на сторінці' },
   { keys: ['Shift', 'Enter'], action: 'Попередній збіг у пошуку на сторінці' },
   { keys: ['Esc'], action: 'Закрити пошук або меню' },

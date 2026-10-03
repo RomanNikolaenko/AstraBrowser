@@ -4,39 +4,34 @@ import { storedSignal } from '../../shared/storage/stored-signal';
 export interface Bookmark {
   readonly id: string;
   readonly title: string;
-  /** Немає — це папка. */
-  readonly url?: string;
-  /** Кольорова іконка сайту; без неї показується загальна. */
-  readonly favicon?: string;
+  readonly url: string;
 }
-
-// Початковий набір для панелі закладок, доки користувач не змінить його.
-const DEFAULT_BOOKMARKS: readonly Bookmark[] = [
-  { id: 'default-work', title: 'Робота', favicon: 'favicon-folder' },
-  { id: 'default-youtube', title: 'YouTube', url: 'https://www.youtube.com', favicon: 'favicon-youtube' },
-  { id: 'default-github', title: 'GitHub', url: 'https://github.com', favicon: 'favicon-github' },
-  { id: 'default-figma', title: 'Figma', url: 'https://www.figma.com', favicon: 'favicon-figma' },
-  { id: 'default-mail', title: 'Пошта', url: 'https://mail.google.com', favicon: 'favicon-mail' },
-  { id: 'default-docs', title: 'Документи', url: 'https://docs.google.com', favicon: 'favicon-docs' },
-];
 
 @Injectable({ providedIn: 'root' })
 export class BookmarksStore {
-  private readonly items = storedSignal<readonly Bookmark[]>('astra.bookmarks', DEFAULT_BOOKMARKS);
+  private readonly items = storedSignal<readonly Bookmark[]>('astra.bookmarks', []);
 
-  /** У порядку, в якому стоять на панелі закладок. */
+  /** У порядку додавання — так вони стоять на панелі закладок. */
   readonly entries = this.items.asReadonly();
+
+  constructor() {
+    // Попередні версії зберігали демо-закладки з id «default-…»; прибираємо їх один раз.
+    this.items.update((items) => items.filter((item) => !item.id.startsWith('default-')));
+  }
+
+  find(url: string): Bookmark | undefined {
+    return url ? this.items().find((item) => item.url === url) : undefined;
+  }
 
   add(title: string, url: string): void {
     this.items.update((items) => [...items, { id: crypto.randomUUID(), title, url }]);
   }
 
+  update(id: string, changes: Pick<Bookmark, 'title' | 'url'>): void {
+    this.items.update((items) => items.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+  }
+
   remove(id: string): void {
     this.items.update((items) => items.filter((item) => item.id !== id));
   }
-}
-
-/** Іконка закладки: власна, папка або загальна іконка сайту. */
-export function bookmarkIcon(bookmark: Bookmark): string {
-  return bookmark.favicon ?? (bookmark.url ? 'globe' : 'favicon-folder');
 }

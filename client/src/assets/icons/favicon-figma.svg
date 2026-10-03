@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-9.5 0 57 57" aria-hidden="true" focusable="false">
-  <path fill="#f24e1e" d="M19 0H9.5a9.5 9.5 0 0 0 0 19H19V0z"/>
-  <path fill="#ff7262" d="M19 0h9.5a9.5 9.5 0 0 1 0 19H19V0z"/>
-  <path fill="#a259ff" d="M19 19H9.5a9.5 9.5 0 0 0 0 19H19V19z"/>
-  <circle cx="28.5" cy="28.5" r="9.5" fill="#1abcfe"/>
-  <path fill="#0acf83" d="M19 38H9.5A9.5 9.5 0 1 0 19 47.5V38z"/>
-</svg>

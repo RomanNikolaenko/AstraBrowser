@@ -11,13 +11,14 @@ import { TitlebarContent } from './titlebar-content';
   template: `
     <app-titlebar />
     @if (showContent()) {
-      <ng-template appTitlebarContent><span class="screen-content">{{ label() }}</span></ng-template>
+      <ng-template appTitlebarContent (spacerMiddleClick)="spacerMiddleClicks.set(spacerMiddleClicks() + 1)"><span class="screen-content">{{ label() }}</span></ng-template>
     }
   `,
 })
 class Host {
   readonly showContent = signal(false);
   readonly label = signal('Вкладки');
+  readonly spacerMiddleClicks = signal(0);
 }
 
 describe('Titlebar', () => {
@@ -66,5 +67,18 @@ describe('Titlebar', () => {
     await fixture.whenStable();
     expect(titlebar.querySelector('.screen-content')).toBeNull();
     expect(titlebar.querySelector('.titlebar__title')).toBeTruthy();
+  });
+
+  it('should pass a middle click on the free space to the open screen only', async () => {
+    const { fixture, titlebar } = await setup();
+    const middleClick = () => titlebar.querySelector('.titlebar__spacer')?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+
+    middleClick();
+    expect(fixture.componentInstance.spacerMiddleClicks()).toBe(0);
+
+    fixture.componentInstance.showContent.set(true);
+    await fixture.whenStable();
+    middleClick();
+    expect(fixture.componentInstance.spacerMiddleClicks()).toBe(1);
   });
 });

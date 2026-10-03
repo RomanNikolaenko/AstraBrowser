@@ -10,4 +10,12 @@ rust-version = "1.90"
 tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
-tauri = { version = "2.12.1", features = [] }
+tauri = { version = "2.12.1", features = ["unstable"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Звук, іконки й дозволи сайтів — через WebView2 напряму, повноекранне вікно — через Win32 (ті самі версії, що й у Tauri/wry).
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-core = "0.62"

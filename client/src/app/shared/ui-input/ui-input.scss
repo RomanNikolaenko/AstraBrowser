@@ -75,6 +75,7 @@
 
   &::placeholder {
     color: var(--input-placeholder, var(--color-text-muted));
+    user-select: none;
   }
 
   // Вбудовані кнопки Edge/WebView2 дублюють власні дії поля. Окремими правилами:

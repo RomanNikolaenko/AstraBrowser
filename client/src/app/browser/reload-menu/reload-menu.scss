@@ -1,0 +1,51 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.reload-menu {
+  --popover-width: 22rem;
+
+  &__title {
+    @include popover-title;
+  }
+
+  &__list {
+    display: grid;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    @include popover-item;
+
+    min-height: 3.25rem;
+    padding-block: 0.5rem;
+  }
+
+  &__icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: 0 0 auto;
+    color: var(--browser-icon);
+  }
+
+  &__text {
+    display: grid;
+    gap: 0.125rem;
+  }
+
+  &__hint {
+    color: var(--browser-muted);
+    font-size: 0.8125rem;
+  }
+
+  // Cookies: наслідки помітні (вийде з облікового запису), тож іконка — кольору небезпечної дії.
+  &__item--danger &__icon {
+    color: var(--color-error);
+  }
+}

@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, model, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, model, output } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { InternalPage } from '../pages/internal-pages';
+import { Popover } from '../popover/popover';
 
 interface MenuItem {
   readonly label: string;
@@ -19,13 +20,10 @@ const ZOOM_LEVELS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 2
 /** Головне меню браузера (кнопка ☰): кожен пункт або виконує дію (action), або відкриває сторінку (page). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [Popover, UiIcon],
   selector: 'app-browser-menu',
   styleUrl: './browser-menu.scss',
   templateUrl: './browser-menu.html',
-  host: {
-    '[class.is-open]': 'open()',
-  },
 })
 export class BrowserMenu {
   readonly zoom = model(100);
@@ -37,8 +35,6 @@ export class BrowserMenu {
   readonly print = output();
   readonly signOut = output();
   readonly fullscreen = output();
-
-  protected readonly open = signal(false);
 
   protected readonly sections: readonly (readonly MenuItem[])[] = [
     [
@@ -103,9 +99,5 @@ export class BrowserMenu {
         this.signOut.emit();
         break;
     }
-  }
-
-  protected onToggle(event: ToggleEvent): void {
-    this.open.set(event.newState === 'open');
   }
 }

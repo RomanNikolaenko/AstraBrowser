@@ -1,0 +1,7 @@
+@if (pageIcon(); as icon) {
+  <app-icon [icon]="icon" />
+} @else if (siteIcon(); as src) {
+  <img [src]="src" alt="" [width]="size()" [height]="size()" (error)="favicons.markBroken(src)" />
+} @else {
+  <app-icon icon="globe" />
+}

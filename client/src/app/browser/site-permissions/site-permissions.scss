@@ -1,0 +1,73 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.site-permissions {
+  --popover-width: 26rem;
+  --popover-padding: 0.75rem 1rem 1rem;
+
+  &__title {
+    margin: 0.25rem 0 0.875rem;
+    padding-bottom: 0.875rem;
+    border-bottom: 0.0625rem solid var(--browser-divider);
+    color: var(--browser-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  &__icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--browser-icon);
+  }
+
+  &__label {
+    flex: 1 1 auto;
+    font-size: 0.9375rem;
+  }
+
+  &__select {
+    --select-background: var(--browser-field);
+    --select-hover: var(--browser-hover);
+    --select-border: var(--browser-chrome-border);
+    --select-text: var(--browser-text);
+    --select-icon: var(--browser-icon);
+    --select-picker-background: var(--browser-popover);
+    --select-picker-border: var(--browser-popover-border);
+    --select-picker-shadow: var(--browser-popover-shadow);
+    --select-option-hover: var(--browser-hover);
+
+    flex: 0 0 auto;
+  }
+
+  &__notice {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.875rem;
+    padding: 0.625rem 0.625rem 0.625rem 0.875rem;
+    border-radius: 0.75rem;
+    background: var(--browser-field);
+    color: var(--browser-muted);
+    font-size: 0.8125rem;
+
+    span {
+      flex: 1 1 auto;
+    }
+  }
+
+  &__reload {
+    @include pill-button(2.25rem);
+  }
+}

@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormField, normalizeUrl, required, urlFormat, validateFields } from '../../../shared/form-field/form-field';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
-import { BookmarksStore, bookmarkIcon } from '../../data/bookmarks';
-import { hostname, matchesQuery } from '../internal-pages';
+import { BookmarksStore } from '../../data/bookmarks';
+import { SiteIcon } from '../../site-icon/site-icon';
+import { hostname, internalPageFor, matchesQuery } from '../internal-pages';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon, UiInput],
+  imports: [SiteIcon, UiIcon, UiInput],
   selector: 'app-bookmarks-page',
   styleUrls: ['../internal-page.scss', './bookmarks-page.scss'],
   templateUrl: './bookmarks-page.html',
@@ -26,8 +27,10 @@ export class BookmarksPage {
     return this.bookmarks.entries().filter((bookmark) => matchesQuery(query, bookmark.title, bookmark.url));
   });
 
-  protected readonly bookmarkIcon = bookmarkIcon;
-  protected readonly hostname = hostname;
+  /** Для внутрішньої сторінки — адреса astra://…, для сайту — домен. */
+  protected describe(url: string): string {
+    return internalPageFor(url) ? url : hostname(url);
+  }
 
   protected startAdding(): void {
     this.adding.set(true);

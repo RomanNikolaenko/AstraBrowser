@@ -20,7 +20,7 @@
     display: flex;
     flex: 0 0 auto;
     align-items: center;
-    margin-inline-end: 1.25rem;
+    margin-inline-end: 0.5rem;
 
     // Інакше клік по логотипу не потрапить у drag-region.
     > * {
@@ -70,11 +70,5 @@
       height: 1.125rem;
       pointer-events: none;
     }
-  }
-}
-
-@container titlebar (width < 60rem) {
-  .titlebar__brand {
-    margin-inline-end: 0.5rem;
   }
 }

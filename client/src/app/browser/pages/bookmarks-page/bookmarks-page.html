@@ -38,10 +38,10 @@
     <ul class="page__list">
       @for (bookmark of visible(); track bookmark.id) {
         <li class="page__row">
-          <app-icon class="page__favicon" [icon]="bookmarkIcon(bookmark)" />
+          <app-site-icon class="page__favicon" [url]="bookmark.url" [size]="22" />
           <span class="page__text">
             <span class="page__name">{{ bookmark.title }}</span>
-            <span class="page__meta">{{ bookmark.url ? hostname(bookmark.url) : 'Папка' }}</span>
+            <span class="page__meta">{{ describe(bookmark.url) }}</span>
           </span>
           <button class="page__remove" type="button" [attr.aria-label]="'Видалити закладку «' + bookmark.title + '»'" title="Видалити закладку" (click)="bookmarks.remove(bookmark.id)">
             <app-icon icon="close" />

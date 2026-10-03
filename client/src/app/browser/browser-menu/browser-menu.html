@@ -1,4 +1,4 @@
-<div class="menu" id="browser-menu" popover (toggle)="onToggle($event)">
+<app-popover class="menu" popoverId="browser-menu" caret>
   <div class="menu__scroll">
     @for (section of sections; track $index) {
       @if ($index === zoomSectionIndex) {
@@ -32,4 +32,4 @@
       </div>
     }
   </div>
-</div>
+</app-popover>

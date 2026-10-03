@@ -1,0 +1,122 @@
+@use '../../../assets/styles/mixins' as *;
+
+// Розміри й кольори беруться зі змінних --select-* на <app-select>; тут лише значення за замовчуванням.
+// anchor-scope: у кожного <app-select> своя пара «кнопка — список», хоч ім'я якоря однакове.
+:host {
+  display: inline-grid;
+  min-width: 0;
+  anchor-scope: --ui-select;
+}
+
+.ui-select__trigger {
+  display: flex;
+  min-width: 0;
+  height: var(--select-height, 2.5rem);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.875rem 0 1rem;
+  border: 0.0625rem solid var(--select-border, var(--color-border));
+  border-radius: var(--select-radius, 0.75rem);
+  background: var(--select-background, var(--color-surface));
+  color: var(--select-text, var(--color-text));
+  font: inherit;
+  font-size: var(--select-font-size, 0.875rem);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  anchor-name: --ui-select;
+  transition: background-color $motion, border-color $motion, box-shadow $motion;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-focus);
+    background: var(--select-hover, var(--select-background, var(--color-surface)));
+  }
+
+  &:focus-visible,
+  :host(.ui-select--open) & {
+    border-color: var(--color-focus);
+    outline: none;
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--color-focus) 22%, transparent);
+  }
+
+  &:disabled {
+    color: var(--select-icon, var(--color-text-muted));
+    cursor: default;
+  }
+}
+
+.ui-select__value {
+  overflow: hidden;
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-select__chevron {
+  width: 1rem;
+  height: 1rem;
+  color: var(--select-icon, var(--color-text-muted));
+  transition: transform $motion;
+
+  :host(.ui-select--open) & {
+    transform: rotate(180deg);
+  }
+}
+
+// Список — у верхньому шарі під кнопкою (над нею, якщо знизу не влазить).
+.ui-select__list {
+  min-width: anchor-size(width);
+  margin: 0.375rem 0;
+  padding: 0.375rem;
+  border: 0.0625rem solid var(--select-picker-border, var(--color-border));
+  border-radius: var(--select-radius, 0.75rem);
+  background: var(--select-picker-background, var(--color-surface));
+  box-shadow: var(--select-picker-shadow, 0 0.75rem 2rem rgb(16 27 104 / 18%));
+  color: var(--select-text, var(--color-text));
+  font-size: var(--select-font-size, 0.875rem);
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity $motion, transform $motion, overlay $motion allow-discrete, display $motion allow-discrete;
+  position-anchor: --ui-select;
+  position-area: bottom span-right;
+  position-try-fallbacks: flip-block;
+  inset: auto;
+
+  &:popover-open {
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+  }
+}
+
+.ui-select__option {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  border-radius: calc(var(--select-radius, 0.75rem) - 0.25rem);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color $motion;
+
+  &--active {
+    background: var(--select-option-hover, color-mix(in srgb, var(--color-focus) 12%, transparent));
+  }
+
+  &[aria-selected='true'] {
+    font-weight: 600;
+  }
+}
+
+.ui-select__check {
+  width: 1rem;
+  height: 1rem;
+  margin-inline-start: auto;
+  color: var(--color-focus);
+}

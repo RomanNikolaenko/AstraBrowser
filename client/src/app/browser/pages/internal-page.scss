@@ -39,52 +39,7 @@
   }
 
   &__button {
-    display: inline-flex;
-    height: 2.75rem;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0 1.125rem;
-    border: 0.0625rem solid var(--browser-chrome-border);
-    border-radius: 999px;
-    background: var(--browser-popover);
-    color: var(--browser-text);
-    font-size: 0.875rem;
-    font-weight: 600;
-    white-space: nowrap;
-    transition: background-color $motion, border-color $motion, color $motion, outline-color $motion, outline-offset $motion;
-    @include focus-ring;
-
-    app-icon {
-      width: 1.125rem;
-      height: 1.125rem;
-    }
-
-    &:hover:not(:disabled) {
-      border-color: var(--color-focus);
-      background: var(--browser-hover);
-    }
-
-    &:disabled {
-      color: var(--browser-icon-disabled);
-      cursor: default;
-    }
-
-    &--danger {
-      color: var(--color-error);
-    }
-
-    &--primary {
-      border-color: transparent;
-      background: var(--gradient-brand);
-      color: #ffffff;
-
-      &:hover:not(:disabled) {
-        border-color: transparent;
-        background: var(--gradient-brand);
-        filter: brightness(1.06);
-      }
-    }
+    @include pill-button;
   }
 
   // Друге підтвердження перед незворотною дією (очистити все).

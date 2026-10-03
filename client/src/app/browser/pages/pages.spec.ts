@@ -100,14 +100,24 @@ describe('internal pages', () => {
   });
 
   describe('BookmarksPage', () => {
+    it('should show the empty state when there are no bookmarks', async () => {
+      const { text } = await render(BookmarksPage);
+
+      expect(text('.page__empty-title')).toEqual(['Закладок немає']);
+    });
+
     it('should list the bookmarks and remove one', async () => {
+      seed('astra.bookmarks', [
+        { id: '1', title: 'YouTube', url: 'https://www.youtube.com/' },
+        { id: '2', title: 'Історія', url: 'astra://history' },
+      ]);
       const { element, text, click } = await render(BookmarksPage);
 
-      expect(text('.page__name')).toEqual(['Робота', 'YouTube', 'GitHub', 'Figma', 'Пошта', 'Документи']);
-      expect(text('.page__meta')[0]).toBe('Папка');
+      expect(text('.page__name')).toEqual(['YouTube', 'Історія']);
+      expect(text('.page__meta')).toEqual(['youtube.com', 'astra://history']);
 
       await click(element.querySelector<HTMLButtonElement>('[aria-label="Видалити закладку «YouTube»"]'));
-      expect(TestBed.inject(BookmarksStore).entries().some((bookmark) => bookmark.title === 'YouTube')).toBe(false);
+      expect(TestBed.inject(BookmarksStore).entries().map((bookmark) => bookmark.title)).toEqual(['Історія']);
     });
 
     it('should validate and add a new bookmark', async () => {

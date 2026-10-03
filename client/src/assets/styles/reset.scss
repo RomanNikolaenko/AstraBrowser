@@ -21,7 +21,7 @@ body {
   line-height: 1.5;
   background-color: var(--background-color);
   color: var(--text-color);
-  font-family: var(--font-family-base);
+  font-family: var(--font-family-base);
 }
 
 :where(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd) {
@@ -48,6 +48,8 @@ svg {
   display: block;
   inline-size: 100%;
   block-size: 100%;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 img,

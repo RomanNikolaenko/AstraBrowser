@@ -18,9 +18,15 @@ class Host {}
 class FakeWindows {
   readonly isPrivate = false;
   readonly opened: boolean[] = [];
+  maximizeToggles = 0;
 
   open({ private: isPrivate = false } = {}): void {
     this.opened.push(isPrivate);
+  }
+
+  toggleMaximize(): Promise<void> {
+    this.maximizeToggles++;
+    return Promise.resolve();
   }
 }
 
@@ -40,6 +46,13 @@ describe('Browser', () => {
   const openTab = () => click(element.querySelector<HTMLButtonElement>('.new-tab-button'));
   const selectTab = (index: number) => click(element.querySelectorAll<HTMLButtonElement>('.tab__select')[index]);
   const closeTab = (index: number) => click(element.querySelectorAll<HTMLButtonElement>('.tab__close')[index]);
+  const mouseClick = async (target: Element | null | undefined, button: number) => {
+    const down = new MouseEvent('mousedown', { button, bubbles: true, cancelable: true });
+    target?.dispatchEvent(down);
+    target?.dispatchEvent(new MouseEvent(button === 0 ? 'click' : 'auxclick', { button, bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    return down;
+  };
   const press = async (init: KeyboardEventInit) => {
     document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, cancelable: true, ...init }));
     await fixture.whenStable();
@@ -69,14 +82,35 @@ describe('Browser', () => {
     expect(tabs().length).toBe(1);
     expect(element.querySelector('.tab__title')?.textContent?.trim()).toBe('Нова вкладка');
     expect(element.querySelector('app-new-tab')).toBeTruthy();
-    expect(element.querySelectorAll('.bookmark').length).toBe(6);
+    expect(element.querySelectorAll('.bookmark').length).toBe(0);
+    expect(element.querySelector('.bookmarks__empty')?.textContent).toContain('Щоб додати закладку');
+    // На новій вкладці ні йти, ні оновлювати нікуди — кнопки неактивні.
+    for (const name of ['Назад', 'Вперед', 'Оновити']) {
+      expect(element.querySelector<HTMLButtonElement>(`[aria-label="${name}"]`)?.disabled).toBe(true);
+    }
   });
 
-  it('should open a new tab and make it active', async () => {
+  it('should open a new tab, make it active and put the cursor into the address bar', async () => {
+    const omnibox = () => element.querySelector<HTMLInputElement>('#omnibox') as HTMLInputElement;
+    // У пошуку першої нової вкладки щось набрали; фокус пішов з адресного рядка.
+    const search = () => element.querySelector<HTMLInputElement>('#new-tab-search') as HTMLInputElement;
+    search().value = 'angular';
+    search().dispatchEvent(new Event('input'));
+    search().focus();
+    await fixture.whenStable();
+
     await openTab();
 
     expect(tabs().length).toBe(2);
     expect(activeIndex()).toBe(1);
+    expect(document.activeElement).toBe(omnibox());
+    // У кожної нової вкладки своя сторінка: набране в іншій сюди не переїжджає.
+    expect(search().value).toBe('');
+
+    // Перейшли на іншу нову вкладку — курсор знову в адресному рядку.
+    search().focus();
+    await selectTab(0);
+    expect(document.activeElement).toBe(omnibox());
   });
 
   it('should activate the tab to the right when the active tab is closed, or the left one if it was last', async () => {
@@ -107,6 +141,46 @@ describe('Browser', () => {
 
     expect(tabs().length).toBe(1);
     expect(activeIndex()).toBe(0);
+  });
+
+  it('should close a tab with the middle mouse button', async () => {
+    await openTab();
+
+    const down = await mouseClick(element.querySelectorAll('.tab__title')[0], 1);
+
+    expect(down.defaultPrevented).toBe(true);
+    expect(tabs().length).toBe(1);
+    expect(activeIndex()).toBe(0);
+  });
+
+  it('should open a new tab with the middle mouse button on the free space of the titlebar', async () => {
+    const spacer = element.querySelector('.titlebar__spacer');
+
+    await mouseClick(spacer, 0);
+    await mouseClick(spacer, 2);
+    expect(tabs().length).toBe(1);
+
+    await mouseClick(spacer, 1);
+    expect(tabs().length).toBe(2);
+    expect(activeIndex()).toBe(1);
+  });
+
+  it('should not drag the window by the browser panels but maximize it on a double click on their free space', async () => {
+    const doubleClick = async (selector: string) => {
+      element.querySelector(selector)?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await fixture.whenStable();
+    };
+    expect(element.querySelector('app-browser [data-tauri-drag-region], .tab-list[data-tauri-drag-region]')).toBeNull();
+
+    await doubleClick('.toolbar');
+    await doubleClick('.bookmarks__empty');
+    await doubleClick('.tab-list');
+    expect(windows.maximizeToggles).toBe(3);
+
+    await doubleClick('.toolbar__button');
+    await doubleClick('#omnibox');
+    await doubleClick('.tab__title');
+    expect(windows.maximizeToggles).toBe(3);
   });
 
   it('should open a new tab on Ctrl+T in any keyboard layout', async () => {
@@ -179,12 +253,30 @@ describe('Browser', () => {
       expect(element.querySelector('app-downloads-page')).toBeTruthy();
     });
 
-    it('should show the bookmarks bar from the bookmarks store', async () => {
-      TestBed.inject(BookmarksStore).remove('default-youtube');
+    it('should show saved bookmarks on the bar and open internal pages from it', async () => {
+      const bookmarks = TestBed.inject(BookmarksStore);
+      bookmarks.add('YouTube', 'https://www.youtube.com/');
+      bookmarks.add('Історія', 'astra://history');
       await fixture.whenStable();
 
-      const bar = [...element.querySelectorAll('.bookmark')].map((bookmark) => bookmark.textContent?.trim());
-      expect(bar).toEqual(['Робота', 'GitHub', 'Figma', 'Пошта', 'Документи']);
+      const bar = [...element.querySelectorAll<HTMLButtonElement>('.bookmark')];
+      expect(bar.map((bookmark) => bookmark.textContent?.trim())).toEqual(['YouTube', 'Історія']);
+      expect(element.querySelector('.bookmarks__empty')).toBeNull();
+
+      await click(bar[1]);
+      expect(titles()).toEqual(['Історія']);
+    });
+
+    it('should fill the star when the current page is bookmarked', async () => {
+      const star = () => element.querySelector<HTMLButtonElement>('.omnibox__action');
+      await click(menuItem('Історія'));
+      expect(star()?.getAttribute('aria-label')).toBe('Додати сторінку в закладки');
+
+      TestBed.inject(BookmarksStore).add('Історія', 'astra://history');
+      await fixture.whenStable();
+
+      expect(star()?.getAttribute('aria-label')).toBe('Редагувати закладку');
+      expect(star()?.classList).toContain('omnibox__action--active');
     });
 
     it('should open settings, extensions and help pages from the menu', async () => {
