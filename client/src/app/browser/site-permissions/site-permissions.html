@@ -4,7 +4,14 @@
   <div class="site-permissions__row">
     <app-icon class="site-permissions__icon" icon="autoplay" />
     <label class="site-permissions__label" for="site-permissions-autoplay">Автовідтворення</label>
-    <app-select class="site-permissions__select" selectId="site-permissions-autoplay" selectName="autoplay" [options]="choices" [value]="autoplay() ?? 'allow'" [disabled]="autoplay() === null" (valueChange)="setAutoplay($event)" />
+    <app-select
+      class="site-permissions__select"
+      selectId="site-permissions-autoplay"
+      selectName="autoplay"
+      [options]="choices"
+      [value]="autoplay() ?? 'allow'"
+      [disabled]="autoplay() === null"
+      (valueChange)="setAutoplay($event)" />
   </div>
 
   @if (changed()) {

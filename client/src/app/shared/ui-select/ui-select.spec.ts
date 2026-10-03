@@ -30,8 +30,7 @@ describe('UiSelect', () => {
     await TestBed.configureTestingModule({
       imports: [Host],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);
     await fixture.whenStable();
@@ -70,7 +69,11 @@ describe('UiSelect', () => {
     await openByClick();
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(options().map((option) => [option.textContent?.trim(), option.getAttribute('aria-selected')])).toEqual([['Яблуко', 'false'], ['Груша', 'true'], ['Слива', 'false']]);
+    expect(options().map((option) => [option.textContent?.trim(), option.getAttribute('aria-selected')])).toEqual([
+      ['Яблуко', 'false'],
+      ['Груша', 'true'],
+      ['Слива', 'false'],
+    ]);
     expect(trigger.getAttribute('aria-activedescendant')).toBe(options()[1].id);
 
     options()[2].click();

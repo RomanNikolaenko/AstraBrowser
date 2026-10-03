@@ -19,8 +19,7 @@
     [attr.spellcheck]="spellcheck() ?? null"
     [attr.enterkeyhint]="enterKeyHint() ?? null"
     (input)="onInput($event)"
-    (blur)="touched.set(true)"
-  />
+    (blur)="touched.set(true)" />
   <ng-content />
 </div>
 

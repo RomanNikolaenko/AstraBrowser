@@ -22,8 +22,8 @@
     padding-block: 0.25rem;
 
     & + & {
-      margin-top: 0.25rem;
       padding-top: 0.5rem;
+      margin-top: 0.25rem;
       border-top: 0.0625rem solid var(--browser-divider);
     }
   }
@@ -43,16 +43,16 @@
   }
 
   &__shortcut {
-    color: var(--browser-muted);
     font-family: inherit;
     font-size: 0.8125rem;
+    color: var(--browser-muted);
     white-space: nowrap;
   }
 
   &__zoom {
     display: flex;
-    align-items: center;
     gap: 0.5rem;
+    align-items: center;
     padding-inline: 0.75rem 0.25rem;
   }
 
@@ -64,8 +64,8 @@
   &__zoom-control {
     display: flex;
     align-items: center;
-    border-radius: 0.75rem;
     background: var(--browser-field);
+    border-radius: 0.75rem;
   }
 
   &__zoom-value {

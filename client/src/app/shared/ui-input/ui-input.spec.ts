@@ -7,7 +7,16 @@ import { UiInput, UiInputType } from './ui-input';
 @Component({
   imports: [UiInput],
   template: `
-    <app-input icon="email" inputId="email" inputName="email" [type]="type()" ariaLabel="Пошта" placeholder="mail@example.com" size="lg" shape="pill" [(value)]="value">
+    <app-input
+      icon="email"
+      inputId="email"
+      inputName="email"
+      [type]="type()"
+      ariaLabel="Пошта"
+      placeholder="mail@example.com"
+      size="lg"
+      shape="pill"
+      [(value)]="value">
       <button class="action" type="button">Дія</button>
     </app-input>
   `,
@@ -31,8 +40,7 @@ describe('UiInput', () => {
     await TestBed.configureTestingModule({
       imports: [host],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(host);
     await fixture.whenStable();

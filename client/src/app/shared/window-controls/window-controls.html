@@ -1,7 +1,12 @@
 <button class="window-control" type="button" aria-label="Згорнути" title="Згорнути" (click)="minimizeWindow()">
   <app-icon icon="minimize" />
 </button>
-<button class="window-control" type="button" [attr.aria-label]="isMaximized() ? 'Відновити' : 'Розгорнути'" [attr.title]="isMaximized() ? 'Відновити' : 'Розгорнути'" (click)="toggleMaximizeWindow()">
+<button
+  class="window-control"
+  type="button"
+  [attr.aria-label]="isMaximized() ? 'Відновити' : 'Розгорнути'"
+  [attr.title]="isMaximized() ? 'Відновити' : 'Розгорнути'"
+  (click)="toggleMaximizeWindow()">
   @if (isMaximized()) {
     <app-icon icon="restore" />
   } @else {

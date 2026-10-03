@@ -39,7 +39,11 @@ const timeFormat = new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '
 const sizeFormat = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1 });
 
 /** Групує записи за днями: «Сьогодні», «Вчора», далі дата. Порядок записів зберігається. */
-export function groupByDay<T>(items: readonly T[], timeOf: (item: T) => number, now = Date.now()): { label: string; items: T[] }[] {
+export function groupByDay<T>(
+  items: readonly T[],
+  timeOf: (item: T) => number,
+  now = Date.now()
+): { label: string; items: T[] }[] {
   const startOfToday = new Date(now).setHours(0, 0, 0, 0);
   const groups = new Map<string, T[]>();
   for (const item of items) {

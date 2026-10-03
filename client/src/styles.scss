@@ -4,13 +4,13 @@
 // Підсвітка пошуку на сторінці (FindBar, CSS Custom Highlight API). Глобально, бо діє на будь-який текст.
 // Темний текст на жовтому/помаранчевому читається в обох темах.
 ::highlight(find-matches) {
-  background-color: #ffe066;
   color: #1a1a1a;
+  background-color: #ffe066;
 }
 
 ::highlight(find-current) {
-  background-color: #ff9632;
   color: #1a1a1a;
+  background-color: #ff9632;
 }
 
 // Поки сайт під панеллю знімається (Browser, pageCovering), відкрита панель невидима — інакше її частину

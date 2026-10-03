@@ -6,12 +6,12 @@
   &__row {
     display: flex;
     flex-wrap: wrap;
-    min-height: 4rem;
+    gap: 0.75rem 1.5rem;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem 1.5rem;
-    margin: 0;
+    min-height: 4rem;
     padding: 0.75rem 1rem;
+    margin: 0;
     border: 0;
     border-radius: 0.75rem;
   }
@@ -22,8 +22,8 @@
   }
 
   &__text {
-    display: grid;
     float: left;
+    display: grid;
     padding: 0;
   }
 
@@ -37,31 +37,34 @@
   display: flex;
   flex-wrap: wrap;
   padding: 0.25rem;
-  border-radius: 999px;
   background: var(--browser-field);
+  border-radius: 999px;
 
   &__option {
     position: relative;
     display: flex;
-    min-height: 2.25rem;
-    align-items: center;
     gap: 0.5rem;
+    align-items: center;
+    min-height: 2.25rem;
     padding: 0 1rem;
-    border-radius: 999px;
-    color: var(--browser-muted);
-    cursor: pointer;
     font-size: 0.875rem;
     font-weight: 600;
-    transition: background-color $motion, color $motion, box-shadow $motion;
+    color: var(--browser-muted);
+    cursor: pointer;
+    border-radius: 999px;
+    transition:
+      background-color $motion,
+      color $motion,
+      box-shadow $motion;
 
     &:hover {
       color: var(--browser-text);
     }
 
     &:has(.segmented__input:checked) {
+      color: var(--browser-text);
       background: var(--browser-popover);
       box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 12%);
-      color: var(--browser-text);
     }
 
     &:has(.segmented__input:focus-visible) {
@@ -72,8 +75,8 @@
 
   &__input {
     position: absolute;
-    opacity: 0;
     pointer-events: none;
+    opacity: 0;
   }
 
   &__icon {
@@ -86,16 +89,21 @@
 // увімкнений — заповнений з білим: стан видно і за положенням, і за контрастом в обох темах.
 .switch {
   position: relative;
+  flex: 0 0 auto;
   width: 2.75rem;
   height: 1.5rem;
-  flex: 0 0 auto;
   margin: 0;
+  appearance: none;
+  cursor: pointer;
+  background: var(--browser-field);
   border: 0.125rem solid var(--browser-icon);
   border-radius: 999px;
-  background: var(--browser-field);
-  cursor: pointer;
-  transition: background-color $motion, border-color $motion, outline-color $motion, outline-offset $motion;
-  appearance: none;
+  transition:
+    background-color $motion,
+    border-color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
   @include focus-ring(0.1875rem);
 
   &::before {
@@ -104,15 +112,17 @@
     left: 0.125rem;
     width: 0.875rem;
     height: 0.875rem;
-    border-radius: 50%;
-    background: var(--browser-icon);
     content: '';
-    transition: transform $motion, background-color $motion;
+    background: var(--browser-icon);
+    border-radius: 50%;
+    transition:
+      transform $motion,
+      background-color $motion;
   }
 
   &:checked {
-    border-color: var(--color-primary);
     background: var(--color-primary);
+    border-color: var(--color-primary);
 
     &::before {
       background: var(--color-on-primary);

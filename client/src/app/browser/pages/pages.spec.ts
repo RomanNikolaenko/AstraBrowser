@@ -12,14 +12,14 @@ describe('internal pages', () => {
     await TestBed.configureTestingModule({
       imports: [page],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(page);
     await fixture.whenStable();
     const element = fixture.nativeElement as HTMLElement;
     const text = (selector: string) => [...element.querySelectorAll(selector)].map((node) => node.textContent?.trim());
-    const button = (label: string) => [...element.querySelectorAll<HTMLButtonElement>('button')].find((node) => node.textContent?.includes(label));
+    const button = (label: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('button')].find((node) => node.textContent?.includes(label));
     const type = async (id: string, value: string) => {
       const input = element.querySelector<HTMLInputElement>(`#${id}`);
       if (input) {
@@ -89,8 +89,22 @@ describe('internal pages', () => {
   describe('DownloadsPage', () => {
     it('should show finished and failed downloads', async () => {
       seed('astra.downloads', [
-        { id: '1', fileName: 'report.pdf', url: 'https://files.example.com/report.pdf', size: 1536, status: 'completed', finishedAt: Date.now() - 1000 },
-        { id: '2', fileName: 'video.mp4', url: 'https://cdn.example.com/video.mp4', size: 0, status: 'failed', finishedAt: Date.now() },
+        {
+          id: '1',
+          fileName: 'report.pdf',
+          url: 'https://files.example.com/report.pdf',
+          size: 1536,
+          status: 'completed',
+          finishedAt: Date.now() - 1000,
+        },
+        {
+          id: '2',
+          fileName: 'video.mp4',
+          url: 'https://cdn.example.com/video.mp4',
+          size: 0,
+          status: 'failed',
+          finishedAt: Date.now(),
+        },
       ]);
       const { text } = await render(DownloadsPage);
 
@@ -117,7 +131,11 @@ describe('internal pages', () => {
       expect(text('.page__meta')).toEqual(['youtube.com', 'astra://history']);
 
       await click(element.querySelector<HTMLButtonElement>('[aria-label="Видалити закладку «YouTube»"]'));
-      expect(TestBed.inject(BookmarksStore).entries().map((bookmark) => bookmark.title)).toEqual(['Історія']);
+      expect(
+        TestBed.inject(BookmarksStore)
+          .entries()
+          .map((bookmark) => bookmark.title)
+      ).toEqual(['Історія']);
     });
 
     it('should validate and add a new bookmark', async () => {

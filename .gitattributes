@@ -1,0 +1,3 @@
+# Текстові файли — завжди з LF, як вимагає Prettier ("endOfLine": "lf"), навіть із core.autocrlf=true на Windows.
+# Двійкові (картинки, шрифти) Git визначає сам і не чіпає.
+* text=auto eol=lf

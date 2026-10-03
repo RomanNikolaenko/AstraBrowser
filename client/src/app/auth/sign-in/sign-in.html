@@ -10,15 +10,24 @@
       <ul class="auth__benefits">
         <li class="auth__benefit">
           <span class="auth__benefit-icon"><app-icon icon="cloud" /></span>
-          <span><strong class="auth__benefit-title">Синхронізація на всіх пристроях</strong><span class="auth__benefit-description">Закладки, паролі, налаштування — завжди з вами.</span></span>
+          <span
+            ><strong class="auth__benefit-title">Синхронізація на всіх пристроях</strong
+            ><span class="auth__benefit-description">Закладки, паролі, налаштування — завжди з вами.</span></span
+          >
         </li>
         <li class="auth__benefit">
           <span class="auth__benefit-icon"><app-icon icon="shield-check" /></span>
-          <span><strong class="auth__benefit-title">Безпечний і приватний перегляд</strong><span class="auth__benefit-description">Сучасні технології захисту ваших даних.</span></span>
+          <span
+            ><strong class="auth__benefit-title">Безпечний і приватний перегляд</strong
+            ><span class="auth__benefit-description">Сучасні технології захисту ваших даних.</span></span
+          >
         </li>
         <li class="auth__benefit">
           <span class="auth__benefit-icon"><app-icon icon="sparkle" /></span>
-          <span><strong class="auth__benefit-title">Доступ до ексклюзивних функцій</strong><span class="auth__benefit-description">Більше можливостей разом з Astra.</span></span>
+          <span
+            ><strong class="auth__benefit-title">Доступ до ексклюзивних функцій</strong
+            ><span class="auth__benefit-description">Більше можливостей разом з Astra.</span></span
+          >
         </li>
       </ul>
     </div>
@@ -31,12 +40,38 @@
       <form class="auth__fields" id="sign-in-form" novalidate (submit)="submit($event)">
         <div class="auth__field-label">
           <span class="auth__field-name">Електронна пошта або ім’я користувача</span>
-          <app-input class="auth__input" icon="email" inputId="sign-in-login" inputName="login" [(value)]="login.value" [(touched)]="login.touched" [error]="login.visibleError()" ariaLabel="Електронна пошта або ім’я користувача" autocomplete="username" placeholder="example@domain.com" />
+          <app-input
+            class="auth__input"
+            icon="email"
+            inputId="sign-in-login"
+            inputName="login"
+            [(value)]="login.value"
+            [(touched)]="login.touched"
+            [error]="login.visibleError()"
+            ariaLabel="Електронна пошта або ім’я користувача"
+            autocomplete="username"
+            placeholder="example@domain.com" />
         </div>
         <div class="auth__field-label">
           <span class="auth__field-name">Пароль</span>
-          <app-input class="auth__input" icon="lock" inputId="sign-in-password" inputName="password" [(value)]="password.value" [(touched)]="password.touched" [error]="password.visibleError()" [type]="passwordVisible() ? 'text' : 'password'" ariaLabel="Пароль" autocomplete="current-password" placeholder="Введіть пароль">
-            <button class="auth__password-toggle" type="button" [attr.aria-label]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" [attr.title]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'" (click)="togglePasswordVisibility()">
+          <app-input
+            class="auth__input"
+            icon="lock"
+            inputId="sign-in-password"
+            inputName="password"
+            [(value)]="password.value"
+            [(touched)]="password.touched"
+            [error]="password.visibleError()"
+            [type]="passwordVisible() ? 'text' : 'password'"
+            ariaLabel="Пароль"
+            autocomplete="current-password"
+            placeholder="Введіть пароль">
+            <button
+              class="auth__password-toggle"
+              type="button"
+              [attr.aria-label]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'"
+              [attr.title]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'"
+              (click)="togglePasswordVisibility()">
               @if (passwordVisible()) {
                 <app-icon icon="eye" />
               } @else {
@@ -56,7 +91,12 @@
         <button class="auth__social" type="button"><app-icon icon="google" />Продовжити з Google</button>
         <button class="auth__social" type="button"><app-icon icon="apple" />Продовжити з Apple</button>
       </div>
-      <div class="auth__notice"><app-icon icon="lock" /><span>Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ до можливостей Astra Browser.</span></div>
+      <div class="auth__notice">
+        <app-icon icon="lock" /><span
+          >Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ
+          до можливостей Astra Browser.</span
+        >
+      </div>
     </div>
   </div>
 </section>

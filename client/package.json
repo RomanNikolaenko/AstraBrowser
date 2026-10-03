@@ -7,6 +7,12 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "lint": "node --disable-warning=ESLintIgnoreWarning node_modules/@angular/cli/bin/ng.js lint",
+    "lint:fix": "node --disable-warning=ESLintIgnoreWarning node_modules/@angular/cli/bin/ng.js lint --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:styles": "stylelint \"src/**/*.scss\"",
+    "lint:styles:fix": "stylelint \"src/**/*.scss\" --fix",
     "tauri:dev": "cd ../server && tauri dev",
     "tauri:build": "cd ../server && tauri build"
   },
@@ -26,10 +32,18 @@
     "@angular/build": "^22.2.0",
     "@angular/cli": "^22.2.0",
     "@angular/compiler-cli": "^22.2.1",
+    "@eslint/compat": "^2.1.1",
+    "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.12.1",
+    "angular-eslint": "22.5.0",
+    "eslint": "^10.9.1",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
+    "stylelint": "^17.16.0",
+    "stylelint-config-recess-order": "^7.8.0",
+    "stylelint-config-standard-scss": "^17.0.0",
     "typescript": "~6.0.3",
+    "typescript-eslint": "8.69.0",
     "vitest": "^5.0.3"
   }
 }

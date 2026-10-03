@@ -32,7 +32,19 @@ import { FaviconStore } from './data/favicons';
 import { HistoryStore } from './data/history';
 import { FindBar } from './find-bar/find-bar';
 import { NewTab } from './new-tab/new-tab';
-import { PageAudioEvent, PageBounds, PageDownloadEvent, PageFaviconEvent, PageFullscreenEvent, PageNavigationEvent, ReloadMode, PageLoadEvent, PageNewTabEvent, PageTitleEvent, PageViews } from './page-views/page-views';
+import {
+  PageAudioEvent,
+  PageBounds,
+  PageDownloadEvent,
+  PageFaviconEvent,
+  PageFullscreenEvent,
+  PageNavigationEvent,
+  ReloadMode,
+  PageLoadEvent,
+  PageNewTabEvent,
+  PageTitleEvent,
+  PageViews,
+} from './page-views/page-views';
 import { BookmarksPage } from './pages/bookmarks-page/bookmarks-page';
 import { DownloadsPage } from './pages/downloads-page/downloads-page';
 import { ExtensionsPage } from './pages/extensions-page/extensions-page';
@@ -258,7 +270,7 @@ export class Browser {
           if (this.fullscreenPage() && this.fullscreenPage() !== label) {
             await this.exitPageFullscreen();
           }
-        }),
+        })
       );
     });
 
@@ -273,7 +285,12 @@ export class Browser {
     // Popover-и не спливають подій toggle, тож ловимо їх на фазі перехоплення.
     // beforetoggle приходить ще до першого кадру з панеллю: ховаємо її, поки сайт не знято (setPageCovering).
     const onBeforeToggle = (event: Event) => {
-      if ((event as ToggleEvent).newState === 'open' && !this.overlayOpen() && this.activeTab().page === 'web' && this.pageViews.available) {
+      if (
+        (event as ToggleEvent).newState === 'open' &&
+        !this.overlayOpen() &&
+        this.activeTab().page === 'web' &&
+        this.pageViews.available
+      ) {
         this.setPageCovering(true);
       }
     };
@@ -661,7 +678,16 @@ export class Browser {
     }
 
     const label = this.newPageLabel(tab);
-    const site: Site = { label, url, title: '', loading: true, canGoBack: false, canGoForward: false, playing: false, muted: false };
+    const site: Site = {
+      label,
+      url,
+      title: '',
+      loading: true,
+      canGoBack: false,
+      canGoForward: false,
+      playing: false,
+      muted: false,
+    };
     this.replaceTab({ id: tab.id, page: 'web', site, back: back && tab.page !== 'web' ? tab.page : undefined });
     const blockAudio = this.autoplay.blockAudio();
     if (background) {
@@ -767,7 +793,10 @@ export class Browser {
     if (tab.page === 'web' && this.pageViews.available) {
       this.setPageCovering(true);
       const bounds = this.pageBounds();
-      const image = await Promise.race([this.pageViews.capture(this.pageLabel(tab)).catch(() => null), delay(400).then(() => null)]);
+      const image = await Promise.race([
+        this.pageViews.capture(this.pageLabel(tab)).catch(() => null),
+        delay(400).then(() => null),
+      ]);
       if (image && change === this.overlayChange) {
         const url = URL.createObjectURL(new Blob([image], { type: 'image/jpeg' }));
         // Знімок має бути вже розкодований і намальований, коли webview зникне, — інакше блимне порожнеча.

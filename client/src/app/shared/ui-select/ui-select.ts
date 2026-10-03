@@ -130,7 +130,12 @@ export class UiSelect<T extends string = string> {
 
   private showActive(): void {
     this.open.set(true);
-    this.active.set(Math.max(this.options().findIndex((option) => option.value === this.value()), 0));
+    this.active.set(
+      Math.max(
+        this.options().findIndex((option) => option.value === this.value()),
+        0
+      )
+    );
   }
 
   /** Набір перших літер переходить до пункту, що з них починається (у закритому — одразу вибирає). */

@@ -29,8 +29,19 @@ export class ReloadMenu {
   protected readonly actions: readonly ReloadAction[] = [
     { mode: 'hard', icon: 'bolt', label: 'Жорстке оновлення', hint: 'Повторно завантажує все, минаючи кеш' },
     { mode: 'cache', icon: 'trash', label: 'Очистити кеш і оновити', hint: 'Видаляє кеш цього сайту' },
-    { mode: 'site-data', icon: 'broom', label: 'Очистити дані сайту й оновити', hint: 'Кеш, LocalStorage, SessionStorage, IndexedDB' },
-    { mode: 'cookies', icon: 'cookie', label: 'Очистити cookies і оновити', hint: 'Може вийти з облікового запису на сайті', danger: true },
+    {
+      mode: 'site-data',
+      icon: 'broom',
+      label: 'Очистити дані сайту й оновити',
+      hint: 'Кеш, LocalStorage, SessionStorage, IndexedDB',
+    },
+    {
+      mode: 'cookies',
+      icon: 'cookie',
+      label: 'Очистити cookies і оновити',
+      hint: 'Може вийти з облікового запису на сайті',
+      danger: true,
+    },
   ];
 
   private readonly popover = viewChild.required(Popover);

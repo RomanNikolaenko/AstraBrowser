@@ -21,8 +21,7 @@ describe('BookmarkEditor', () => {
     await TestBed.configureTestingModule({
       imports: [Host],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);
     fixture.componentInstance.title.set(title);
@@ -58,7 +57,11 @@ describe('BookmarkEditor', () => {
 
     await click('Зберегти');
 
-    expect(TestBed.inject(BookmarksStore).entries().map((bookmark) => [bookmark.title, bookmark.url])).toEqual([['Історія', 'astra://history']]);
+    expect(
+      TestBed.inject(BookmarksStore)
+        .entries()
+        .map((bookmark) => [bookmark.title, bookmark.url])
+    ).toEqual([['Історія', 'astra://history']]);
   });
 
   it('should let you type a site on an empty new tab', async () => {
@@ -68,7 +71,8 @@ describe('BookmarkEditor', () => {
     expect(field('bookmark-editor-title').value).toBe('');
 
     await click('Зберегти');
-    const errors = () => [...element.querySelectorAll('.ui-input__message--visible .ui-input__error')].map((error) => error.textContent?.trim());
+    const errors = () =>
+      [...element.querySelectorAll('.ui-input__message--visible .ui-input__error')].map((error) => error.textContent?.trim());
     expect(errors()).toEqual(['Введіть назву', 'Введіть адресу']);
 
     await type('bookmark-editor-title', 'Angular');

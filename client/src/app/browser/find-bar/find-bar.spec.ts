@@ -33,7 +33,10 @@ describe('findMatches', () => {
 @Component({
   imports: [FindBar],
   template: `
-    <div #page><p>alpha beta alpha</p><p>Alpha</p></div>
+    <div #page>
+      <p>alpha beta alpha</p>
+      <p>Alpha</p>
+    </div>
     <app-find-bar [root]="page" (closed)="closed = closed + 1" />
   `,
 })
@@ -46,8 +49,7 @@ describe('FindBar', () => {
     await TestBed.configureTestingModule({
       imports: [Host],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);
     await fixture.whenStable();

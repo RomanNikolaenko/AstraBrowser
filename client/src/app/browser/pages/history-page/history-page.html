@@ -2,8 +2,19 @@
   <header class="page__header">
     <h1 class="page__title">Історія</h1>
     @if (history.entries().length) {
-      <app-input class="page__search" shape="pill" icon="search" inputId="history-search" inputName="history-search" ariaLabel="Пошук в історії" placeholder="Пошук в історії" autocomplete="off" [(value)]="query" />
-      <button class="page__button page__button--danger" type="button" (click)="confirmingClear.set(true)">Очистити історію</button>
+      <app-input
+        class="page__search"
+        shape="pill"
+        icon="search"
+        inputId="history-search"
+        inputName="history-search"
+        ariaLabel="Пошук в історії"
+        placeholder="Пошук в історії"
+        autocomplete="off"
+        [(value)]="query" />
+      <button class="page__button page__button--danger" type="button" (click)="confirmingClear.set(true)">
+        Очистити історію
+      </button>
     }
   </header>
 
@@ -35,7 +46,12 @@
               <span class="page__name">{{ entry.title }}</span>
               <span class="page__meta">{{ hostname(entry.url) }}</span>
             </span>
-            <button class="page__remove" type="button" [attr.aria-label]="'Видалити «' + entry.title + '» з історії'" title="Видалити з історії" (click)="history.remove(entry.id)">
+            <button
+              class="page__remove"
+              type="button"
+              [attr.aria-label]="'Видалити «' + entry.title + '» з історії'"
+              title="Видалити з історії"
+              (click)="history.remove(entry.id)">
               <app-icon icon="close" />
             </button>
           </li>

@@ -101,7 +101,13 @@ export class PageViews {
    * `blockAudio` — сайти, яким заборонено автовідтворення зі звуком (server/src/audio.rs).
    */
   open(label: string, url: string, bounds: PageBounds, options: PageOpenOptions = {}): Promise<void> {
-    return invoke('page_open', { label, url, bounds, background: options.background ?? false, blockAudio: options.blockAudio ?? [] });
+    return invoke('page_open', {
+      label,
+      url,
+      bounds,
+      background: options.background ?? false,
+      blockAudio: options.blockAudio ?? [],
+    });
   }
 
   navigate(label: string, url: string): Promise<void> {

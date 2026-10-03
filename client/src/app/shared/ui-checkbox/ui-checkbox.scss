@@ -5,29 +5,31 @@
 .checkbox {
   position: relative;
   display: inline-flex;
-  align-items: center;
   gap: 0.5rem;
+  align-items: center;
   color: var(--auth-muted);
   cursor: pointer;
   user-select: none;
 
   &__checkmark {
     display: flex;
-    width: 1.25rem;
-    height: 1.25rem;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: var(--color-surface);
     border: 0.0625rem solid var(--auth-field-border);
     border-radius: 0.25rem;
-    background: var(--color-surface);
-    transition: background-color var(--transition-duration, 180ms) ease, border-color var(--transition-duration, 180ms) ease;
+    transition:
+      background-color var(--transition-duration, 180ms) ease,
+      border-color var(--transition-duration, 180ms) ease;
 
     app-icon {
       width: 0.875rem;
       height: 0.875rem;
-      transform: scale(0);
       color: var(--color-on-primary);
+      transform: scale(0);
       transition: transform var(--transition-duration, 180ms) ease;
     }
   }
@@ -43,8 +45,8 @@
     width: 1.25rem;
     height: 1.25rem;
     margin: 0;
-    opacity: 0;
     cursor: pointer;
+    opacity: 0;
 
     &:disabled {
       cursor: not-allowed;
@@ -57,8 +59,8 @@
   }
 
   &:has(&__input:checked) &__checkmark {
-    border-color: var(--color-primary);
     background: var(--color-primary);
+    border-color: var(--color-primary);
 
     app-icon {
       transform: scale(1);

@@ -11,14 +11,14 @@ import { UiInput } from '../../shared/ui-input/ui-input';
 })
 export class NewTab {
   /** Запит чи адреса з поля пошуку (Enter). */
-  readonly search = output<string>();
+  readonly searched = output<string>();
 
   protected readonly query = signal('');
 
   protected submit(event: Event): void {
     event.preventDefault();
     if (this.query().trim()) {
-      this.search.emit(this.query());
+      this.searched.emit(this.query());
     }
   }
 }

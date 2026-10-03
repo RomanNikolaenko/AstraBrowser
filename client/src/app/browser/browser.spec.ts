@@ -37,7 +37,8 @@ describe('Browser', () => {
 
   const tabs = () => [...element.querySelectorAll('.tab')];
   const activeIndex = () => tabs().findIndex((tab) => tab.classList.contains('tab--active'));
-  const menuItem = (label: string) => [...element.querySelectorAll<HTMLButtonElement>('.menu__item')].find((item) => item.textContent?.includes(label));
+  const menuItem = (label: string) =>
+    [...element.querySelectorAll<HTMLButtonElement>('.menu__item')].find((item) => item.textContent?.includes(label));
 
   const click = async (button: HTMLElement | null | undefined) => {
     button?.click();
@@ -69,8 +70,7 @@ describe('Browser', () => {
         provideHttpClientTesting(),
         { provide: BrowserWindows, useClass: FakeWindows },
       ],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     windows = TestBed.inject(BrowserWindows) as unknown as FakeWindows;
     fixture = TestBed.createComponent(Host);
@@ -223,7 +223,8 @@ describe('Browser', () => {
   describe('internal pages', () => {
     const titles = () => [...element.querySelectorAll('.tab__title')].map((title) => title.textContent?.trim());
     const omnibox = () => element.querySelector<HTMLInputElement>('#omnibox')?.value;
-    const tool = (label: string) => [...element.querySelectorAll<HTMLButtonElement>('.tools-menu__tile')].find((tile) => tile.textContent?.includes(label));
+    const tool = (label: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.tools-menu__tile')].find((tile) => tile.textContent?.includes(label));
 
     it('should open a page in the empty new tab and show its address', async () => {
       await click(menuItem('Історія'));

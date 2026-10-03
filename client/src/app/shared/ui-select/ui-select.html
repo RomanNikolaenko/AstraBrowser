@@ -10,8 +10,7 @@
   [attr.aria-activedescendant]="open() && active() >= 0 ? optionId(active()) : null"
   [attr.popovertarget]="listId"
   [disabled]="disabled()"
-  (keydown)="onKeydown($event)"
->
+  (keydown)="onKeydown($event)">
   <span class="ui-select__value">{{ selected()?.label }}</span>
   <app-icon class="ui-select__chevron" icon="chevron-down" />
 </button>
@@ -20,8 +19,17 @@
   <input type="hidden" [name]="name" [value]="value() ?? ''" />
 }
 
-<div class="ui-select__list" #list popover role="listbox" data-tauri-drag-region="false" [id]="listId" (toggle)="onToggle($event)">
+<div
+  class="ui-select__list"
+  #list
+  popover
+  role="listbox"
+  data-tauri-drag-region="false"
+  [id]="listId"
+  (toggle)="onToggle($event)">
   @for (option of options(); track option.value; let index = $index) {
+    <!-- Пункти не беруть фокус: він лишається на кнопці-комбобоксі, а пункт під курсором — aria-activedescendant (шаблон WAI-ARIA). -->
+    <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
     <div
       class="ui-select__option"
       role="option"
@@ -30,8 +38,7 @@
       [class.ui-select__option--active]="index === active()"
       (pointermove)="hover(index)"
       (mousedown)="$event.preventDefault()"
-      (click)="choose(index)"
-    >
+      (click)="choose(index)">
       <span>{{ option.label }}</span>
       @if (option.value === value()) {
         <app-icon class="ui-select__check" icon="check" />

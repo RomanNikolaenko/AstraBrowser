@@ -31,12 +31,19 @@ describe('browser data stores', () => {
   });
 
   it('should start empty and drop the demo bookmarks saved by older versions', () => {
-    localStorage.setItem('astra.bookmarks', JSON.stringify([
-      { id: 'default-youtube', title: 'YouTube', url: 'https://www.youtube.com', favicon: 'favicon-youtube' },
-      { id: 'mine', title: 'Моя', url: 'https://mine.example/' },
-    ]));
+    localStorage.setItem(
+      'astra.bookmarks',
+      JSON.stringify([
+        { id: 'default-youtube', title: 'YouTube', url: 'https://www.youtube.com', favicon: 'favicon-youtube' },
+        { id: 'mine', title: 'Моя', url: 'https://mine.example/' },
+      ])
+    );
 
-    expect(TestBed.inject(BookmarksStore).entries().map((bookmark) => bookmark.title)).toEqual(['Моя']);
+    expect(
+      TestBed.inject(BookmarksStore)
+        .entries()
+        .map((bookmark) => bookmark.title)
+    ).toEqual(['Моя']);
   });
 
   it('should add, find, update and remove bookmarks', () => {
@@ -49,7 +56,9 @@ describe('browser data stores', () => {
     expect(bookmarks.find('')).toBeUndefined();
 
     bookmarks.update(added?.id ?? '', { title: 'Angular docs', url: 'https://angular.dev/overview' });
-    expect(bookmarks.entries().map((bookmark) => [bookmark.title, bookmark.url])).toEqual([['Angular docs', 'https://angular.dev/overview']]);
+    expect(bookmarks.entries().map((bookmark) => [bookmark.title, bookmark.url])).toEqual([
+      ['Angular docs', 'https://angular.dev/overview'],
+    ]);
 
     bookmarks.remove(added?.id ?? '');
     TestBed.tick();
@@ -65,7 +74,9 @@ describe('browser data stores', () => {
     favicons.remember('https://www.youtube.com/', 'https://www.youtube.com/s/desktop/favicon_32x32.png');
     TestBed.tick();
     expect(favicons.iconFor('https://www.youtube.com/watch?v=1')).toBe('https://www.youtube.com/s/desktop/favicon_32x32.png');
-    expect(JSON.parse(localStorage.getItem('astra.favicons') ?? '{}')).toEqual({ 'www.youtube.com': 'https://www.youtube.com/s/desktop/favicon_32x32.png' });
+    expect(JSON.parse(localStorage.getItem('astra.favicons') ?? '{}')).toEqual({
+      'www.youtube.com': 'https://www.youtube.com/s/desktop/favicon_32x32.png',
+    });
 
     favicons.markBroken('https://www.youtube.com/s/desktop/favicon_32x32.png');
     expect(favicons.iconFor('https://www.youtube.com/')).toBe('https://www.youtube.com/favicon.ico');

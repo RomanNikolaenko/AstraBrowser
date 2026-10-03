@@ -5,15 +5,34 @@
         <div class="menu__section menu__zoom">
           <span class="menu__zoom-label" id="browser-menu-zoom">Масштаб</span>
           <div class="menu__zoom-control" role="group" aria-labelledby="browser-menu-zoom">
-            <button class="menu__zoom-button" type="button" aria-label="Зменшити масштаб" title="Зменшити масштаб" [disabled]="!canZoomOut()" (click)="zoomOut()">
+            <button
+              class="menu__zoom-button"
+              type="button"
+              aria-label="Зменшити масштаб"
+              title="Зменшити масштаб"
+              [disabled]="!canZoomOut()"
+              (click)="zoomOut()">
               <app-icon icon="minus" />
             </button>
             <output class="menu__zoom-value" aria-live="polite">{{ zoom() }}%</output>
-            <button class="menu__zoom-button" type="button" aria-label="Збільшити масштаб" title="Збільшити масштаб" [disabled]="!canZoomIn()" (click)="zoomIn()">
+            <button
+              class="menu__zoom-button"
+              type="button"
+              aria-label="Збільшити масштаб"
+              title="Збільшити масштаб"
+              [disabled]="!canZoomIn()"
+              (click)="zoomIn()">
               <app-icon icon="plus" />
             </button>
           </div>
-          <button class="menu__zoom-button menu__fullscreen" type="button" aria-label="Повноекранний режим" title="Повноекранний режим" popovertarget="browser-menu" popovertargetaction="hide" (click)="fullscreen.emit()">
+          <button
+            class="menu__zoom-button menu__fullscreen"
+            type="button"
+            aria-label="Повноекранний режим"
+            title="Повноекранний режим"
+            popovertarget="browser-menu"
+            popovertargetaction="hide"
+            (click)="fullscreen.emit()">
             <app-icon icon="fullscreen" />
           </button>
         </div>
@@ -21,7 +40,13 @@
 
       <div class="menu__section">
         @for (item of section; track item.label) {
-          <button class="menu__item" type="button" popovertarget="browser-menu" popovertargetaction="hide" [attr.aria-keyshortcuts]="item.keys ?? null" (click)="run(item)">
+          <button
+            class="menu__item"
+            type="button"
+            popovertarget="browser-menu"
+            popovertargetaction="hide"
+            [attr.aria-keyshortcuts]="item.keys ?? null"
+            (click)="run(item)">
             <app-icon class="menu__icon" [icon]="item.icon" />
             <span class="menu__label">{{ item.label }}</span>
             @if (item.shortcut) {

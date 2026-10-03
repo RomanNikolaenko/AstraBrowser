@@ -28,7 +28,10 @@ export class SettingsPage {
     { value: 'dark', label: 'Темна', icon: 'moon' },
   ];
 
-  protected readonly engines = Object.entries(SEARCH_ENGINES).map(([value, engine]) => ({ value: value as SearchEngine, label: engine.label }));
+  protected readonly engines = Object.entries(SEARCH_ENGINES).map(([value, engine]) => ({
+    value: value as SearchEngine,
+    label: engine.label,
+  }));
 
   protected records(count: number): string {
     return count ? `${count} ${RECORDS[plural.select(count)]}` : 'Порожньо';

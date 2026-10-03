@@ -1,0 +1,13 @@
+# Що ESLint не перевіряє. Читається з eslint.config.js (includeIgnoreFile), формат — як у .gitignore.
+
+# Збірки й кеш
+dist/
+out-tsc/
+.angular/
+coverage/
+
+# Залежності
+node_modules/
+
+# Статика (картинки, шрифти)
+public/

@@ -10,9 +10,9 @@
 
   &__title {
     margin-bottom: 0.875rem;
-    color: var(--browser-heading);
     font-size: 1.125rem;
     font-weight: 700;
+    color: var(--browser-heading);
   }
 
   &__form {
@@ -31,8 +31,8 @@
 
   &__actions {
     display: flex;
-    justify-content: flex-end;
     gap: 0.5rem;
+    justify-content: flex-end;
     margin-top: 0.25rem;
   }
 

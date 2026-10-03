@@ -1,12 +1,35 @@
 <div class="find-bar" role="search">
-  <app-input class="find-bar__field" icon="search" inputId="find-on-page" inputName="find-on-page" ariaLabel="Знайти на сторінці" placeholder="Знайти на сторінці" autocomplete="off" [spellcheck]="false" enterKeyHint="search" [(value)]="query" (keydown)="onKeydown($event)">
+  <app-input
+    class="find-bar__field"
+    icon="search"
+    inputId="find-on-page"
+    inputName="find-on-page"
+    ariaLabel="Знайти на сторінці"
+    placeholder="Знайти на сторінці"
+    autocomplete="off"
+    [spellcheck]="false"
+    enterKeyHint="search"
+    [(value)]="query"
+    (keydown)="onKeydown($event)">
     <output class="find-bar__status" [class.find-bar__status--empty]="notFound()" aria-live="polite">{{ status() }}</output>
   </app-input>
   <span class="find-bar__divider" aria-hidden="true"></span>
-  <button class="find-bar__button" type="button" aria-label="Попередній збіг" title="Попередній збіг (Shift+Enter)" [disabled]="!canStep()" (click)="previous()">
+  <button
+    class="find-bar__button"
+    type="button"
+    aria-label="Попередній збіг"
+    title="Попередній збіг (Shift+Enter)"
+    [disabled]="!canStep()"
+    (click)="previous()">
     <app-icon icon="chevron-up" />
   </button>
-  <button class="find-bar__button" type="button" aria-label="Наступний збіг" title="Наступний збіг (Enter)" [disabled]="!canStep()" (click)="next()">
+  <button
+    class="find-bar__button"
+    type="button"
+    aria-label="Наступний збіг"
+    title="Наступний збіг (Enter)"
+    [disabled]="!canStep()"
+    (click)="next()">
     <app-icon icon="chevron-down" />
   </button>
   <button class="find-bar__button" type="button" aria-label="Закрити пошук" title="Закрити (Esc)" (click)="closed.emit()">

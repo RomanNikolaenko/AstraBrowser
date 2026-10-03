@@ -1,17 +1,16 @@
 :host {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  flex-direction: column;
   overflow: hidden;
 }
 
 // Екрани вставляються сюди: сторінки входу прокручуються цілком, браузер керує прокруткою сам.
 .app-content {
   display: flex;
-  min-height: 0;
   flex: 1;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden auto;
 }

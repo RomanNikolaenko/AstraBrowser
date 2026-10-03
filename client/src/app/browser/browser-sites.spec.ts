@@ -165,8 +165,7 @@ describe('Browser with sites', () => {
         { provide: PageViews, useClass: FakePageViews },
         { provide: BrowserWindows, useClass: FakeWindows },
       ],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     pages = TestBed.inject(PageViews) as unknown as FakePageViews;
     windows = TestBed.inject(BrowserWindows) as unknown as FakeWindows;
@@ -188,7 +187,12 @@ describe('Browser with sites', () => {
   it('should search anything that is not an address', async () => {
     await typeInOmnibox('як працює браузер');
 
-    expect(pages.called('open')).toEqual([[label(1), 'https://www.google.com/search?q=%D1%8F%D0%BA%20%D0%BF%D1%80%D0%B0%D1%86%D1%8E%D1%94%20%D0%B1%D1%80%D0%B0%D1%83%D0%B7%D0%B5%D1%80']]);
+    expect(pages.called('open')).toEqual([
+      [
+        label(1),
+        'https://www.google.com/search?q=%D1%8F%D0%BA%20%D0%BF%D1%80%D0%B0%D1%86%D1%8E%D1%94%20%D0%B1%D1%80%D0%B0%D1%83%D0%B7%D0%B5%D1%80',
+      ],
+    ]);
   });
 
   it('should open internal pages typed as astra:// addresses', async () => {
@@ -217,7 +221,10 @@ describe('Browser with sites', () => {
   });
 
   it('should follow the page: title, history and back/forward from WebView2', async () => {
-    const history = () => TestBed.inject(HistoryStore).entries().map((entry) => [entry.title, entry.url]);
+    const history = () =>
+      TestBed.inject(HistoryStore)
+        .entries()
+        .map((entry) => [entry.title, entry.url]);
     const navigation = async (url: string, canGoBack: boolean, canGoForward: boolean) => {
       pages.emit('page://navigation', { label: label(1), url, canGoBack, canGoForward });
       await stable();
@@ -252,7 +259,10 @@ describe('Browser with sites', () => {
     expect(omnibox().value).toBe('https://angular.dev/');
     button('Вперед').click();
     await stable();
-    expect(pages.called('go')).toEqual([[label(1), -1], [label(1), 1]]);
+    expect(pages.called('go')).toEqual([
+      [label(1), -1],
+      [label(1), 1],
+    ]);
   });
 
   it('should go back from the first page of a site to the new tab page and forward again', async () => {
@@ -280,7 +290,12 @@ describe('Browser with sites', () => {
   it('should not offer to go back from a site opened in a new tab by a link', async () => {
     await typeInOmnibox('angular.dev');
     pages.emit('page://new-tab', { label: label(1), url: 'https://github.com/angular' });
-    pages.emit('page://navigation', { label: label(2), url: 'https://github.com/angular', canGoBack: false, canGoForward: false });
+    pages.emit('page://navigation', {
+      label: label(2),
+      url: 'https://github.com/angular',
+      canGoBack: false,
+      canGoForward: false,
+    });
     await stable();
 
     expect(titles()).toEqual(['angular.dev', 'github.com']);
@@ -290,7 +305,8 @@ describe('Browser with sites', () => {
   describe('reload menu', () => {
     const reloadButton = () => button('Оновити');
     const menuOpen = () => !!element.querySelector('app-reload-menu .is-open');
-    const item = (text: string) => [...element.querySelectorAll<HTMLButtonElement>('.reload-menu__item')].find((node) => node.textContent?.includes(text));
+    const item = (text: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.reload-menu__item')].find((node) => node.textContent?.includes(text));
 
     it('should reload on a click and keep the menu closed', async () => {
       await typeInOmnibox('angular.dev');
@@ -369,7 +385,10 @@ describe('Browser with sites', () => {
       item('Очистити cookies')?.click();
       item('Жорстке оновлення')?.click();
       await stable();
-      expect(pages.called('reload-with')).toEqual([[label(1), 'cookies'], [label(1), 'hard']]);
+      expect(pages.called('reload-with')).toEqual([
+        [label(1), 'cookies'],
+        [label(1), 'hard'],
+      ]);
       expect(element.querySelector('.tab__spinner')).toBeTruthy();
     });
   });
@@ -415,7 +434,11 @@ describe('Browser with sites', () => {
     await load(1, 'https://www.youtube.com/');
     expect(tabIcon()?.getAttribute('src')).toBe('https://www.youtube.com/favicon.ico');
 
-    pages.emit('page://favicon', { label: label(1), url: 'https://www.youtube.com/', icon: 'https://www.youtube.com/s/desktop/favicon_32x32.png' });
+    pages.emit('page://favicon', {
+      label: label(1),
+      url: 'https://www.youtube.com/',
+      icon: 'https://www.youtube.com/s/desktop/favicon_32x32.png',
+    });
     await stable();
 
     expect(tabIcon()?.getAttribute('src')).toBe('https://www.youtube.com/s/desktop/favicon_32x32.png');
@@ -473,7 +496,9 @@ describe('Browser with sites', () => {
     const openPanel = () => open(panel());
     const choose = async (label: string) => {
       await open(panel().querySelector('[role="listbox"]'));
-      [...panel().querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent?.trim() === label)?.click();
+      [...panel().querySelectorAll<HTMLElement>('[role="option"]')]
+        .find((option) => option.textContent?.trim() === label)
+        ?.click();
       await stable();
       await stable();
     };
@@ -483,7 +508,9 @@ describe('Browser with sites', () => {
       const covering = () => document.documentElement.classList.contains('page-covering');
 
       // Без сайту знімати нічого — панель з'являється одразу.
-      element.querySelector('app-bookmark-editor div')?.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
+      element
+        .querySelector('app-bookmark-editor div')
+        ?.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
       expect(covering()).toBe(false);
 
       await typeInOmnibox('www.twitch.tv');
@@ -574,7 +601,8 @@ describe('Browser with sites', () => {
     bookmarks.add('YouTube', 'https://www.youtube.com/');
     bookmarks.add('Історія', 'astra://history');
     await stable();
-    const bookmark = (title: string) => [...element.querySelectorAll('.bookmark')].find((item) => item.textContent?.includes(title));
+    const bookmark = (title: string) =>
+      [...element.querySelectorAll('.bookmark')].find((item) => item.textContent?.includes(title));
     const middleClick = async (target: Element | undefined) => {
       target?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
       await stable();
@@ -608,11 +636,19 @@ describe('Browser with sites', () => {
 
       await fullscreen(true);
       expect(windows.fullscreenCalls).toEqual([true]);
-      expect(pages.called('bounds').at(-1)).toEqual([label(1), { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }]);
+      expect(pages.called('bounds').at(-1)).toEqual([
+        label(1),
+        { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight },
+      ]);
 
       await fullscreen(false);
       expect(windows.fullscreenCalls).toEqual([true, false]);
-      expect(pages.called('bounds').at(-1)?.[1]).not.toEqual({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight });
+      expect(pages.called('bounds').at(-1)?.[1]).not.toEqual({
+        x: 0,
+        y: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
     });
 
     it('should keep the window fullscreen if it already was', async () => {
@@ -653,12 +689,19 @@ describe('Browser with sites', () => {
     await typeInOmnibox('youtube.com');
     expect(pip()).toBeNull();
 
-    pages.emit('page://navigation', { label: label(1), url: 'https://www.youtube.com/watch?v=abc', canGoBack: true, canGoForward: false });
+    pages.emit('page://navigation', {
+      label: label(1),
+      url: 'https://www.youtube.com/watch?v=abc',
+      canGoBack: true,
+      canGoForward: false,
+    });
     await stable();
     expect(pip()?.getAttribute('aria-label')).toBe('Картинка в картинці');
 
     pip()?.click();
-    document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, code: 'BracketRight', key: 'Ї', cancelable: true }));
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, code: 'BracketRight', key: 'Ї', cancelable: true })
+    );
     await stable();
     expect(pages.called('pip')).toEqual([[label(1)], [label(1)]]);
 
@@ -666,16 +709,28 @@ describe('Browser with sites', () => {
     pages.emit('page://navigation', { label: label(1), url: 'https://example.com/watch', canGoBack: true, canGoForward: false });
     await stable();
     expect(pip()).toBeNull();
-    document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, code: 'BracketRight', key: '}', cancelable: true }));
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, code: 'BracketRight', key: '}', cancelable: true })
+    );
     expect(pages.called('pip').length).toBe(2);
   });
 
   it('should record finished downloads', async () => {
     await typeInOmnibox('angular.dev');
-    pages.emit('page://download', { label: label(1), url: 'https://x.example/a.zip', fileName: 'a.zip', size: 2048, success: true });
+    pages.emit('page://download', {
+      label: label(1),
+      url: 'https://x.example/a.zip',
+      fileName: 'a.zip',
+      size: 2048,
+      success: true,
+    });
     await stable();
 
-    expect(TestBed.inject(DownloadsStore).entries().map((entry) => [entry.fileName, entry.size, entry.status])).toEqual([['a.zip', 2048, 'completed']]);
+    expect(
+      TestBed.inject(DownloadsStore)
+        .entries()
+        .map((entry) => [entry.fileName, entry.size, entry.status])
+    ).toEqual([['a.zip', 2048, 'completed']]);
   });
 
   it('should hide the site behind other tabs and close its webview with the tab', async () => {

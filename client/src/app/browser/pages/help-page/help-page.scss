@@ -2,8 +2,8 @@
 .help-table {
   display: table;
   width: 100%;
-  border-collapse: separate;
   border-spacing: 0;
+  border-collapse: separate;
 
   &__row {
     &:hover {
@@ -18,15 +18,15 @@
   &__action,
   &__keys {
     padding: 0.75rem 1rem;
-    color: var(--browser-text);
     font-size: 0.9375rem;
     font-weight: 400;
+    color: var(--browser-text);
     text-align: start;
   }
 
   &__keys {
-    white-space: nowrap;
     text-align: end;
+    white-space: nowrap;
   }
 
   &__plus {
@@ -38,15 +38,15 @@
     display: inline-block;
     min-width: 1.75rem;
     padding: 0.125rem 0.5rem;
-    border: 0.0625rem solid var(--browser-chrome-border);
-    border-bottom-width: 0.125rem;
-    border-radius: 0.375rem;
-    background: var(--browser-field);
-    color: var(--browser-text);
     font-family: inherit;
     font-size: 0.8125rem;
     font-weight: 600;
+    color: var(--browser-text);
     text-align: center;
+    background: var(--browser-field);
+    border: 0.0625rem solid var(--browser-chrome-border);
+    border-bottom-width: 0.125rem;
+    border-radius: 0.375rem;
   }
 }
 
@@ -55,8 +55,8 @@
 
   &__row {
     display: flex;
-    justify-content: space-between;
     gap: 1rem;
+    justify-content: space-between;
     padding: 0.75rem 1rem;
 
     & + & {
@@ -65,14 +65,14 @@
   }
 
   dt {
-    color: var(--browser-text);
     font-size: 0.9375rem;
+    color: var(--browser-text);
   }
 
   dd {
     margin: 0;
-    color: var(--browser-muted);
     font-size: 0.9375rem;
     font-variant-numeric: tabular-nums;
+    color: var(--browser-muted);
   }
 }

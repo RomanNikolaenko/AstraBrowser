@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, ElementRef, booleanAttribute, input, output, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  booleanAttribute,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 
 /**
  * Випадна панель браузера (Popover API): під кнопкою-якорем, з рамкою, тінню, анімацією й, за потреби, стрілкою.
@@ -76,11 +85,17 @@ export class Popover {
   /** Якір — кнопка, що відкриває панель (не та, що закриває її зсередини), чи її частина з тим самим anchor-name. */
   private findAnchor(): HTMLElement | null {
     const panel = this.panel().nativeElement;
-    const invoker = [...document.querySelectorAll<HTMLElement>(`[popovertarget="${this.popoverId()}"]`)].find((element) => !panel.contains(element));
+    const invoker = [...document.querySelectorAll<HTMLElement>(`[popovertarget="${this.popoverId()}"]`)].find(
+      (element) => !panel.contains(element)
+    );
     if (!invoker) {
       return null;
     }
     const name = `--${this.popoverId()}`;
-    return [invoker, ...invoker.querySelectorAll<HTMLElement>('*')].find((element) => getComputedStyle(element).getPropertyValue('anchor-name') === name) ?? invoker;
+    return (
+      [invoker, ...invoker.querySelectorAll<HTMLElement>('*')].find(
+        (element) => getComputedStyle(element).getPropertyValue('anchor-name') === name
+      ) ?? invoker
+    );
   }
 }

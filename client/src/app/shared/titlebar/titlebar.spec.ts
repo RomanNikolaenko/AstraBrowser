@@ -11,7 +11,9 @@ import { TitlebarContent } from './titlebar-content';
   template: `
     <app-titlebar />
     @if (showContent()) {
-      <ng-template appTitlebarContent (spacerMiddleClick)="spacerMiddleClicks.set(spacerMiddleClicks() + 1)"><span class="screen-content">{{ label() }}</span></ng-template>
+      <ng-template appTitlebarContent (spacerMiddleClick)="spacerMiddleClicks.set(spacerMiddleClicks() + 1)"
+        ><span class="screen-content">{{ label() }}</span></ng-template
+      >
     }
   `,
 })
@@ -26,8 +28,7 @@ describe('Titlebar', () => {
     await TestBed.configureTestingModule({
       imports: [Host],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);
     await fixture.whenStable();
@@ -71,7 +72,8 @@ describe('Titlebar', () => {
 
   it('should pass a middle click on the free space to the open screen only', async () => {
     const { fixture, titlebar } = await setup();
-    const middleClick = () => titlebar.querySelector('.titlebar__spacer')?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+    const middleClick = () =>
+      titlebar.querySelector('.titlebar__spacer')?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
 
     middleClick();
     expect(fixture.componentInstance.spacerMiddleClicks()).toBe(0);

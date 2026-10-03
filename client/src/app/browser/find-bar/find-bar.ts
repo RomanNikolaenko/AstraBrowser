@@ -1,4 +1,17 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, afterNextRender, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
 

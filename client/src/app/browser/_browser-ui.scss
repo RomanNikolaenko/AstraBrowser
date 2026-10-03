@@ -3,16 +3,21 @@
 // Кругла кнопка-іконка панелей браузера.
 @mixin icon-button($size: 2.5rem, $icon-size: 1.375rem, $color: var(--browser-icon), $radius: 50%) {
   display: grid;
-  width: $size;
-  height: $size;
   flex: 0 0 auto;
   place-items: center;
+  width: $size;
+  height: $size;
   padding: 0;
+  color: $color;
+  background: transparent;
   border: 0;
   border-radius: $radius;
-  background: transparent;
-  color: $color;
-  transition: background-color $motion, color $motion, outline-color $motion, outline-offset $motion;
+  transition:
+    background-color $motion,
+    color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
   @include focus-ring(0.125rem);
 
   app-icon {
@@ -23,8 +28,8 @@
 
   &:hover:not(:disabled),
   &:focus-visible {
-    background: var(--browser-hover);
     color: var(--browser-tab-active-text);
+    background: var(--browser-hover);
   }
 
   &:active:not(:disabled) {
@@ -44,20 +49,26 @@
 // Кнопка-«пігулка» з текстом. Модифікатори --primary (градієнт) і --danger (незворотна дія).
 @mixin pill-button($height: 2.75rem) {
   display: inline-flex;
-  height: $height;
   flex: 0 0 auto;
+  gap: 0.5rem;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  height: $height;
   padding: 0 1.125rem;
-  border: 0.0625rem solid var(--browser-chrome-border);
-  border-radius: 999px;
-  background: var(--browser-popover);
-  color: var(--browser-text);
   font-size: 0.875rem;
   font-weight: 600;
+  color: var(--browser-text);
   white-space: nowrap;
-  transition: background-color $motion, border-color $motion, color $motion, outline-color $motion, outline-offset $motion;
+  background: var(--browser-popover);
+  border: 0.0625rem solid var(--browser-chrome-border);
+  border-radius: 999px;
+  transition:
+    background-color $motion,
+    border-color $motion,
+    color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
   @include focus-ring;
 
   app-icon {
@@ -66,8 +77,8 @@
   }
 
   &:hover:not(:disabled) {
-    border-color: var(--color-focus);
     background: var(--browser-hover);
+    border-color: var(--color-focus);
   }
 
   &:disabled {
@@ -80,13 +91,13 @@
   }
 
   &--primary {
-    border-color: transparent;
+    color: #fff;
     background: var(--gradient-brand);
-    color: #ffffff;
+    border-color: transparent;
 
     &:hover:not(:disabled) {
-      border-color: transparent;
       background: var(--gradient-brand);
+      border-color: transparent;
       filter: brightness(1.06);
     }
   }
@@ -94,28 +105,32 @@
 
 @mixin popover-title {
   margin: 0.5rem 0.5rem 0.75rem;
-  color: var(--browser-heading);
   font-size: 1.125rem;
   font-weight: 700;
+  color: var(--browser-heading);
 }
 
 // Рядок меню: іконка, підпис і необов'язковий хвіст (гаряча клавіша чи стрілка).
 // Кільце фокусу всередині, бо панель може прокручуватися й обрізати все, що виходить за край.
 @mixin popover-item {
   display: flex;
+  gap: 0.875rem;
+  align-items: center;
   width: 100%;
   min-height: 2.5rem;
-  align-items: center;
-  gap: 0.875rem;
   padding: 0 0.75rem;
-  border: 0;
-  border-radius: 0.625rem;
-  background: transparent;
-  color: var(--browser-text);
   font-size: 0.9375rem;
+  color: var(--browser-text);
   text-align: start;
   text-decoration: none;
-  transition: background-color $motion, outline-color $motion, outline-offset $motion;
+  background: transparent;
+  border: 0;
+  border-radius: 0.625rem;
+  transition:
+    background-color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
   @include focus-ring(-0.1875rem);
 
   &:hover,

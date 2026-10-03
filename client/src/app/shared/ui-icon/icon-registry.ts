@@ -19,7 +19,7 @@ export class IconRegistry {
           this.cache.delete(name);
           return of('');
         }),
-        shareReplay(1),
+        shareReplay(1)
       );
       this.cache.set(name, svg);
     }

@@ -9,8 +9,7 @@ describe('SettingsPage', () => {
     await TestBed.configureTestingModule({
       imports: [SettingsPage],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(SettingsPage);
     await fixture.whenStable();
@@ -53,9 +52,18 @@ describe('SettingsPage', () => {
 
   it('should count records and clear history after confirmation', async () => {
     const now = Date.now();
-    localStorage.setItem('astra.history', JSON.stringify([1, 2, 3].map((id) => ({ id: `${id}`, url: 'https://a.example', title: 'A', visitedAt: now }))));
+    localStorage.setItem(
+      'astra.history',
+      JSON.stringify([1, 2, 3].map((id) => ({ id: `${id}`, url: 'https://a.example', title: 'A', visitedAt: now })))
+    );
     const { element, click, meta } = await setup();
-    expect(meta()).toEqual(['«Як у системі» стежить за темою Windows', 'Показувати закладки під адресним рядком', 'Для запитів з адресного рядка й нової вкладки', '3 записи', 'Порожньо · самі файли лишаються на диску']);
+    expect(meta()).toEqual([
+      '«Як у системі» стежить за темою Windows',
+      'Показувати закладки під адресним рядком',
+      'Для запитів з адресного рядка й нової вкладки',
+      '3 записи',
+      'Порожньо · самі файли лишаються на диску',
+    ]);
 
     const clearHistory = element.querySelectorAll<HTMLButtonElement>('.settings__row .page__button')[0];
     await click(clearHistory);

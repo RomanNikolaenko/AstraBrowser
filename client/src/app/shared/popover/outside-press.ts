@@ -19,7 +19,9 @@ export function closePopoversOnOutsidePress(): void {
       return;
     }
     // Від верхньої до нижньої: вкладена (список у панелі) закривається, а панель, у якій клікнули, лишається.
-    const open = [...document.querySelectorAll<HTMLElement>('[popover="auto"], [popover=""]')].filter((popover) => popover.matches(':popover-open'));
+    const open = [...document.querySelectorAll<HTMLElement>('[popover="auto"], [popover=""]')].filter((popover) =>
+      popover.matches(':popover-open')
+    );
     for (const popover of open.reverse()) {
       if (!popover.contains(target)) {
         popover.hidePopover();

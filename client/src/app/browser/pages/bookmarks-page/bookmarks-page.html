@@ -2,7 +2,16 @@
   <header class="page__header">
     <h1 class="page__title">Закладки</h1>
     @if (bookmarks.entries().length) {
-      <app-input class="page__search" shape="pill" icon="search" inputId="bookmarks-search" inputName="bookmarks-search" ariaLabel="Пошук у закладках" placeholder="Пошук у закладках" autocomplete="off" [(value)]="query" />
+      <app-input
+        class="page__search"
+        shape="pill"
+        icon="search"
+        inputId="bookmarks-search"
+        inputName="bookmarks-search"
+        ariaLabel="Пошук у закладках"
+        placeholder="Пошук у закладках"
+        autocomplete="off"
+        [(value)]="query" />
     }
     @if (!adding()) {
       <button class="page__button page__button--primary" type="button" (click)="startAdding()">
@@ -16,8 +25,30 @@
     <form class="bookmark-form" novalidate (submit)="save($event)">
       <h2 class="bookmark-form__title">Нова закладка</h2>
       <div class="bookmark-form__fields">
-        <app-input class="page__search bookmark-form__field" icon="star" inputId="bookmark-title" inputName="title" ariaLabel="Назва закладки" placeholder="Назва" autocomplete="off" [(value)]="title.value" [(touched)]="title.touched" [error]="title.visibleError()" />
-        <app-input class="page__search bookmark-form__field" icon="globe" inputId="bookmark-url" inputName="url" type="url" ariaLabel="Адреса сайту" placeholder="example.com" autocomplete="url" [spellcheck]="false" [(value)]="url.value" [(touched)]="url.touched" [error]="url.visibleError()" />
+        <app-input
+          class="page__search bookmark-form__field"
+          icon="star"
+          inputId="bookmark-title"
+          inputName="title"
+          ariaLabel="Назва закладки"
+          placeholder="Назва"
+          autocomplete="off"
+          [(value)]="title.value"
+          [(touched)]="title.touched"
+          [error]="title.visibleError()" />
+        <app-input
+          class="page__search bookmark-form__field"
+          icon="globe"
+          inputId="bookmark-url"
+          inputName="url"
+          type="url"
+          ariaLabel="Адреса сайту"
+          placeholder="example.com"
+          autocomplete="url"
+          [spellcheck]="false"
+          [(value)]="url.value"
+          [(touched)]="url.touched"
+          [error]="url.visibleError()" />
       </div>
       <div class="bookmark-form__actions">
         <button class="page__button page__button--primary" type="submit">Зберегти</button>
@@ -43,7 +74,12 @@
             <span class="page__name">{{ bookmark.title }}</span>
             <span class="page__meta">{{ describe(bookmark.url) }}</span>
           </span>
-          <button class="page__remove" type="button" [attr.aria-label]="'Видалити закладку «' + bookmark.title + '»'" title="Видалити закладку" (click)="bookmarks.remove(bookmark.id)">
+          <button
+            class="page__remove"
+            type="button"
+            [attr.aria-label]="'Видалити закладку «' + bookmark.title + '»'"
+            title="Видалити закладку"
+            (click)="bookmarks.remove(bookmark.id)">
             <app-icon icon="close" />
           </button>
         </li>

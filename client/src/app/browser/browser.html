@@ -2,8 +2,18 @@
 <ng-template appTitlebarContent (spacerMiddleClick)="openNewTab()">
   <ul class="tab-list" aria-label="Відкриті вкладки" (dblclick)="onChromeDoubleClick($event)">
     @for (tab of tabs(); track tab.id) {
-      <li class="tab" [class.tab--active]="tab.id === activeTabId()" [class.tab--audio]="tab.site?.playing || tab.site?.muted" (appMiddleClick)="closeTab(tab.id)">
-        <button class="tab__select" type="button" [attr.aria-current]="tab.id === activeTabId() ? 'page' : null" [attr.aria-busy]="tab.site?.loading || null" [title]="tabTitle(tab)" (click)="selectTab(tab.id)">
+      <li
+        class="tab"
+        [class.tab--active]="tab.id === activeTabId()"
+        [class.tab--audio]="tab.site?.playing || tab.site?.muted"
+        (appMiddleClick)="closeTab(tab.id)">
+        <button
+          class="tab__select"
+          type="button"
+          [attr.aria-current]="tab.id === activeTabId() ? 'page' : null"
+          [attr.aria-busy]="tab.site?.loading || null"
+          [title]="tabTitle(tab)"
+          (click)="selectTab(tab.id)">
           @if (tab.site?.loading) {
             <span class="tab__spinner" aria-hidden="true"></span>
           } @else if (tab.site) {
@@ -14,11 +24,22 @@
           <span class="tab__title">{{ tabTitle(tab) }}</span>
         </button>
         @if (tab.site?.playing || tab.site?.muted) {
-          <button class="tab__audio" type="button" [class.tab__audio--muted]="tab.site?.muted" [attr.aria-label]="(tab.site?.muted ? 'Увімкнути звук вкладки «' : 'Вимкнути звук вкладки «') + tabTitle(tab) + '»'" [title]="tab.site?.muted ? 'Увімкнути звук вкладки' : 'Вимкнути звук вкладки'" (click)="toggleMute(tab)">
+          <button
+            class="tab__audio"
+            type="button"
+            [class.tab__audio--muted]="tab.site?.muted"
+            [attr.aria-label]="(tab.site?.muted ? 'Увімкнути звук вкладки «' : 'Вимкнути звук вкладки «') + tabTitle(tab) + '»'"
+            [title]="tab.site?.muted ? 'Увімкнути звук вкладки' : 'Вимкнути звук вкладки'"
+            (click)="toggleMute(tab)">
             <app-icon [icon]="tab.site?.muted ? 'volume-off' : 'volume'" />
           </button>
         }
-        <button class="tab__close" type="button" [attr.aria-label]="'Закрити вкладку «' + tabTitle(tab) + '»'" title="Закрити вкладку" (click)="closeTab(tab.id)">
+        <button
+          class="tab__close"
+          type="button"
+          [attr.aria-label]="'Закрити вкладку «' + tabTitle(tab) + '»'"
+          title="Закрити вкладку"
+          (click)="closeTab(tab.id)">
           <app-icon icon="close" />
         </button>
       </li>
@@ -36,7 +57,13 @@
       <button class="toolbar__button" type="button" aria-label="Назад" title="Назад" [disabled]="!canGoBack()" (click)="goBack()">
         <app-icon icon="arrow-left" />
       </button>
-      <button class="toolbar__button" type="button" aria-label="Вперед" title="Вперед" [disabled]="!canGoForward()" (click)="goForward()">
+      <button
+        class="toolbar__button"
+        type="button"
+        aria-label="Вперед"
+        title="Вперед"
+        [disabled]="!canGoForward()"
+        (click)="goForward()">
         <app-icon icon="arrow-right" />
       </button>
       <button
@@ -51,27 +78,57 @@
         (pointerup)="cancelReloadHold()"
         (pointerleave)="cancelReloadHold()"
         (pointercancel)="cancelReloadHold()"
-        (contextmenu)="openReloadMenu($event)"
-      >
+        (contextmenu)="openReloadMenu($event)">
         <app-icon icon="reload" />
       </button>
       <app-reload-menu (reload)="reloadWith($event)" />
     </div>
 
-    <app-input #omnibox class="omnibox" [class.omnibox--site]="activeSitePage()" shape="pill" inputId="omnibox" inputName="address" [(value)]="omniboxText" ariaLabel="Адресний рядок" placeholder="Введіть пошуковий запит або адресу сайту..." autocomplete="off" [spellcheck]="false" enterKeyHint="go" (keydown)="onOmniboxKeydown($event)">
+    <app-input
+      #omnibox
+      class="omnibox"
+      [class.omnibox--site]="activeSitePage()"
+      shape="pill"
+      inputId="omnibox"
+      inputName="address"
+      [(value)]="omniboxText"
+      ariaLabel="Адресний рядок"
+      placeholder="Введіть пошуковий запит або адресу сайту..."
+      autocomplete="off"
+      [spellcheck]="false"
+      enterKeyHint="go"
+      (keydown)="onOmniboxKeydown($event)">
       @if (activeSitePage()) {
-        <button class="omnibox__site" data-input-start type="button" popovertarget="site-permissions" aria-label="Дозволи сайту" title="Дозволи сайту">
+        <button
+          class="omnibox__site"
+          data-input-start
+          type="button"
+          popovertarget="site-permissions"
+          aria-label="Дозволи сайту"
+          title="Дозволи сайту">
           <app-icon icon="sliders" />
         </button>
       } @else {
         <img class="omnibox__logo" data-input-start src="/logo.webp" alt="" width="24" height="24" />
       }
       @if (canPictureInPicture()) {
-        <button class="omnibox__pip" type="button" aria-label="Картинка в картинці" title="Картинка в картинці (Ctrl+Shift+])" aria-keyshortcuts="Control+Shift+]" (click)="togglePictureInPicture()">
+        <button
+          class="omnibox__pip"
+          type="button"
+          aria-label="Картинка в картинці"
+          title="Картинка в картинці (Ctrl+Shift+])"
+          aria-keyshortcuts="Control+Shift+]"
+          (click)="togglePictureInPicture()">
           <app-icon icon="picture-in-picture" />
         </button>
       }
-      <button class="omnibox__action" type="button" popovertarget="bookmark-editor" [class.omnibox__action--active]="currentBookmark()" [attr.aria-label]="currentBookmark() ? 'Редагувати закладку' : 'Додати сторінку в закладки'" [title]="currentBookmark() ? 'Редагувати закладку' : 'Додати в закладки'">
+      <button
+        class="omnibox__action"
+        type="button"
+        popovertarget="bookmark-editor"
+        [class.omnibox__action--active]="currentBookmark()"
+        [attr.aria-label]="currentBookmark() ? 'Редагувати закладку' : 'Додати сторінку в закладки'"
+        [title]="currentBookmark() ? 'Редагувати закладку' : 'Додати в закладки'">
         <app-icon [icon]="currentBookmark() ? 'star-filled' : 'star'" />
       </button>
     </app-input>
@@ -81,7 +138,12 @@
     }
 
     <div class="toolbar__group">
-      <button class="toolbar__button toolbar__button--tools" type="button" aria-label="Інструменти" title="Інструменти" popovertarget="tools-menu">
+      <button
+        class="toolbar__button toolbar__button--tools"
+        type="button"
+        aria-label="Інструменти"
+        title="Інструменти"
+        popovertarget="tools-menu">
         <app-icon icon="apps" />
       </button>
       <app-tools-menu (openPage)="openPage($event)" />
@@ -90,10 +152,24 @@
         <app-icon class="profile__chevron" icon="chevron-down" />
       </button>
       <app-profile-menu />
-      <button class="toolbar__button toolbar__button--filled toolbar__button--menu" type="button" aria-label="Меню" title="Меню" popovertarget="browser-menu">
+      <button
+        class="toolbar__button toolbar__button--filled toolbar__button--menu"
+        type="button"
+        aria-label="Меню"
+        title="Меню"
+        popovertarget="browser-menu">
         <app-icon icon="menu" />
       </button>
-      <app-browser-menu [(zoom)]="zoom" (newTab)="openNewTab()" (newWindow)="openWindow()" (privateWindow)="openWindow(true)" (openPage)="openPage($event)" (find)="openFind()" (print)="print()" (signOut)="signOut()" (fullscreen)="toggleFullscreen()" />
+      <app-browser-menu
+        [(zoom)]="zoom"
+        (newTab)="openNewTab()"
+        (newWindow)="openWindow()"
+        (privateWindow)="openWindow(true)"
+        (openPage)="openPage($event)"
+        (find)="openFind()"
+        (print)="print()"
+        (signOut)="signOut()"
+        (fullscreen)="toggleFullscreen()" />
     </div>
   </div>
 
@@ -103,7 +179,12 @@
         <ul class="bookmarks__list">
           @for (bookmark of bookmarks.entries(); track bookmark.id) {
             <li class="bookmarks__item">
-              <button class="bookmark" type="button" [title]="bookmark.url" (click)="openBookmark(bookmark)" (appMiddleClick)="openBookmarkInNewTab(bookmark)">
+              <button
+                class="bookmark"
+                type="button"
+                [title]="bookmark.url"
+                (click)="openBookmark(bookmark)"
+                (appMiddleClick)="openBookmarkInNewTab(bookmark)">
                 <app-site-icon class="bookmark__favicon" [url]="bookmark.url" [size]="16" />
                 <span>{{ bookmark.title }}</span>
               </button>
@@ -111,7 +192,9 @@
           }
         </ul>
       } @else {
-        <p class="bookmarks__empty">Щоб додати закладку, натисніть <app-icon class="bookmarks__empty-icon" icon="star" /> в адресному рядку</p>
+        <p class="bookmarks__empty">
+          Щоб додати закладку, натисніть <app-icon class="bookmarks__empty-icon" icon="star" /> в адресному рядку
+        </p>
       }
     </nav>
   }
@@ -149,13 +232,16 @@
       @default {
         <!-- Своя сторінка для кожної нової вкладки (за id): автофокус і порожній пошук — і при переході між ними. -->
         @for (tab of [activeTab()]; track tab.id) {
-          <app-new-tab (search)="navigate($event)" />
+          <app-new-tab (searched)="navigate($event)" />
         }
       }
     }
   </div>
 
   @if (findOpen()) {
-    <app-find-bar [root]="content" [finder]="activeTab().page === 'web' ? findOnPage : undefined" (closed)="findOpen.set(false)" />
+    <app-find-bar
+      [root]="content"
+      [finder]="activeTab().page === 'web' ? findOnPage : undefined"
+      (closed)="findOpen.set(false)" />
   }
 </div>

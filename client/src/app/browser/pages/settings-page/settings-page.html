@@ -13,7 +13,13 @@
       <div class="segmented">
         @for (theme of themes; track theme.value) {
           <label class="segmented__option">
-            <input class="segmented__input" type="radio" name="theme" [value]="theme.value" [checked]="settings.theme() === theme.value" (change)="settings.theme.set(theme.value)" />
+            <input
+              class="segmented__input"
+              type="radio"
+              name="theme"
+              [value]="theme.value"
+              [checked]="settings.theme() === theme.value"
+              (change)="settings.theme.set(theme.value)" />
             <app-icon class="segmented__icon" [icon]="theme.icon" />
             <span>{{ theme.label }}</span>
           </label>
@@ -26,7 +32,14 @@
         <span class="page__name">Панель закладок</span>
         <span class="page__meta">Показувати закладки під адресним рядком</span>
       </span>
-      <input class="switch" id="settings-bookmarks-bar" name="bookmarks-bar" type="checkbox" role="switch" [checked]="settings.showBookmarksBar()" (change)="setBookmarksBar($event)" />
+      <input
+        class="switch"
+        id="settings-bookmarks-bar"
+        name="bookmarks-bar"
+        type="checkbox"
+        role="switch"
+        [checked]="settings.showBookmarksBar()"
+        (change)="setBookmarksBar($event)" />
     </label>
   </div>
 
@@ -40,7 +53,13 @@
       <div class="segmented">
         @for (engine of engines; track engine.value) {
           <label class="segmented__option">
-            <input class="segmented__input" type="radio" name="search-engine" [value]="engine.value" [checked]="settings.searchEngine() === engine.value" (change)="settings.searchEngine.set(engine.value)" />
+            <input
+              class="segmented__input"
+              type="radio"
+              name="search-engine"
+              [value]="engine.value"
+              [checked]="settings.searchEngine() === engine.value"
+              (change)="settings.searchEngine.set(engine.value)" />
             <span>{{ engine.label }}</span>
           </label>
         }
@@ -55,20 +74,35 @@
         <span class="page__name">Історія переглядів</span>
         <span class="page__meta">{{ records(history.entries().length) }}</span>
       </span>
-      <button class="page__button page__button--danger" type="button" [disabled]="!history.entries().length" (click)="confirming.set('history')">Очистити</button>
+      <button
+        class="page__button page__button--danger"
+        type="button"
+        [disabled]="!history.entries().length"
+        (click)="confirming.set('history')">
+        Очистити
+      </button>
     </div>
     <div class="settings__row">
       <span class="settings__text">
         <span class="page__name">Список завантажень</span>
         <span class="page__meta">{{ records(downloads.entries().length) }} · самі файли лишаються на диску</span>
       </span>
-      <button class="page__button page__button--danger" type="button" [disabled]="!downloads.entries().length" (click)="confirming.set('downloads')">Очистити</button>
+      <button
+        class="page__button page__button--danger"
+        type="button"
+        [disabled]="!downloads.entries().length"
+        (click)="confirming.set('downloads')">
+        Очистити
+      </button>
     </div>
   </div>
 
   @if (confirming(); as target) {
     <div class="page__confirm settings__confirm" role="alert">
-      <span>{{ target === 'history' ? 'Видалити всю історію переглядів?' : 'Прибрати всі записи зі списку завантажень?' }} Цю дію не можна скасувати.</span>
+      <span
+        >{{ target === 'history' ? 'Видалити всю історію переглядів?' : 'Прибрати всі записи зі списку завантажень?' }} Цю дію не
+        можна скасувати.</span
+      >
       <button class="page__button page__button--danger" type="button" (click)="clear()">Очистити</button>
       <button class="page__button" type="button" (click)="confirming.set(null)">Скасувати</button>
     </div>

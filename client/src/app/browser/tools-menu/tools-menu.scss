@@ -16,31 +16,37 @@
     display: grid;
     grid-template-columns: repeat(3, 6.5rem);
     gap: 0.75rem;
-    margin: 0;
     padding: 0;
+    margin: 0;
     list-style: none;
   }
 
   &__tile {
     display: grid;
-    width: 100%;
-    height: 6rem;
+    gap: 0.625rem;
     place-content: center;
     justify-items: center;
-    gap: 0.625rem;
+    width: 100%;
+    height: 6rem;
     padding: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--browser-text);
+    background: var(--browser-tile);
     border: 0.0625rem solid var(--browser-tile-border);
     border-radius: 0.75rem;
-    background: var(--browser-tile);
-    color: var(--browser-text);
-    font-size: 0.8125rem;
-    transition: transform $motion, border-color $motion, background-color $motion, outline-color $motion, outline-offset $motion;
+    transition:
+      transform $motion,
+      border-color $motion,
+      background-color $motion,
+      outline-color $motion,
+      outline-offset $motion;
+
     @include focus-ring(0.125rem);
 
     &:hover,
     &:focus-visible {
-      border-color: var(--browser-icon-accent);
       background: var(--browser-hover);
+      border-color: var(--browser-icon-accent);
       transform: translateY(-0.0625rem);
 
       .tools-menu__icon {

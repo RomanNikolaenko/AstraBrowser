@@ -2,7 +2,16 @@
   <header class="page__header">
     <h1 class="page__title">Завантаження</h1>
     @if (downloads.entries().length) {
-      <app-input class="page__search" shape="pill" icon="search" inputId="downloads-search" inputName="downloads-search" ariaLabel="Пошук у завантаженнях" placeholder="Пошук у завантаженнях" autocomplete="off" [(value)]="query" />
+      <app-input
+        class="page__search"
+        shape="pill"
+        icon="search"
+        inputId="downloads-search"
+        inputName="downloads-search"
+        ariaLabel="Пошук у завантаженнях"
+        placeholder="Пошук у завантаженнях"
+        autocomplete="off"
+        [(value)]="query" />
       <button class="page__button page__button--danger" type="button" (click)="confirmingClear.set(true)">Очистити все</button>
     }
   </header>
@@ -39,7 +48,12 @@
                 <span class="page__meta">{{ formatSize(entry.size) }} · {{ hostname(entry.url) }}</span>
               }
             </span>
-            <button class="page__remove" type="button" [attr.aria-label]="'Прибрати «' + entry.fileName + '» зі списку'" title="Прибрати зі списку" (click)="downloads.remove(entry.id)">
+            <button
+              class="page__remove"
+              type="button"
+              [attr.aria-label]="'Прибрати «' + entry.fileName + '» зі списку'"
+              title="Прибрати зі списку"
+              (click)="downloads.remove(entry.id)">
               <app-icon icon="close" />
             </button>
           </li>

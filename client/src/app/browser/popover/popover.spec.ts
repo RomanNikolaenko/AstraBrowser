@@ -6,7 +6,13 @@ import { Popover } from './popover';
   imports: [Popover],
   template: `
     <button class="invoker" type="button" popovertarget="demo">Меню</button>
-    <app-popover class="demo" popoverId="demo" align="start" caret (opened)="events.push('opened')" (closed)="events.push('closed')">
+    <app-popover
+      class="demo"
+      popoverId="demo"
+      align="start"
+      caret
+      (opened)="events.push('opened')"
+      (closed)="events.push('closed')">
       <p class="content">Вміст</p>
       <button class="close" type="button" popovertarget="demo" popovertargetaction="hide">Закрити</button>
     </app-popover>

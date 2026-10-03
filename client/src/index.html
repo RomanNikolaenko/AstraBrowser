@@ -1,26 +1,40 @@
 <!doctype html>
 <html lang="uk">
-<head>
-  <meta charset="utf-8">
-  <title>Astra Browser</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Astra Browser — швидкий і безпечний браузер із синхронізацією закладок, паролів і налаштувань між усіма вашими пристроями.">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <script>
-    // Тема з налаштувань (SettingsStore) ще до старту Angular, щоб не блимала тема системи.
-    try {
-      const theme = JSON.parse(localStorage.getItem('astra.settings.theme') ?? '"system"');
-      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
-    } catch {}
-  </script>
-  <!-- Застосунок рендериться в браузері, тож без preload картинки почали б вантажитися лише після JS. -->
-  <!-- Фон із бульбашками — найбільший елемент і на вході, і на новій вкладці (LCP). -->
-  <link rel="preload" as="image" href="assets/images/background-light.webp" type="image/webp" media="(prefers-color-scheme: light)" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/images/background-dark.webp" type="image/webp" media="(prefers-color-scheme: dark)" fetchpriority="high">
-  <link rel="preload" as="image" href="logo.webp" type="image/webp">
-</head>
-<body>
-  <app-root></app-root>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Astra Browser</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Astra Browser — швидкий і безпечний браузер із синхронізацією закладок, паролів і налаштувань між усіма вашими пристроями." />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <script>
+      // Тема з налаштувань (SettingsStore) ще до старту Angular, щоб не блимала тема системи.
+      try {
+        const theme = JSON.parse(localStorage.getItem('astra.settings.theme') ?? '"system"');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
+    <!-- Застосунок рендериться в браузері, тож без preload картинки почали б вантажитися лише після JS. -->
+    <!-- Фон із бульбашками — найбільший елемент і на вході, і на новій вкладці (LCP). -->
+    <link
+      rel="preload"
+      as="image"
+      href="assets/images/background-light.webp"
+      type="image/webp"
+      media="(prefers-color-scheme: light)"
+      fetchpriority="high" />
+    <link
+      rel="preload"
+      as="image"
+      href="assets/images/background-dark.webp"
+      type="image/webp"
+      media="(prefers-color-scheme: dark)"
+      fetchpriority="high" />
+    <link rel="preload" as="image" href="logo.webp" type="image/webp" />
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
 </html>

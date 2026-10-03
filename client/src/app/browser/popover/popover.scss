@@ -1,6 +1,7 @@
 @use '../../../assets/styles/mixins' as *;
 
 $caret-size: 0.75rem;
+
 // Стрілка не ближче до краю панелі, ніж заокруглення кута (1rem) плюс пів її діагоналі — інакше лягає на дугу.
 $caret-min-offset: 1.25rem;
 
@@ -15,25 +16,31 @@ $caret-min-offset: 1.25rem;
   --popover-caret: calc(var(--popover-anchor-width, 2.5rem) / 2 - #{$caret-size} / 2);
   --popover-shift: max(0rem, #{$caret-min-offset} - var(--popover-caret));
 
-  position-area: bottom span-left;
   inset: auto;
-  width: var(--popover-width, auto);
-  // Не вище за вікно: довгий вміст прокручується всередині (--popover-display: flex і min-height: 0 у вмісту).
-  max-height: calc(100% - 0.625rem);
+
   // Напрям — і в закритому стані: під час анімації закриття display ще flex, і без цього вміст стрибав би.
   flex-direction: column;
-  margin: 0.625rem 0 0;
+  width: var(--popover-width, auto);
+
+  // Не вище за вікно: довгий вміст прокручується всередині (--popover-display: flex і min-height: 0 у вмісту).
+  max-height: calc(100% - 0.625rem);
   padding: var(--popover-padding, 0.5rem);
+  margin: 0.625rem 0 0;
+  position-area: bottom span-left;
+  font-family: var(--font-family-base);
+  color: var(--browser-text);
+  background: var(--browser-popover);
   border: 0.0625rem solid var(--browser-popover-border);
   border-radius: 1rem;
-  background: var(--browser-popover);
   box-shadow: var(--browser-popover-shadow);
-  color: var(--browser-text);
-  font-family: var(--font-family-base);
   opacity: 0;
   transform: translateY(-0.375rem) scale(0.98);
   transform-origin: top right;
-  transition: opacity $motion, transform $motion, overlay $motion allow-discrete, display $motion allow-discrete;
+  transition:
+    opacity $motion,
+    transform $motion,
+    overlay $motion allow-discrete,
+    display $motion allow-discrete;
 
   // display — лише для відкритого стану: інакше перекрив би display: none, яким браузер ховає закриту панель.
   &:popover-open {
@@ -53,8 +60,8 @@ $caret-min-offset: 1.25rem;
   }
 
   &--caret {
-    overflow: visible;
     margin-right: calc(-1 * var(--popover-shift));
+    overflow: visible;
 
     &::before {
       position: absolute;
@@ -62,11 +69,11 @@ $caret-min-offset: 1.25rem;
       right: calc(var(--popover-caret) + var(--popover-shift));
       width: $caret-size;
       height: $caret-size;
+      content: '';
+      background: var(--browser-popover);
       border-top: 0.0625rem solid var(--browser-popover-border);
       border-left: 0.0625rem solid var(--browser-popover-border);
       border-top-left-radius: 0.1875rem;
-      background: var(--browser-popover);
-      content: '';
       transform: rotate(45deg);
     }
   }

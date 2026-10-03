@@ -6,7 +6,16 @@ import { BrowserMenu } from './browser-menu';
 
 @Component({
   imports: [BrowserMenu],
-  template: `<app-browser-menu [(zoom)]="zoom" (newTab)="events.push('new-tab')" (newWindow)="events.push('new-window')" (privateWindow)="events.push('private-window')" (openPage)="events.push($event)" (find)="events.push('find')" (print)="events.push('print')" (signOut)="events.push('sign-out')" (fullscreen)="events.push('fullscreen')" />`,
+  template: `<app-browser-menu
+    [(zoom)]="zoom"
+    (newTab)="events.push('new-tab')"
+    (newWindow)="events.push('new-window')"
+    (privateWindow)="events.push('private-window')"
+    (openPage)="events.push($event)"
+    (find)="events.push('find')"
+    (print)="events.push('print')"
+    (signOut)="events.push('sign-out')"
+    (fullscreen)="events.push('fullscreen')" />`,
 })
 class Host {
   readonly zoom = signal(100);
@@ -18,15 +27,15 @@ describe('BrowserMenu', () => {
     await TestBed.configureTestingModule({
       imports: [Host],
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);
     fixture.componentInstance.zoom.set(zoom);
     await fixture.whenStable();
     const element = fixture.nativeElement as HTMLElement;
     const button = (label: string) => element.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
-    const item = (label: string) => [...element.querySelectorAll<HTMLButtonElement>('.menu__item')].find((b) => b.textContent?.includes(label));
+    const item = (label: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.menu__item')].find((b) => b.textContent?.includes(label));
     return { fixture, element, button, item };
   };
 
@@ -57,7 +66,20 @@ describe('BrowserMenu', () => {
   it('should emit the actions of the menu items', async () => {
     const { fixture, button, item } = await setup();
 
-    const labels = ['Нова вкладка', 'Нове вікно', 'Приватне вікно', 'Історія', 'Завантаження', 'Закладки', 'Знайти на сторінці', 'Друк', 'Розширення', 'Налаштування', 'Довідка', 'Вийти'];
+    const labels = [
+      'Нова вкладка',
+      'Нове вікно',
+      'Приватне вікно',
+      'Історія',
+      'Завантаження',
+      'Закладки',
+      'Знайти на сторінці',
+      'Друк',
+      'Розширення',
+      'Налаштування',
+      'Довідка',
+      'Вийти',
+    ];
     for (const label of labels) {
       item(label)?.click();
     }
@@ -87,7 +109,9 @@ describe('BrowserMenu', () => {
     expect(item('Приватне вікно')?.getAttribute('aria-keyshortcuts')).toBe('Control+Shift+N');
     expect(item('Друк')?.querySelector('.menu__shortcut')?.textContent).toBe('Ctrl+P');
     // Кожна показана гаряча клавіша працює, тож кожна оголошена.
-    const withShortcut = [...element.querySelectorAll('.menu__item')].filter((menuItem) => menuItem.querySelector('.menu__shortcut'));
+    const withShortcut = [...element.querySelectorAll('.menu__item')].filter((menuItem) =>
+      menuItem.querySelector('.menu__shortcut')
+    );
     expect(withShortcut.every((menuItem) => menuItem.hasAttribute('aria-keyshortcuts'))).toBe(true);
   });
 });

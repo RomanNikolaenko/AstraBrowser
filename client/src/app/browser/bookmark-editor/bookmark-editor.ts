@@ -6,8 +6,10 @@ import { internalPageFor } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
 
 // Як urlFormat, але приймає й адреси внутрішніх сторінок (astra://history тощо).
-const siteOrInternalPage = (message: string): Validator => (value) =>
-  internalPageFor(value.trim()) || normalizeUrl(value) ? null : message;
+const siteOrInternalPage =
+  (message: string): Validator =>
+  (value) =>
+    internalPageFor(value.trim()) || normalizeUrl(value) ? null : message;
 
 /**
  * Панель зірочки в адресному рядку: додає поточну сторінку в закладки або редагує/видаляє наявну.

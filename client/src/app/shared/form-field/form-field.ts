@@ -5,11 +5,20 @@ export type Validator = (value: string) => string | null;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const required = (message: string): Validator => (value) => (value.trim() ? null : message);
+export const required =
+  (message: string): Validator =>
+  (value) =>
+    value.trim() ? null : message;
 
-export const emailFormat = (message: string): Validator => (value) => (EMAIL_PATTERN.test(value.trim()) ? null : message);
+export const emailFormat =
+  (message: string): Validator =>
+  (value) =>
+    EMAIL_PATTERN.test(value.trim()) ? null : message;
 
-export const minLength = (length: number, message: string): Validator => (value) => (value.length >= length ? null : message);
+export const minLength =
+  (length: number, message: string): Validator =>
+  (value) =>
+    value.length >= length ? null : message;
 
 /** Адреса сайту http(s) у повному вигляді або `null`. Схему https:// можна не вказувати. */
 export function normalizeUrl(value: string): string | null {
@@ -22,10 +31,16 @@ export function normalizeUrl(value: string): string | null {
   }
 }
 
-export const urlFormat = (message: string): Validator => (value) => (normalizeUrl(value) ? null : message);
+export const urlFormat =
+  (message: string): Validator =>
+  (value) =>
+    normalizeUrl(value) ? null : message;
 
 /** Значення має збігатися з іншим полем, наприклад підтвердження пароля. */
-export const matches = (other: () => string, message: string): Validator => (value) => (value === other() ? null : message);
+export const matches =
+  (other: () => string, message: string): Validator =>
+  (value) =>
+    value === other() ? null : message;
 
 /** Стан одного текстового поля форми: значення, «торкнутість» і перша помилка валідації. */
 export class FormField {

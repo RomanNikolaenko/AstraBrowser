@@ -1,17 +1,17 @@
 .bookmark-form {
   display: grid;
   gap: 1rem;
-  margin-bottom: 1.5rem;
   padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--browser-popover);
   border: 0.0625rem solid var(--browser-chrome-border);
   border-radius: 1rem;
-  background: var(--browser-popover);
   box-shadow: var(--browser-chrome-shadow);
 
   &__title {
-    color: var(--browser-heading);
     font-size: 1.125rem;
     font-weight: 700;
+    color: var(--browser-heading);
   }
 
   &__fields {

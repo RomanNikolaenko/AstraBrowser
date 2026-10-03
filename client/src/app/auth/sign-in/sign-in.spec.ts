@@ -9,7 +9,8 @@ describe('SignIn', () => {
   let element: HTMLElement;
   let navigate: ReturnType<typeof vi.spyOn>;
 
-  const errors = () => [...element.querySelectorAll('.ui-input__message--visible .ui-input__error')].map((error) => error.textContent?.trim());
+  const errors = () =>
+    [...element.querySelectorAll('.ui-input__message--visible .ui-input__error')].map((error) => error.textContent?.trim());
 
   const type = (id: string, value: string) => {
     const input = element.querySelector<HTMLInputElement>(`#${id}`);
@@ -28,8 +29,7 @@ describe('SignIn', () => {
     await TestBed.configureTestingModule({
       imports: [SignIn],
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
-    })
-      .compileComponents();
+    }).compileComponents();
 
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     fixture = TestBed.createComponent(SignIn);
