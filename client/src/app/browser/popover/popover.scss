@@ -87,4 +87,11 @@ $caret-min-offset: 1.25rem;
       left: calc(var(--popover-caret) + var(--popover-shift));
     }
   }
+
+  // Вкладене меню: праворуч від пункту, що його відкрив, верхом на рівні пункту.
+  &--side {
+    margin: -0.5rem 0 0 0.25rem;
+    position-area: right span-bottom;
+    transform-origin: top left;
+  }
 }

@@ -70,10 +70,15 @@
       @for (bookmark of visible(); track bookmark.id) {
         <li class="page__row">
           <app-site-icon class="page__favicon" [url]="bookmark.url" [size]="22" />
-          <span class="page__text">
+          <button
+            class="page__text page__open"
+            type="button"
+            [title]="bookmark.url"
+            (click)="openUrl.emit(bookmark.url)"
+            (appMiddleClick)="openUrlInNewTab.emit(bookmark.url)">
             <span class="page__name">{{ bookmark.title }}</span>
             <span class="page__meta">{{ describe(bookmark.url) }}</span>
-          </span>
+          </button>
           <button
             class="page__remove"
             type="button"

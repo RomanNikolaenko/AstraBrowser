@@ -9,7 +9,7 @@
       selectId="site-permissions-autoplay"
       selectName="autoplay"
       [options]="choices"
-      [value]="autoplay() ?? 'allow'"
+      [value]="autoplay() ?? 'block'"
       [disabled]="autoplay() === null"
       (valueChange)="setAutoplay($event)" />
   </div>

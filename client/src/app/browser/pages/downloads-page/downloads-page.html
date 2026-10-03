@@ -12,25 +12,66 @@
         placeholder="Пошук у завантаженнях"
         autocomplete="off"
         [(value)]="query" />
-      <button class="page__button page__button--danger" type="button" (click)="confirmingClear.set(true)">Очистити все</button>
+      <button class="page__button page__button--danger" type="button" (click)="confirmClear.show()">Очистити все</button>
     }
   </header>
 
-  @if (confirmingClear()) {
-    <div class="page__confirm" role="alert">
-      <span>Прибрати всі записи зі списку? Самі файли лишаться на диску.</span>
-      <button class="page__button page__button--danger" type="button" (click)="clear()">Очистити</button>
-      <button class="page__button" type="button" (click)="confirmingClear.set(false)">Скасувати</button>
-    </div>
+  <app-confirm-dialog
+    #confirmClear
+    heading="Очистити список завантажень?"
+    message="Записи зникнуть зі списку, а самі файли лишаться на диску."
+    confirmLabel="Очистити"
+    danger
+    (confirmed)="downloads.clear()" />
+
+  @if (downloads.active().length) {
+    <h2 class="page__group">Зараз завантажується</h2>
+    <ul class="page__list">
+      @for (download of downloads.active(); track download.id) {
+        <li class="page__row">
+          <app-icon class="page__favicon" icon="file" />
+          <span class="page__text">
+            <span class="page__name">{{ download.fileName }}</span>
+            <span class="page__meta">
+              {{
+                download.total
+                  ? formatSize(download.received) + ' з ' + formatSize(download.total)
+                  : formatSize(download.received)
+              }}
+              · {{ hostname(download.url) }}
+            </span>
+            <span class="page__progress" [class.page__progress--unknown]="!download.total">
+              <span class="page__progress-value" [style.width.%]="percent(download.received, download.total)"></span>
+            </span>
+          </span>
+          <button
+            class="page__remove"
+            type="button"
+            [attr.aria-label]="'Показати «' + download.fileName + '» у теці'"
+            title="Показати в теці"
+            (click)="showPath(download.path)">
+            <app-icon icon="folder" />
+          </button>
+          <button
+            class="page__remove"
+            type="button"
+            [attr.aria-label]="'Скасувати завантаження «' + download.fileName + '»'"
+            title="Скасувати"
+            (click)="cancel(download.id)">
+            <app-icon icon="close" />
+          </button>
+        </li>
+      }
+    </ul>
   }
 
-  @if (!downloads.entries().length) {
+  @if (!downloads.entries().length && !downloads.active().length) {
     <div class="page__empty">
       <span class="page__empty-icon"><app-icon icon="download" /></span>
       <h2 class="page__empty-title">Завантажень ще немає</h2>
       <p>Тут з'являться файли, які ви завантажите.</p>
     </div>
-  } @else if (!groups().length) {
+  } @else if (downloads.entries().length && !groups().length) {
     <p class="page__no-results">Нічого не знайдено за запитом «{{ query() }}».</p>
   } @else {
     @for (group of groups(); track group.label) {
@@ -41,13 +82,26 @@
             <time class="page__time" [attr.datetime]="isoTime(entry.finishedAt)">{{ formatTime(entry.finishedAt) }}</time>
             <app-icon class="page__favicon" [icon]="entry.status === 'failed' ? 'alert' : 'file'" />
             <span class="page__text">
-              <span class="page__name">{{ entry.fileName }}</span>
-              @if (entry.status === 'failed') {
-                <span class="page__meta page__meta--error">Помилка завантаження · {{ hostname(entry.url) }}</span>
+              @if (entry.status === 'completed' && entry.path) {
+                <button class="page__name page__link" type="button" title="Відкрити" (click)="open(entry)">
+                  {{ entry.fileName }}
+                </button>
               } @else {
-                <span class="page__meta">{{ formatSize(entry.size) }} · {{ hostname(entry.url) }}</span>
+                <span class="page__name">{{ entry.fileName }}</span>
               }
+              <span class="page__meta" [class.page__meta--error]="entry.status === 'failed'">{{ status(entry) }}</span>
             </span>
+            <!-- Теку можна показати для будь-якого запису: вже немає файла — відкриється сама тека. -->
+            @if (entry.path) {
+              <button
+                class="page__remove"
+                type="button"
+                [attr.aria-label]="'Показати «' + entry.fileName + '» у теці'"
+                title="Показати в теці"
+                (click)="showPath(entry.path)">
+                <app-icon icon="folder" />
+              </button>
+            }
             <button
               class="page__remove"
               type="button"

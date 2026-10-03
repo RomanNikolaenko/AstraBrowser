@@ -1,0 +1,80 @@
+@use '../../../assets/styles/mixins' as *;
+
+// Кольори й відступи — змінні --accordion-* на <app-accordion>; тут лише значення за замовчуванням.
+// Заголовок і вміст мають однакові відступи по боках, а згорнутий рядок — однакові згори й знизу.
+:host {
+  display: block;
+}
+
+.ui-accordion__trigger {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+  padding: var(--accordion-padding, 0.75rem);
+  font: inherit;
+  font-size: var(--accordion-font-size, 0.875rem);
+  font-weight: 700;
+  color: var(--accordion-text, var(--color-text));
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--accordion-radius, 0.75rem);
+  transition:
+    background-color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
+  @include focus-ring(0.125rem);
+
+  &:hover {
+    background: var(--accordion-hover, transparent);
+  }
+}
+
+.ui-accordion__chevron {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  color: var(--accordion-icon, currentcolor);
+  transition: transform $motion;
+
+  :host(.ui-accordion--open) & {
+    transform: rotate(90deg);
+  }
+}
+
+.ui-accordion__badge {
+  padding: 0.0625rem 0.5rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accordion-badge-text, inherit);
+  background: var(--accordion-badge-background, transparent);
+  border-radius: 999px;
+}
+
+// Висота з 0 до «скільки треба»: рядок сітки 0fr → 1fr, а вміст обрізається, доки не розгорнувся.
+// visibility: hidden — лише після згортання, тож воно встигає зіграти.
+.ui-accordion__body {
+  display: grid;
+  visibility: hidden;
+  grid-template-rows: 0fr;
+  transition:
+    grid-template-rows $motion,
+    visibility $motion;
+
+  :host(.ui-accordion--open) & {
+    visibility: visible;
+    grid-template-rows: 1fr;
+  }
+}
+
+.ui-accordion__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ui-accordion__content {
+  padding: var(--accordion-content-padding, 0 0.75rem 0.75rem);
+}

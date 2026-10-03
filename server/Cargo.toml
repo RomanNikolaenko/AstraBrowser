@@ -13,9 +13,21 @@ tauri-build = { version = "2.7.1", features = [] }
 tauri = { version = "2.12.1", features = ["unstable"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+adblock = { version = "0.13.3", default-features = false, features = ["css-validation", "embedded-domain-resolver", "full-regex-handling"] }
+ureq = "3"
+base64 = "0.22"
+regex = "1"
+tauri-plugin-dialog = "2"
 
 # Звук, іконки й дозволи сайтів — через WebView2 напряму, повноекранне вікно — через Win32 (ті самі версії, що й у Tauri/wry).
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-core = "0.62"
+
+# Рушій блокувальника реклами розбирає десятки тисяч правил — і в debug-збірці його варто оптимізувати.
+[profile.dev.package.adblock]
+opt-level = 3
+
+[profile.dev.package.regex-automata]
+opt-level = 3

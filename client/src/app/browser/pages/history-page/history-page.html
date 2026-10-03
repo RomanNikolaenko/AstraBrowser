@@ -12,19 +12,17 @@
         placeholder="Пошук в історії"
         autocomplete="off"
         [(value)]="query" />
-      <button class="page__button page__button--danger" type="button" (click)="confirmingClear.set(true)">
-        Очистити історію
-      </button>
+      <button class="page__button page__button--danger" type="button" (click)="confirmClear.show()">Очистити історію</button>
     }
   </header>
 
-  @if (confirmingClear()) {
-    <div class="page__confirm" role="alert">
-      <span>Видалити всю історію? Цю дію не можна скасувати.</span>
-      <button class="page__button page__button--danger" type="button" (click)="clear()">Очистити</button>
-      <button class="page__button" type="button" (click)="confirmingClear.set(false)">Скасувати</button>
-    </div>
-  }
+  <app-confirm-dialog
+    #confirmClear
+    heading="Очистити всю історію?"
+    message="Усі відвідані сторінки буде видалено. Цю дію не можна скасувати."
+    confirmLabel="Очистити"
+    danger
+    (confirmed)="history.clear()" />
 
   @if (!history.entries().length) {
     <div class="page__empty">
@@ -42,10 +40,15 @@
           <li class="page__row">
             <time class="page__time" [attr.datetime]="isoTime(entry.visitedAt)">{{ formatTime(entry.visitedAt) }}</time>
             <app-site-icon class="page__favicon" [url]="entry.url" [size]="22" />
-            <span class="page__text">
+            <button
+              class="page__text page__open"
+              type="button"
+              [title]="entry.url"
+              (click)="openUrl.emit(entry.url)"
+              (appMiddleClick)="openUrlInNewTab.emit(entry.url)">
               <span class="page__name">{{ entry.title }}</span>
               <span class="page__meta">{{ hostname(entry.url) }}</span>
-            </span>
+            </button>
             <button
               class="page__remove"
               type="button"

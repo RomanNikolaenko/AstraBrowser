@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { FormField, normalizeUrl, required, urlFormat, validateFields } from '../../../shared/form-field/form-field';
+import { MiddleClick } from '../../../shared/middle-click/middle-click';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
 import { BookmarksStore } from '../../data/bookmarks';
@@ -8,12 +9,16 @@ import { hostname, internalPageFor, matchesQuery } from '../internal-pages';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SiteIcon, UiIcon, UiInput],
+  imports: [MiddleClick, SiteIcon, UiIcon, UiInput],
   selector: 'app-bookmarks-page',
   styleUrls: ['../internal-page.scss', './bookmarks-page.scss'],
   templateUrl: './bookmarks-page.html',
 })
 export class BookmarksPage {
+  /** Клік по закладці — сторінка в цій вкладці, коліщатком — у новій. */
+  readonly openUrl = output<string>();
+  readonly openUrlInNewTab = output<string>();
+
   protected readonly bookmarks = inject(BookmarksStore);
 
   protected readonly query = signal('');

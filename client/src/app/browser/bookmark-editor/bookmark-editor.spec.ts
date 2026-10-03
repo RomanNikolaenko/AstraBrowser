@@ -92,10 +92,57 @@ describe('BookmarkEditor', () => {
 
     await type('bookmark-editor-title', 'Історія переглядів');
     await click('Зберегти');
-    expect(TestBed.inject(BookmarksStore).entries()).toEqual([{ id: '1', title: 'Історія переглядів', url: 'astra://history' }]);
+    expect(TestBed.inject(BookmarksStore).entries()).toEqual([
+      { type: 'bookmark', id: '1', title: 'Історія переглядів', url: 'astra://history' },
+    ]);
 
     await open();
     await click('Видалити');
     expect(TestBed.inject(BookmarksStore).entries()).toEqual([]);
+  });
+
+  it('should put a bookmark into a folder and move it back to the bar', async () => {
+    const store = () => TestBed.inject(BookmarksStore);
+    const { element, open, click } = await setup();
+    const folderSelect = () => element.querySelector<HTMLButtonElement>('#bookmark-editor-folder');
+    const chooseFolder = async (label: string) => {
+      [...element.querySelectorAll<HTMLElement>('.bookmark-editor [role="option"]')]
+        .find((option) => option.textContent?.trim() === label)
+        ?.click();
+      await click('');
+    };
+
+    // Поки тек немає, вибирати нічого.
+    await open();
+    expect(folderSelect()).toBeNull();
+
+    store().addFolder('Робота');
+    store().addFolder('Архів', { folder: store().bar()[0].id });
+    await open();
+    expect(folderSelect()?.textContent?.trim()).toBe('Панель закладок');
+    expect([...element.querySelectorAll('.bookmark-editor [role="option"]')].map((option) => option.textContent?.trim())).toEqual(
+      ['Панель закладок', 'Робота', 'Робота › Архів']
+    );
+
+    await chooseFolder('Робота › Архів');
+    await click('Зберегти');
+    const archive = store().folders()[1].id;
+    expect(
+      store()
+        .bookmarksOf(archive)
+        .map((bookmark) => bookmark.title)
+    ).toEqual(['Історія']);
+
+    // Відкрита знову — показує, де закладка лежить, і переносить її.
+    await open();
+    expect(folderSelect()?.textContent?.trim()).toBe('Робота › Архів');
+    await chooseFolder('Панель закладок');
+    await click('Зберегти');
+    expect(store().bookmarksOf(archive)).toEqual([]);
+    expect(
+      store()
+        .bookmarksOf(null)
+        .map((bookmark) => bookmark.title)
+    ).toEqual(['Історія']);
   });
 });

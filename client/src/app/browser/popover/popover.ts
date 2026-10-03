@@ -21,6 +21,9 @@ import {
  * Ширина, відступи й розкладка — CSS-змінні на `<app-popover>`:
  * `--popover-width`, `--popover-padding`, `--popover-display` (block чи flex-колонка).
  * Поки панель відкрита, на `<app-popover>` є клас `is-open` — для «натиснутої» кнопки поруч.
+ *
+ * Контекстне меню відкривається з коду: `show({ anchor })` — під довільним елементом (скажімо, точкою кліку),
+ * а `source` — елемент іншої відкритої панелі, щоб та не закрилася (вкладене меню).
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,6 +40,8 @@ export class Popover {
   readonly align = input<'start' | 'end'>('end');
   /** Стрілка, що вказує на якір. */
   readonly caret = input(false, { transform: booleanAttribute });
+  /** `side` — збоку від якоря, як вкладене меню, а не під ним. */
+  readonly placement = input<'below' | 'side'>('below');
 
   readonly opened = output<void>();
   readonly closed = output<void>();
@@ -44,10 +49,18 @@ export class Popover {
   readonly isOpen = signal(false);
 
   private readonly panel = viewChild.required<ElementRef<HTMLElement>>('panel');
+  /** Якір, заданий у show(), — на час цього відкриття. */
+  private anchor: HTMLElement | null = null;
 
-  /** Відкрити не кліком по кнопці, а з коду (як меню «Оновити» за утриманням). */
-  show(): void {
-    this.panel().nativeElement.showPopover?.();
+  /** Відкрити не кліком по кнопці, а з коду (як меню «Оновити» за утриманням чи контекстне меню). */
+  show({ anchor, source }: { readonly anchor?: HTMLElement; readonly source?: HTMLElement } = {}): void {
+    this.anchor = anchor ?? null;
+    const panel = this.panel().nativeElement;
+    if (source) {
+      panel.showPopover?.({ source });
+    } else {
+      panel.showPopover?.();
+    }
     this.setOpen(true);
   }
 
@@ -58,7 +71,7 @@ export class Popover {
 
   /** До першого кадру: якір для розташування панелі, а стрілці — його ширина, щоб стати над центром. */
   protected onBeforeToggle(event: Event): void {
-    const anchor = (event as ToggleEvent).newState === 'open' ? this.findAnchor() : null;
+    const anchor = (event as ToggleEvent).newState === 'open' ? (this.anchor ?? this.findAnchor()) : null;
     if (!anchor) {
       return;
     }
@@ -72,7 +85,11 @@ export class Popover {
   }
 
   protected onToggle(event: Event): void {
-    this.setOpen((event as ToggleEvent).newState === 'open');
+    const open = (event as ToggleEvent).newState === 'open';
+    if (!open) {
+      this.anchor = null;
+    }
+    this.setOpen(open);
   }
 
   private setOpen(open: boolean): void {

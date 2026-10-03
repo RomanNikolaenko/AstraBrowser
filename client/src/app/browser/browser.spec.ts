@@ -191,6 +191,25 @@ describe('Browser', () => {
     expect(activeIndex()).toBe(1);
   });
 
+  it('should switch tabs with Ctrl+Tab and Ctrl+Shift+Tab, going round', async () => {
+    await openTab();
+    await openTab();
+    expect(activeIndex()).toBe(2);
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', ctrlKey: true, cancelable: true });
+    document.dispatchEvent(tab);
+    await fixture.whenStable();
+    expect(tab.defaultPrevented).toBe(true);
+    expect(activeIndex()).toBe(0);
+
+    await press({ key: 'Tab', code: 'Tab' });
+    expect(activeIndex()).toBe(1);
+
+    await press({ key: 'Tab', code: 'Tab', shiftKey: true });
+    await press({ key: 'Tab', code: 'Tab', shiftKey: true });
+    expect(activeIndex()).toBe(2);
+  });
+
   it('should open a new and a private window from shortcuts', async () => {
     await press({ key: 'т', code: 'KeyN' });
     await press({ key: 'Т', code: 'KeyN', shiftKey: true });

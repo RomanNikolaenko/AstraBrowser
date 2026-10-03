@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, ElementRef, input, linkedSignal, model, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  booleanAttribute,
+  input,
+  linkedSignal,
+  model,
+  viewChild,
+} from '@angular/core';
 import { UiIcon } from '../ui-icon/ui-icon';
 
 export type UiInputType = 'text' | 'email' | 'password' | 'search' | 'url' | 'tel';
@@ -45,6 +54,8 @@ export class UiInput {
   readonly icon = input<string>();
   readonly size = input<'md' | 'lg'>('md');
   readonly shape = input<'rounded' | 'pill'>('rounded');
+  /** Як адресний рядок браузера: поле, у яке щойно перейшли (кліком чи Tab), виділяє весь текст — можна одразу писати. */
+  readonly selectOnFocus = input(false, { transform: booleanAttribute });
 
   protected readonly errorId = `ui-input-error-${nextErrorId++}`;
 
@@ -55,6 +66,8 @@ export class UiInput {
   });
 
   private readonly control = viewChild.required<ElementRef<HTMLInputElement>>('control');
+  /** Клік, яким поле щойно отримало фокус: коли кнопку миші відпустять, текст має лишитися виділеним. */
+  private focusingClick = false;
 
   focus(): void {
     this.control().nativeElement.focus();
@@ -62,6 +75,31 @@ export class UiInput {
 
   select(): void {
     this.control().nativeElement.select();
+  }
+
+  protected onPointerDown(): void {
+    this.focusingClick = this.selectOnFocus() && document.activeElement !== this.control().nativeElement;
+  }
+
+  protected onFocus(): void {
+    if (this.selectOnFocus()) {
+      this.control().nativeElement.select();
+    }
+  }
+
+  /**
+   * Браузер ставить курсор у місце кліку вже після фокусу й так знімає виділення. Тож якщо цим кліком
+   * у поле лише перейшли, виділяємо все знову — але не тоді, коли мишею виділили частину тексту.
+   */
+  protected onMouseUp(): void {
+    if (!this.focusingClick) {
+      return;
+    }
+    this.focusingClick = false;
+    const control = this.control().nativeElement;
+    if (control.selectionStart === control.selectionEnd) {
+      control.select();
+    }
   }
 
   protected onInput(event: Event): void {

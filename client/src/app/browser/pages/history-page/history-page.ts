@@ -1,22 +1,27 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
+import { MiddleClick } from '../../../shared/middle-click/middle-click';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
+import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
 import { HistoryStore } from '../../data/history';
 import { SiteIcon } from '../../site-icon/site-icon';
 import { formatTime, groupByDay, hostname, matchesQuery } from '../internal-pages';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SiteIcon, UiIcon, UiInput],
+  imports: [ConfirmDialog, MiddleClick, SiteIcon, UiIcon, UiInput],
   selector: 'app-history-page',
   styleUrls: ['../internal-page.scss'],
   templateUrl: './history-page.html',
 })
 export class HistoryPage {
+  /** Клік по запису — сторінка в цій вкладці, коліщатком — у новій. */
+  readonly openUrl = output<string>();
+  readonly openUrlInNewTab = output<string>();
+
   protected readonly history = inject(HistoryStore);
 
   protected readonly query = signal('');
-  protected readonly confirmingClear = signal(false);
 
   protected readonly groups = computed(() => {
     const query = this.query();
@@ -29,10 +34,5 @@ export class HistoryPage {
 
   protected isoTime(time: number): string {
     return new Date(time).toISOString();
-  }
-
-  protected clear(): void {
-    this.history.clear();
-    this.confirmingClear.set(false);
   }
 }

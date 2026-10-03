@@ -1,8 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod adblock;
+mod audio;
+#[cfg(windows)]
+mod downloads;
 #[cfg(windows)]
 mod fullscreen;
-mod audio;
 mod pages;
 #[cfg(windows)]
 mod webview2;
@@ -10,6 +13,17 @@ mod webview2;
 fn main() {
 	tauri::Builder::default()
 		.manage(audio::RulesScripts::default())
+		.manage(adblock::AdBlock::default())
+		.plugin(tauri_plugin_dialog::init())
+		.setup(|app| {
+			adblock::start(app.handle());
+			#[cfg(windows)]
+			{
+				tauri::Manager::manage(app, downloads::Downloads::default());
+				downloads::start(app.handle());
+			}
+			Ok(())
+		})
 		.on_page_load(pages::close_orphans)
 		.invoke_handler(tauri::generate_handler![
 			pages::page_open,
@@ -23,6 +37,30 @@ fn main() {
 			pages::page_print,
 			pages::page_close,
 			pages::page_find,
+			adblock::adblock_status,
+			adblock::adblock_set_enabled,
+			adblock::adblock_set_site_enabled,
+			adblock::adblock_update,
+			#[cfg(windows)]
+			downloads::downloads_settings,
+			#[cfg(windows)]
+			downloads::downloads_choose_folder,
+			#[cfg(windows)]
+			downloads::downloads_reset_folder,
+			#[cfg(windows)]
+			downloads::downloads_set_ask,
+			#[cfg(windows)]
+			downloads::downloads_open_folder,
+			#[cfg(windows)]
+			downloads::download_resolve,
+			#[cfg(windows)]
+			downloads::downloads_pick_folder,
+			#[cfg(windows)]
+			downloads::download_cancel,
+			#[cfg(windows)]
+			downloads::download_open,
+			#[cfg(windows)]
+			downloads::download_show,
 			#[cfg(windows)]
 			fullscreen::window_fill_monitor,
 			#[cfg(windows)]

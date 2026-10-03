@@ -18,6 +18,9 @@
     [attr.autocomplete]="autocomplete() ?? null"
     [attr.spellcheck]="spellcheck() ?? null"
     [attr.enterkeyhint]="enterKeyHint() ?? null"
+    (pointerdown)="onPointerDown()"
+    (focus)="onFocus()"
+    (mouseup)="onMouseUp()"
     (input)="onInput($event)"
     (blur)="touched.set(true)" />
   <ng-content />

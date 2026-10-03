@@ -1,0 +1,174 @@
+<nav
+  #bar
+  class="bookmarks"
+  aria-label="Закладки"
+  (contextmenu)="showBarMenu($event)"
+  (dragover)="drag.overEnd($event, null, bookmarks.bar().length)"
+  (dragleave)="drag.leave($event, bar)"
+  (drop)="drag.drop($event)"
+  (dragend)="drag.end()">
+  @if (bookmarks.bar().length) {
+    <ul class="bookmarks__list">
+      @for (item of bookmarks.bar(); track item.id; let index = $index) {
+        <li
+          class="bookmarks__item"
+          [class.bookmarks__item--dragging]="drag.dragging() === item.id"
+          [class.bookmarks__item--drop-before]="drag.before(null, index)"
+          [class.bookmarks__item--drop-after]="drag.after(null, index, bookmarks.bar().length)"
+          [class.bookmarks__item--drop-into]="drag.into(item.id)"
+          (contextmenu)="showItemMenu($event, item, index)"
+          (dragover)="drag.overItem($event, item, null, index, 'x')">
+          @switch (item.type) {
+            @case ('bookmark') {
+              <button
+                class="bookmark"
+                type="button"
+                draggable="true"
+                [title]="item.url"
+                (dragstart)="drag.start($event, item)"
+                (click)="open(item)"
+                (appMiddleClick)="openInNewTab(item)">
+                <app-site-icon class="bookmark__favicon" [url]="item.url" [size]="16" />
+                <span>{{ item.title }}</span>
+              </button>
+            }
+            @case ('folder') {
+              <button
+                class="bookmark"
+                type="button"
+                draggable="true"
+                aria-haspopup="menu"
+                [attr.popovertarget]="folderMenuId(item)"
+                (dragstart)="drag.start($event, item)">
+                <app-icon class="bookmark__favicon" [icon]="folderIcon(item)" [style.color]="folderColor(item)" />
+                <span>{{ item.title }}</span>
+              </button>
+              <app-bookmark-folder-menu [folder]="item" />
+            }
+            @case ('separator') {
+              <span
+                class="bookmarks__separator"
+                role="separator"
+                aria-orientation="vertical"
+                draggable="true"
+                (dragstart)="drag.start($event, item)"></span>
+            }
+          }
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="bookmarks__empty">
+      Щоб додати закладку, натисніть <app-icon class="bookmarks__empty-icon" icon="star" /> в адресному рядку
+    </p>
+  }
+  <span #anchor class="bookmarks__anchor"></span>
+</nav>
+
+<app-popover #menu class="bookmarks-menu" popoverId="bookmarks-menu" align="start">
+  <ul #menuList class="bookmarks-menu__list" role="menu" aria-label="Закладки" tabindex="-1" (keydown)="onMenuKeydown($event)">
+    @if (target().item?.type === 'bookmark') {
+      <li role="none">
+        <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="openTargetInNewTab()">
+          Відкрити в новій вкладці
+        </button>
+      </li>
+      <li class="bookmarks-menu__separator" role="separator"></li>
+    } @else if (target().item?.type !== 'separator') {
+      <li role="none">
+        <button class="bookmarks-menu__item" type="button" role="menuitem" [disabled]="!openAllCount()" (click)="openAll()">
+          Відкрити всі закладки
+        </button>
+      </li>
+      <li class="bookmarks-menu__separator" role="separator"></li>
+    }
+    @if (target().item; as item) {
+      @if (item.type !== 'separator') {
+        <li role="none">
+          <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="edit()">
+            {{ item.type === 'folder' ? 'Перейменувати…' : 'Редагувати…' }}
+          </button>
+        </li>
+      }
+      <li role="none">
+        <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="remove()">Видалити</button>
+      </li>
+      <li class="bookmarks-menu__separator" role="separator"></li>
+    }
+    <li role="none">
+      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addBookmark()">Додати закладку…</button>
+    </li>
+    <li role="none">
+      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addFolder()">Додати теку…</button>
+    </li>
+    <li role="none">
+      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addSeparator()">Додати роздільник</button>
+    </li>
+  </ul>
+</app-popover>
+
+<app-popover #editor class="bookmark-dialog" popoverId="bookmark-dialog" align="start">
+  <h2 class="bookmark-dialog__title">{{ dialogTitle() }}</h2>
+  <form class="bookmark-dialog__form" novalidate (submit)="save($event)">
+    <app-input
+      #titleInput
+      class="bookmark-dialog__field"
+      [icon]="dialog().kind === 'folder' ? 'folder' : 'star'"
+      inputId="bookmark-dialog-title"
+      inputName="title"
+      ariaLabel="Назва"
+      placeholder="Назва"
+      autocomplete="off"
+      [(value)]="title.value"
+      [(touched)]="title.touched"
+      [error]="title.visibleError()" />
+    @if (dialog().kind === 'bookmark') {
+      <app-input
+        class="bookmark-dialog__field"
+        icon="globe"
+        inputId="bookmark-dialog-url"
+        inputName="url"
+        type="url"
+        ariaLabel="Адреса сайту"
+        placeholder="example.com"
+        autocomplete="url"
+        [spellcheck]="false"
+        [(value)]="url.value"
+        [(touched)]="url.touched"
+        [error]="url.visibleError()" />
+    }
+    @if (dialog().kind === 'folder') {
+      <fieldset class="bookmark-dialog__colors">
+        <legend class="bookmark-dialog__legend">Колір</legend>
+        <label class="bookmark-dialog__color bookmark-dialog__color--none" title="Без кольору">
+          <input
+            class="bookmark-dialog__color-input"
+            type="radio"
+            name="folder-color"
+            value=""
+            aria-label="Без кольору"
+            [checked]="!color()"
+            (change)="color.set(undefined)" />
+        </label>
+        @for (shade of palette; track shade.color) {
+          <label class="bookmark-dialog__color" [title]="shade.label" [style.--swatch]="shade.value">
+            <input
+              class="bookmark-dialog__color-input"
+              type="radio"
+              name="folder-color"
+              [value]="shade.color"
+              [attr.aria-label]="shade.label"
+              [checked]="color() === shade.color"
+              (change)="color.set(shade.color)" />
+          </label>
+        }
+      </fieldset>
+    }
+    <div class="bookmark-dialog__actions">
+      <button class="bookmark-dialog__button" type="button" popovertarget="bookmark-dialog" popovertargetaction="hide">
+        Скасувати
+      </button>
+      <button class="bookmark-dialog__button bookmark-dialog__button--primary" type="submit">Зберегти</button>
+    </div>
+  </form>
+</app-popover>

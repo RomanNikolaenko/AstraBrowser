@@ -19,6 +19,7 @@ export class BrowserWindows {
   /**
    * Нове вікно одразу з головним екраном. Приватне — у режимі incognito
    * (InPrivate у WebView2): cookies, сховище й історія зникають, щойно вікно закрито.
+   * Розгорнуте на весь екран, якщо розгорнуте поточне (застосунок і стартує розгорнутим).
    */
   open({ private: isPrivate = false } = {}): void {
     if (!isTauri()) {
@@ -26,7 +27,13 @@ export class BrowserWindows {
       window.open('/home', '_blank', 'noopener');
       return;
     }
+    void this.openWindow(isPrivate);
+  }
 
+  private async openWindow(isPrivate: boolean): Promise<void> {
+    const maximized = await getCurrentWindow()
+      .isMaximized()
+      .catch(() => false);
     const label = `${isPrivate ? PRIVATE_PREFIX : WINDOW_PREFIX}${crypto.randomUUID()}`;
     const webview = new WebviewWindow(label, {
       url: '/home',
@@ -35,7 +42,11 @@ export class BrowserWindows {
       height: 800,
       minWidth: 800,
       minHeight: 600,
+      center: true,
+      maximized,
       decorations: false,
+      // Інакше у Windows Tauri забирає собі перетягування, і в інтерфейсі воно не працює (закладки).
+      dragDropEnabled: false,
       incognito: isPrivate,
     });
     void webview.once('tauri://error', (event) => console.error('Failed to open a window', event.payload));

@@ -72,8 +72,13 @@ export class SitePermissions {
     this.changed.set(false);
     this.autoplay.set(null);
     const permission = await this.pageViews.autoplay(this.page()).catch(() => 'default');
-    // За замовчуванням WebView2 автовідтворення дозволяє.
-    this.autoplay.set(permission === 'block' ? 'block' : this.autoplayRules.blocksAudio(this.origin()) ? 'block-audio' : 'allow');
+    // За замовчуванням автовідтворення заборонене (server/src/webview2.rs, block_autoplay_by_default):
+    // дозволене — лише те, що дозволив сам користувач.
+    if (permission !== 'allow') {
+      this.autoplay.set('block');
+    } else {
+      this.autoplay.set(this.autoplayRules.blocksAudio(this.origin()) ? 'block-audio' : 'allow');
+    }
   }
 
   protected async setAutoplay(choice: AutoplayChoice | undefined): Promise<void> {
@@ -83,8 +88,8 @@ export class SitePermissions {
     const previous = this.autoplay();
     this.autoplay.set(choice);
     try {
-      // «Дозволити» — і так поведінка за замовчуванням, тож просто прибираємо виняток для сайту.
-      await this.pageViews.setAutoplay(this.page(), choice === 'block' ? 'block' : 'default');
+      // «Блокувати аудіо» — відео дозволене WebView2, а звук глушить наш скрипт (server/src/audio.rs).
+      await this.pageViews.setAutoplay(this.page(), choice === 'block' ? 'block' : 'allow');
       this.autoplayRules.setBlockAudio(this.origin(), choice === 'block-audio');
       this.changed.set(true);
     } catch {

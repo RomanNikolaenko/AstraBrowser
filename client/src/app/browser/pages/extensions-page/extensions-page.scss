@@ -1,0 +1,134 @@
+@use '../../../../assets/styles/mixins' as *;
+@use '../../browser-ui' as *;
+
+// Розділи картки відділяє лише лінія: проміжків між ними немає, відступи — всередині розділів.
+.extension {
+  gap: 0;
+  padding: 0.5rem;
+
+  &__main {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.75rem;
+  }
+
+  &__icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    color: var(--browser-icon-accent);
+    background: var(--browser-tile);
+    border: 0.0625rem solid var(--browser-tile-border);
+    border-radius: 0.875rem;
+
+    app-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+  }
+
+  &__text {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__description {
+    font-size: 0.875rem;
+    color: var(--browser-text);
+  }
+
+  &__switch {
+    @include switch;
+
+    margin-top: 0.25rem;
+  }
+
+  &__section {
+    display: grid;
+    gap: 0.625rem;
+    padding: 0.875rem 0.75rem;
+    border-top: 0.0625rem solid var(--browser-divider);
+  }
+
+  // Рядок акордеона підсвічується з однаковими проміжками до розділювачів згори й знизу,
+  // а текст і вміст стоять на тих самих відступах, що й в інших розділах.
+  &__section--accordion {
+    padding: 0.375rem 0;
+  }
+
+  &__accordion {
+    --accordion-padding: 0.5rem 0.75rem;
+    --accordion-content-padding: 0.25rem 0.75rem 0.5rem;
+    --accordion-text: var(--browser-heading);
+    --accordion-icon: var(--browser-icon);
+    --accordion-hover: var(--browser-hover);
+    --accordion-badge-text: var(--browser-muted);
+    --accordion-badge-background: var(--browser-field);
+  }
+
+  // Проміжки між абзацом, списками й кнопкою задає лише gap — власні поля абзацу й списку прибрано.
+  &__lists-body {
+    display: grid;
+    gap: 0.75rem;
+
+    > * {
+      margin: 0;
+    }
+  }
+
+  &__update {
+    justify-self: start;
+  }
+
+  &__subtitle {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__lists {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__chip {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--browser-text);
+    background: var(--browser-field);
+    border-radius: 999px;
+  }
+
+  &__sites {
+    display: grid;
+    padding: 0;
+    margin: 0 -0.375rem;
+    list-style: none;
+  }
+
+  &__hint {
+    font-size: 0.875rem;
+    color: var(--browser-muted);
+  }
+
+  &__hint-icon {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    vertical-align: -0.1875rem;
+  }
+}

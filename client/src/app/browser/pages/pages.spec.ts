@@ -3,6 +3,8 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Type } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BookmarksStore } from '../data/bookmarks';
+import { DownloadsStore } from '../data/downloads';
+import { PageViews } from '../page-views/page-views';
 import { BookmarksPage } from './bookmarks-page/bookmarks-page';
 import { DownloadsPage } from './downloads-page/downloads-page';
 import { HistoryPage } from './history-page/history-page';
@@ -70,18 +72,37 @@ describe('internal pages', () => {
       expect(text('.page__name')).toEqual(['YouTube']);
     });
 
+    it('should open a history entry here or, with the middle button, in a new tab', async () => {
+      seed('astra.history', [{ id: '1', url: 'https://github.com/', title: 'GitHub', visitedAt: Date.now() }]);
+      const { fixture, element } = await render(HistoryPage);
+      const opened: string[][] = [];
+      fixture.componentInstance.openUrl.subscribe((url) => opened.push(['here', url]));
+      fixture.componentInstance.openUrlInNewTab.subscribe((url) => opened.push(['new-tab', url]));
+      const entry = element.querySelector('.page__open') as HTMLButtonElement;
+
+      expect(entry.getAttribute('title')).toBe('https://github.com/');
+      entry.click();
+      entry.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
+
+      expect(opened).toEqual([
+        ['here', 'https://github.com/'],
+        ['new-tab', 'https://github.com/'],
+      ]);
+    });
+
     it('should clear history only after confirmation', async () => {
       seed('astra.history', [{ id: '1', url: 'https://github.com/', title: 'GitHub', visitedAt: Date.now() }]);
       const { element, text, button, click } = await render(HistoryPage);
 
       await click(button('Очистити історію'));
+      expect(text('.confirm-dialog__title')).toEqual(['Очистити всю історію?']);
       expect(text('.page__name')).toEqual(['GitHub']);
 
       await click(button('Скасувати'));
-      expect(text('.page__confirm')).toEqual([]);
+      expect(text('.page__name')).toEqual(['GitHub']);
 
       await click(button('Очистити історію'));
-      await click(element.querySelector<HTMLButtonElement>('.page__confirm .page__button--danger'));
+      await click(element.querySelector<HTMLButtonElement>('.confirm-dialog__button--confirm'));
       expect(text('.page__empty-title')).toEqual(['Історія порожня']);
     });
   });
@@ -109,7 +130,66 @@ describe('internal pages', () => {
       const { text } = await render(DownloadsPage);
 
       expect(text('.page__name')).toEqual(['video.mp4', 'report.pdf']);
-      expect(text('.page__meta')).toEqual(['Помилка завантаження · cdn.example.com', '1,5 КБ · files.example.com']);
+      expect(text('.page__meta')).toEqual(['Помилка завантаження · cdn.example.com', 'Завантажено · 1,5 КБ · files.example.com']);
+    });
+
+    it('should show what is downloading, open finished files and show them in their folder', async () => {
+      seed('astra.downloads', [
+        {
+          id: '1',
+          fileName: 'report.pdf',
+          url: 'https://files.example.com/report.pdf',
+          size: 1536,
+          status: 'completed',
+          finishedAt: Date.now(),
+          path: 'C:\\Users\\me\\Downloads\\report.pdf',
+        },
+        {
+          id: '2',
+          fileName: 'old.zip',
+          url: 'https://files.example.com/old.zip',
+          size: 10,
+          status: 'canceled',
+          finishedAt: Date.now() - 1,
+        },
+      ]);
+      const { fixture, element, text, click } = await render(DownloadsPage);
+      const pageViews = TestBed.inject(PageViews);
+      const open = vi.spyOn(pageViews, 'openDownload').mockResolvedValue();
+      const show = vi.spyOn(pageViews, 'showDownload').mockResolvedValue();
+      const cancel = vi.spyOn(pageViews, 'cancelDownload').mockResolvedValue();
+
+      TestBed.inject(DownloadsStore).track({
+        id: 7,
+        url: 'https://cdn.example.com/big.iso',
+        path: 'C:\\Users\\me\\Downloads\\big.iso',
+        fileName: 'big.iso',
+        received: 1024 * 1024,
+        total: 4 * 1024 * 1024,
+        state: 'in-progress',
+      });
+      await fixture.whenStable();
+
+      expect(text('.page__group')[0]).toBe('Зараз завантажується');
+      // Блоку з текою немає: показати теку можна в кожного запису, хоч би де лежав файл.
+      expect(element.querySelector('.downloads-location')).toBeNull();
+      const active = element.querySelector('.page__list .page__row') as HTMLElement;
+      expect(active.querySelector('.page__time')).toBeNull();
+      expect(active.querySelector('[aria-label="Показати «big.iso» у теці"]')).toBeTruthy();
+      expect(text('.page__name')).toEqual(['big.iso', 'report.pdf', 'old.zip']);
+      expect(text('.page__meta')[0]?.replace(/\s+/g, ' ')).toBe('1 МБ з 4 МБ · cdn.example.com');
+      expect(element.querySelector<HTMLElement>('.page__progress-value')?.style.width).toBe('25%');
+      expect(text('.page__meta').slice(1)).toEqual(['Завантажено · 1,5 КБ · files.example.com', 'Скасовано · files.example.com']);
+
+      await click(element.querySelector<HTMLButtonElement>('[aria-label="Скасувати завантаження «big.iso»"]'));
+      expect(cancel).toHaveBeenCalledWith(7);
+
+      // Скасований файл не відкрити — його немає на диску.
+      expect(element.querySelectorAll('.page__link').length).toBe(1);
+      await click(element.querySelector<HTMLButtonElement>('.page__link'));
+      expect(open).toHaveBeenCalledWith('C:\\Users\\me\\Downloads\\report.pdf');
+      await click(element.querySelector<HTMLButtonElement>('[aria-label="Показати «report.pdf» у теці"]'));
+      expect(show).toHaveBeenCalledWith('C:\\Users\\me\\Downloads\\report.pdf');
     });
   });
 
@@ -125,10 +205,15 @@ describe('internal pages', () => {
         { id: '1', title: 'YouTube', url: 'https://www.youtube.com/' },
         { id: '2', title: 'Історія', url: 'astra://history' },
       ]);
-      const { element, text, click } = await render(BookmarksPage);
+      const { fixture, element, text, click } = await render(BookmarksPage);
 
       expect(text('.page__name')).toEqual(['YouTube', 'Історія']);
       expect(text('.page__meta')).toEqual(['youtube.com', 'astra://history']);
+
+      const opened: string[] = [];
+      fixture.componentInstance.openUrl.subscribe((url) => opened.push(url));
+      await click(element.querySelectorAll<HTMLButtonElement>('.page__open')[1]);
+      expect(opened).toEqual(['astra://history']);
 
       await click(element.querySelector<HTMLButtonElement>('[aria-label="Видалити закладку «YouTube»"]'));
       expect(

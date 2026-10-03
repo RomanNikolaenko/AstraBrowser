@@ -12,7 +12,7 @@ use crate::audio;
 #[cfg(windows)]
 use crate::webview2::{self, Autoplay};
 use tauri::{
-  webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, PageLoadPayload},
+  webview::{NewWindowResponse, PageLoadEvent, PageLoadPayload},
   Emitter, LogicalPosition, LogicalSize, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl, Window,
 };
 
@@ -74,20 +74,41 @@ struct FaviconEvent {
   icon: String,
 }
 
+/// Гаряча клавіша браузера, натиснута, поки фокус у сайті (webview2::watch_shortcuts).
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+struct ShortcutEvent {
+  label: String,
+  shortcut: &'static str,
+}
+
+/// Скільки запитів блокувальник реклами відсік на поточній сторінці вкладки.
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+struct AdBlockEvent {
+  label: String,
+  blocked: u32,
+}
+
 #[derive(Clone, Serialize)]
 struct NewTabEvent {
   label: String,
   url: String,
 }
 
+/// Завантаження почалося, іде чи скінчилося (webview2::watch_downloads).
+#[cfg(windows)]
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DownloadFinishedEvent {
+struct DownloadEvent {
   label: String,
+  id: u64,
   url: String,
+  path: String,
   file_name: String,
-  size: u64,
-  success: bool,
+  received: i64,
+  total: i64,
+  state: &'static str,
 }
 
 fn is_web(url: &Url) -> bool {
@@ -151,11 +172,16 @@ pub async fn page_open(
   let url = web_url(&url)?;
   let ui = window.label().to_string();
   let app = window.app_handle().clone();
+  #[cfg(windows)]
+  let address = url.to_string();
 
   let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
     // У приватному вікні сторінки теж без збережених cookies, кешу й сховища.
     .incognito(ui.starts_with("private-"))
     .focused(!background)
+    // Перетягування на сайтах (файли в пошту, картки в Trello) — самому сайту, а не обробникові Tauri,
+    // який у Windows його перехоплює.
+    .disable_drag_drop_handler()
     .initialization_script_for_all_frames(audio::guard_script(&block_audio))
     // Сайт не може перейти на file:, tauri: чи інші не-вебові схеми.
     .on_navigation(|url| is_web(url) || url.as_str() == "about:blank")
@@ -183,27 +209,29 @@ pub async fn page_open(
         NewWindowResponse::Deny
       }
     })
-    .on_download({
-      let (app, ui) = (app.clone(), ui.clone());
-      move |webview, event| {
-        if let DownloadEvent::Finished { url, path, success } = event {
-          let file_name = path
-            .as_deref()
-            .and_then(Path::file_name)
-            .map(|name| name.to_string_lossy().into_owned())
-            .or_else(|| url.path_segments().and_then(|mut segments| segments.next_back()).map(str::to_owned))
-            .unwrap_or_else(|| url.to_string());
-          let size = path.as_deref().and_then(|path| std::fs::metadata(path).ok()).map_or(0, |metadata| metadata.len());
-          let event = DownloadFinishedEvent { label: webview.label().into(), url: url.to_string(), file_name, size, success };
-          let _ = app.emit_to(&ui, "page://download", event);
-        }
-        true
-      }
-    });
+    // Файл зберігається в «Завантаження» Windows, а власне вікно завантажень WebView2 сховане:
+    // перебіг показує інтерфейс (webview2::watch_downloads).
+    .on_download(|_, _| true);
 
   let webview = window
     .add_child(builder, LogicalPosition::new(bounds.x, bounds.y), LogicalSize::new(bounds.width, bounds.height))
     .map_err(|error| error.to_string())?;
+
+  // Найпершим — блокувальник реклами: перший перехід Tauri вже почав, і фільтр має стати раніше, ніж підуть
+  // запити сторінки. `report` — скільки заблоковано на сторінці, для інтерфейсу.
+  #[cfg(windows)]
+  webview2::block_ads(&webview, app.clone(), address.clone(), {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |blocked| {
+      let _ = app.emit_to(&ui, "page://adblock", AdBlockEvent { label: label.clone(), blocked });
+    }
+  })
+  .map_err(|error| error.to_string())?;
+
+  // Автовідтворення — заборонене, доки користувач не дозволить його сайту в «Дозволах сайту».
+  #[cfg(windows)]
+  webview2::block_autoplay_by_default(&webview, address.clone()).map_err(|error| error.to_string())?;
+
   if background {
     webview.hide().map_err(|error| error.to_string())?;
   }
@@ -243,10 +271,62 @@ pub async fn page_open(
 
   // Звук сторінки: значок у вкладці й кнопка, що його вимикає.
   #[cfg(windows)]
-  webview2::watch_audio(&webview, move |playing, muted| {
-    let _ = app.emit_to(&ui, "page://audio", AudioEvent { label: label.clone(), playing, muted });
+  webview2::watch_audio(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |playing, muted| {
+      let _ = app.emit_to(&ui, "page://audio", AudioEvent { label: label.clone(), playing, muted });
+    }
   })
   .map_err(|error| error.to_string())?;
+
+  // Ctrl+Tab і Ctrl+Shift+Tab перемикають вкладки й тоді, коли фокус у сайті.
+  #[cfg(windows)]
+  webview2::watch_shortcuts(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |shortcut| {
+      let _ = app.emit_to(&ui, "page://shortcut", ShortcutEvent { label: label.clone(), shortcut });
+    }
+  })
+  .map_err(|error| error.to_string())?;
+
+  // Завантаження: у вибрану теку (чи щоразу питати куди), а як ідуть і чим скінчилися — для кнопки
+  // завантажень і сторінки «Завантаження».
+  #[cfg(windows)]
+  if let Some(folder) = app.state::<crate::downloads::Downloads>().folder(&app) {
+    webview2::set_download_folder(&webview, folder).map_err(|error| error.to_string())?;
+  }
+  #[cfg(windows)]
+  webview2::watch_downloads(
+    &webview,
+    {
+      let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+      move |request| crate::downloads::ask_where(&app, &ui, &label, request)
+    },
+    {
+      let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+      move |update| {
+        let file_name = Path::new(&update.path)
+          .file_name()
+          .map(|name| name.to_string_lossy().into_owned())
+          .or_else(|| Url::parse(&update.url).ok()?.path_segments()?.next_back().map(str::to_owned))
+          .filter(|name| !name.is_empty())
+          .unwrap_or_else(|| update.url.clone());
+        let event = DownloadEvent {
+          label: label.clone(),
+          id: update.id,
+          url: update.url,
+          path: update.path,
+          file_name,
+          received: update.received,
+          total: update.total,
+          state: update.state,
+        };
+        let _ = app.emit_to(&ui, "page://download", event);
+      }
+    },
+  )
+  .map_err(|error| error.to_string())?;
+
   #[cfg(not(windows))]
   let _ = (webview, app);
   Ok(())
@@ -302,10 +382,18 @@ pub fn page_print(window: Window, label: String) -> Result<(), String> {
 #[tauri::command]
 pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label: String) -> Result<(), String> {
   scripts.0.lock().map_err(|error| error.to_string())?.remove(&label);
-  match window.get_webview(&label) {
-    Some(webview) => webview.close().map_err(|error| error.to_string()),
-    None => Ok(()),
-  }
+  let Some(webview) = window.get_webview(&label) else {
+    return Ok(());
+  };
+  // Сторінку, з якої ще йде завантаження, лише ховаємо до його кінця (webview2::close_page).
+  #[cfg(windows)]
+  return window
+    .run_on_main_thread(move || {
+      let _ = webview2::close_page(webview);
+    })
+    .map_err(|error| error.to_string());
+  #[cfg(not(windows))]
+  webview.close().map_err(|error| error.to_string())
 }
 
 /// Пошук тексту на сторінці через window.find: виділяє наступний (чи попередній) збіг і каже, чи він знайшовся.

@@ -23,16 +23,21 @@ import { SettingsStore } from '../shared/settings/settings';
 import { UiIcon } from '../shared/ui-icon/ui-icon';
 import { UiInput } from '../shared/ui-input/ui-input';
 import { TitlebarContent } from '../shared/titlebar/titlebar-content';
+import { BookmarksBar } from './bookmarks-bar/bookmarks-bar';
 import { BrowserMenu } from './browser-menu/browser-menu';
 import { BookmarkEditor } from './bookmark-editor/bookmark-editor';
 import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
 import { DownloadsStore } from './data/downloads';
+import { DownloadPrompt } from './download-prompt/download-prompt';
+import { DownloadsMenu } from './downloads-menu/downloads-menu';
+import { ExtensionsMenu } from './extensions-menu/extensions-menu';
 import { FaviconStore } from './data/favicons';
 import { HistoryStore } from './data/history';
 import { FindBar } from './find-bar/find-bar';
 import { NewTab } from './new-tab/new-tab';
 import {
+  PageAdBlockEvent,
   PageAudioEvent,
   PageBounds,
   PageDownloadEvent,
@@ -42,6 +47,7 @@ import {
   ReloadMode,
   PageLoadEvent,
   PageNewTabEvent,
+  PageShortcutEvent,
   PageTitleEvent,
   PageViews,
 } from './page-views/page-views';
@@ -75,6 +81,8 @@ interface Site {
   readonly playing: boolean;
   /** Звук вкладки вимкнено. */
   readonly muted: boolean;
+  /** Скільки запитів блокувальник реклами відсік на поточній сторінці. */
+  readonly blocked: number;
 }
 
 /** Вкладка показує внутрішню сторінку або сайт (тоді page === 'web' і є site). */
@@ -92,9 +100,13 @@ interface BrowserTab {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BookmarkEditor,
+    BookmarksBar,
     BookmarksPage,
     BrowserMenu,
+    DownloadPrompt,
+    DownloadsMenu,
     DownloadsPage,
+    ExtensionsMenu,
     ExtensionsPage,
     FindBar,
     HelpPage,
@@ -126,6 +138,7 @@ export class Browser {
   private readonly downloads = inject(DownloadsStore);
   private readonly favicons = inject(FaviconStore);
   private readonly autoplay = inject(AutoplayStore);
+  private readonly injector = inject(Injector);
 
   protected readonly settings = inject(SettingsStore);
   protected readonly bookmarks = inject(BookmarksStore);
@@ -221,7 +234,7 @@ export class Browser {
 
   constructor() {
     const destroyRef = inject(DestroyRef);
-    const injector = inject(Injector);
+    const injector = this.injector;
 
     // Меню оновлення — про сайт, на якому його відкрили: інша вкладка чи не сайт — закриваємо.
     effect(() => {
@@ -331,6 +344,9 @@ export class Browser {
         this.pageViews.on('page://favicon', (event) => this.onPageFavicon(event)),
         this.pageViews.on('page://new-tab', (event) => this.onPageNewTab(event)),
         this.pageViews.on('page://download', (event) => this.onPageDownload(event)),
+        this.pageViews.on('page://download-prompt', (event) => this.downloads.ask(event)),
+        this.pageViews.on('page://adblock', (event) => this.onPageAdBlock(event)),
+        this.pageViews.on('page://shortcut', (event) => this.onPageShortcut(event)),
       ];
       destroyRef.onDestroy(() => {
         for (const listener of listeners) {
@@ -360,6 +376,28 @@ export class Browser {
 
   protected selectTab(id: number): void {
     this.activeTabId.set(id);
+  }
+
+  /**
+   * Ctrl+Tab — наступна вкладка, Ctrl+Shift+Tab — попередня (по колу, як у Chrome і Firefox).
+   * Фокус іде за вкладкою: у сайт чи в інтерфейс, щоб і наступне натискання дійшло до браузера.
+   */
+  protected switchTab(step: 1 | -1): void {
+    const tabs = this.tabs();
+    const index = tabs.findIndex((tab) => tab.id === this.activeTab().id);
+    const next = tabs[(index + step + tabs.length) % tabs.length];
+    if (next.id === this.activeTab().id) {
+      return;
+    }
+    this.activeTabId.set(next.id);
+    if (!this.pageViews.available) {
+      return;
+    }
+    // Після того як webview нової вкладки покажеться: прихований фокус не прийме.
+    afterNextRender(
+      () => this.ignore(next.page === 'web' ? this.pageViews.focus(this.pageLabel(next)) : this.pageViews.focusInterface()),
+      { injector: this.injector }
+    );
   }
 
   protected openNewTab(): void {
@@ -571,19 +609,22 @@ export class Browser {
     this.activeTabId.set(tab.id);
   }
 
-  /** Закладка на внутрішню сторінку відкриває її, на сайт — сайт у поточній вкладці. */
-  protected openBookmark(bookmark: Bookmark): void {
-    const page = internalPageFor(bookmark.url);
+  /**
+   * Посилання із закладок чи історії: внутрішня сторінка відкривається сама, сайт — у поточній вкладці
+   * (і «Назад» повертає на сторінку, з якої перейшли).
+   */
+  protected openLink(url: string): void {
+    const page = internalPageFor(url);
     if (page) {
       this.openPage(page);
     } else {
-      this.openSite(bookmark.url, this.activeTab(), { back: true });
+      this.openSite(url, this.activeTab(), { back: true });
     }
   }
 
-  /** Клік коліщатком по закладці: нова вкладка у фоні, як у звичайних браузерах. */
-  protected openBookmarkInNewTab(bookmark: Bookmark): void {
-    const page = internalPageFor(bookmark.url);
+  /** Клік коліщатком: нова вкладка у фоні, як у звичайних браузерах. */
+  protected openLinkInNewTab(url: string): void {
+    const page = internalPageFor(url);
     if (page) {
       // Внутрішня сторінка має одну вкладку: вже відкрита — нова не потрібна.
       if (!this.tabs().some((tab) => tab.page === page)) {
@@ -594,7 +635,19 @@ export class Browser {
 
     const tab = this.createNewTab();
     this.tabs.update((tabs) => [...tabs, tab]);
-    this.openSite(bookmark.url, tab, { background: true });
+    this.openSite(url, tab, { background: true });
+  }
+
+  /** «Відкрити всі закладки» з панелі: кожна — у новій вкладці, а показується перша з них. */
+  protected openAllBookmarks(bookmarks: readonly Bookmark[]): void {
+    const firstNewTab = this.nextTabId;
+    for (const bookmark of bookmarks) {
+      this.openLinkInNewTab(bookmark.url);
+    }
+    const opened = this.tabs().find((tab) => tab.id >= firstNewTab);
+    if (opened) {
+      this.activeTabId.set(opened.id);
+    }
   }
 
   protected openWindow(isPrivate = false): void {
@@ -654,6 +707,12 @@ export class Browser {
       case 'Shift+BracketRight':
         this.togglePictureInPicture();
         break;
+      case 'Tab':
+        this.switchTab(1);
+        break;
+      case 'Shift+Tab':
+        this.switchTab(-1);
+        break;
       default:
         return;
     }
@@ -687,6 +746,7 @@ export class Browser {
       canGoForward: false,
       playing: false,
       muted: false,
+      blocked: 0,
     };
     this.replaceTab({ id: tab.id, page: 'web', site, back: back && tab.page !== 'web' ? tab.page : undefined });
     const blockAudio = this.autoplay.blockAudio();
@@ -701,7 +761,8 @@ export class Browser {
 
   private onPageLoad({ label, url, loading }: PageLoadEvent): void {
     const tab = this.tabByLabel(label);
-    if (tab?.site) {
+    // Порожній документ нового webview, поки сайт ще не відкрився, — не сайт.
+    if (tab?.site && /^https?:/i.test(url)) {
       this.updateSite(tab.id, (site) => ({ ...site, url, loading }));
     }
   }
@@ -737,6 +798,20 @@ export class Browser {
     }
   }
 
+  private onPageAdBlock({ label, blocked }: PageAdBlockEvent): void {
+    const tab = this.tabByLabel(label);
+    if (tab?.site && tab.site.blocked !== blocked) {
+      this.updateSite(tab.id, (site) => ({ ...site, blocked }));
+    }
+  }
+
+  /** Гаряча клавіша з сайту — лише з того, що зараз показаний. */
+  private onPageShortcut({ label, shortcut }: PageShortcutEvent): void {
+    if (label === this.visiblePage()) {
+      this.switchTab(shortcut === 'next-tab' ? 1 : -1);
+    }
+  }
+
   private onPageAudio({ label, playing, muted }: PageAudioEvent): void {
     const tab = this.tabByLabel(label);
     if (tab?.site) {
@@ -768,7 +843,8 @@ export class Browser {
    * й кладемо знімок на те саме місце; після закриття знімок зникає, щойно webview знову на місці.
    */
   private async onOverlayToggle(): Promise<void> {
-    const open = !!document.querySelector(':popover-open');
+    // Панелі (popover) і модальні вікна (вікно підтвердження, «Зберегти файл?») однаково ховають сайт.
+    const open = !!document.querySelector(':popover-open, dialog:modal');
     const change = ++this.overlayChange;
 
     if (!open) {
@@ -860,9 +936,13 @@ export class Browser {
     this.openSite(url, tab);
   }
 
-  private onPageDownload({ label, url, fileName, size, success }: PageDownloadEvent): void {
-    if (this.tabByLabel(label)) {
-      this.downloads.add({ fileName, url, size, status: success ? 'completed' : 'failed', finishedAt: Date.now() });
+  /** Завантаження записується, навіть коли вкладку вже закрито, — сам файл однаково зберігається. */
+  private onPageDownload(event: PageDownloadEvent): void {
+    this.downloads.track(event);
+    // Перехід, що виявився файлом, сторінки не відкриває — вкладка вже не вантажиться.
+    const tab = this.tabByLabel(event.label);
+    if (tab?.site?.loading && event.state === 'in-progress') {
+      this.updateSite(tab.id, (site) => ({ ...site, loading: false }));
     }
   }
 

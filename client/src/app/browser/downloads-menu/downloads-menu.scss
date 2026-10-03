@@ -1,0 +1,242 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+// Кнопка панелі інструментів; коло довкола іконки — загальний поступ того, що завантажується.
+.downloads-button {
+  @include icon-button;
+
+  position: relative;
+
+  // «Натиснута», поки відкритий список.
+  &:has(+ .is-open) {
+    color: var(--browser-tab-active-text);
+    background: var(--browser-pressed);
+  }
+
+  &__icon--new {
+    animation: downloads-arrive 600ms ease;
+  }
+
+  // Поки щось завантажується, значок менший, а довкола нього — тонке коло поступу.
+  &--busy app-icon {
+    width: 1.0625rem;
+    height: 1.0625rem;
+  }
+
+  &__ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin: -0.875rem 0 0 -0.875rem;
+    pointer-events: none;
+    transform: rotate(-90deg);
+
+    &--unknown {
+      animation: downloads-spin 1s linear infinite;
+    }
+  }
+
+  &__track,
+  &__value {
+    fill: none;
+    stroke-width: 2.25;
+  }
+
+  &__track {
+    stroke: var(--browser-divider);
+  }
+
+  &__value {
+    stroke: var(--browser-accent);
+    stroke-linecap: round;
+    transition: stroke-dasharray $motion;
+  }
+}
+
+@keyframes downloads-arrive {
+  0% {
+    transform: translateY(-0.5rem);
+  }
+
+  60% {
+    transform: translateY(0.125rem);
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes downloads-spin {
+  from {
+    transform: rotate(-90deg);
+  }
+
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+.downloads-menu {
+  --popover-width: 24rem;
+  --popover-padding: 0.5rem;
+
+  &__title {
+    padding: 0.5rem 0 0.75rem;
+    margin: 0 0.5rem 0.375rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+    text-align: center;
+    border-bottom: 0.0625rem solid var(--browser-divider);
+  }
+
+  &__list {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  &__row {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+  }
+
+  &__file {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.75rem;
+    align-items: center;
+    min-width: 0;
+    min-height: 3.25rem;
+    padding: 0.375rem 0.75rem;
+    font: inherit;
+    color: var(--browser-text);
+    text-align: start;
+    background: transparent;
+    border: 0;
+    border-radius: 0.625rem;
+  }
+
+  // Завершений файл відкривається кліком.
+  button.downloads-menu__file {
+    @include popover-item;
+
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding-block: 0.375rem;
+  }
+
+  &__icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    color: var(--browser-icon);
+    background: var(--browser-field);
+    border-radius: 0.625rem;
+
+    app-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+
+    &--failed {
+      color: var(--color-error);
+    }
+  }
+
+  &__text {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+
+  &__name,
+  &__meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__name {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  &__meta {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--browser-muted);
+
+    &--error {
+      color: var(--color-error);
+    }
+  }
+
+  &__bar {
+    height: 0.25rem;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    background: var(--browser-field);
+    border-radius: 999px;
+
+    // Розмір невідомий — смужка біжить, а не заповнюється.
+    &--unknown .downloads-menu__bar-value {
+      width: 30% !important;
+      animation: downloads-unknown 1.2s ease-in-out infinite;
+    }
+  }
+
+  &__bar-value {
+    display: block;
+    height: 100%;
+    background: var(--browser-accent);
+    border-radius: inherit;
+    transition: width $motion;
+  }
+
+  &__action {
+    @include icon-button(2.25rem, 1.125rem);
+  }
+
+  &__footer {
+    padding-top: 0.375rem;
+    margin-top: 0.375rem;
+    border-top: 0.0625rem solid var(--browser-divider);
+  }
+
+  &__all {
+    @include popover-item;
+
+    gap: 0.625rem;
+    font-size: 0.875rem;
+  }
+
+  &__all-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--browser-icon);
+  }
+}
+
+@keyframes downloads-unknown {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}

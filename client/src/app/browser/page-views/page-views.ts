@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
 
 export interface PageBounds {
   readonly x: number;
@@ -33,12 +34,14 @@ export interface PageNewTabEvent {
   readonly url: string;
 }
 
-export interface PageDownloadEvent {
+/** Завантаження зі сторінки чекає відповіді, куди зберегти файл. */
+export interface PageDownloadPromptEvent extends DownloadPromptRequest {
   readonly label: string;
-  readonly url: string;
-  readonly fileName: string;
-  readonly size: number;
-  readonly success: boolean;
+}
+
+/** Завантаження зі сторінки почалося, іде чи скінчилося. */
+export interface PageDownloadEvent extends DownloadProgress {
+  readonly label: string;
 }
 
 /** Сторінка почала чи перестала грати звук, або його вимкнули. */
@@ -70,6 +73,18 @@ export interface PageFullscreenEvent {
   readonly fullscreen: boolean;
 }
 
+/** Скільки запитів блокувальник реклами відсік на поточній сторінці вкладки (server/src/adblock.rs). */
+export interface PageAdBlockEvent {
+  readonly label: string;
+  readonly blocked: number;
+}
+
+/** Гаряча клавіша браузера, натиснута, поки фокус у сайті (server/src/webview2.rs, watch_shortcuts). */
+export interface PageShortcutEvent {
+  readonly label: string;
+  readonly shortcut: 'next-tab' | 'previous-tab';
+}
+
 /** Дозвіл сайту на автовідтворення; `default` у WebView2 теж дозволяє. */
 export type AutoplayPermission = 'allow' | 'block' | 'default';
 
@@ -82,6 +97,9 @@ interface PageEvents {
   'page://favicon': PageFaviconEvent;
   'page://new-tab': PageNewTabEvent;
   'page://download': PageDownloadEvent;
+  'page://download-prompt': PageDownloadPromptEvent;
+  'page://adblock': PageAdBlockEvent;
+  'page://shortcut': PageShortcutEvent;
 }
 
 /**
@@ -156,6 +174,11 @@ export class PageViews {
     return invoke('page_focus', { label });
   }
 
+  /** Фокус — у сам інтерфейс вікна (скажімо, з прихованого щойно сайту). */
+  focusInterface(): Promise<void> {
+    return getCurrentWebview().setFocus();
+  }
+
   print(label: string): Promise<void> {
     return invoke('page_print', { label });
   }
@@ -191,6 +214,30 @@ export class PageViews {
   /** Сторінка побачить новий дозвіл після перезавантаження. */
   setAutoplay(label: string, autoplay: AutoplayPermission): Promise<void> {
     return invoke('page_set_autoplay', { label, autoplay });
+  }
+
+  /** Відповідь «куди зберегти»: тека чи null — не завантажувати. */
+  resolveDownload(id: number, folder: string | null): Promise<void> {
+    return invoke('download_resolve', { id, folder });
+  }
+
+  /** Вікно вибору теки Windows для одного файла; null — теку не вибрали. */
+  pickDownloadFolder(current: string): Promise<string | null> {
+    return invoke('downloads_pick_folder', { current });
+  }
+
+  cancelDownload(id: number): Promise<void> {
+    return invoke('download_cancel', { id });
+  }
+
+  /** Відкриває завантажений файл програмою, що стоїть для нього в Windows. */
+  openDownload(path: string): Promise<void> {
+    return invoke('download_open', { path });
+  }
+
+  /** Показує файл виділеним у його теці. */
+  showDownload(path: string): Promise<void> {
+    return invoke('download_show', { path });
   }
 
   /** Події надходять лише webview інтерфейсу поточного вікна. */

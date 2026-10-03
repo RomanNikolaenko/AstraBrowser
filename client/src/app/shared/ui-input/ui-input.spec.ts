@@ -35,6 +35,15 @@ class ValidatedHost {
   readonly error = signal<string | null>(null);
 }
 
+@Component({
+  imports: [UiInput],
+  template: `<app-input inputId="address" [selectOnFocus]="select()" [(value)]="value" />`,
+})
+class AddressHost {
+  readonly select = signal(true);
+  readonly value = signal('https://www.youtube.com/');
+}
+
 describe('UiInput', () => {
   const setup = async <T>(host: Type<T>) => {
     await TestBed.configureTestingModule({
@@ -120,5 +129,50 @@ describe('UiInput', () => {
 
     control.dispatchEvent(new FocusEvent('blur'));
     expect(fixture.componentInstance.touched()).toBe(true);
+  });
+
+  describe('select on focus', () => {
+    // Клік у поле: pointerdown, фокус, курсор у місці кліку (виділення знято), mouseup.
+    const clickInto = (control: HTMLInputElement, caret = 5) => {
+      control.dispatchEvent(new Event('pointerdown'));
+      control.focus();
+      control.setSelectionRange(caret, caret);
+      control.dispatchEvent(new MouseEvent('mouseup'));
+    };
+    const selected = (control: HTMLInputElement) => control.value.slice(control.selectionStart ?? 0, control.selectionEnd ?? 0);
+
+    it('should select the whole text when the field is clicked into, then let the next click place the caret', async () => {
+      const { control } = await setup(AddressHost);
+
+      clickInto(control);
+      expect(selected(control)).toBe('https://www.youtube.com/');
+
+      // Поле вже у фокусі — клік ставить курсор, як звичайно.
+      clickInto(control, 8);
+      expect([control.selectionStart, control.selectionEnd]).toEqual([8, 8]);
+    });
+
+    it('should keep a part selected with the mouse and select all when tabbed into', async () => {
+      const { control } = await setup(AddressHost);
+
+      control.dispatchEvent(new Event('pointerdown'));
+      control.focus();
+      control.setSelectionRange(8, 11);
+      control.dispatchEvent(new MouseEvent('mouseup'));
+      expect(selected(control)).toBe('www');
+
+      control.blur();
+      control.focus();
+      expect(selected(control)).toBe('https://www.youtube.com/');
+    });
+
+    it('should leave the caret alone in ordinary fields', async () => {
+      const { fixture, control } = await setup(AddressHost);
+      fixture.componentInstance.select.set(false);
+      await fixture.whenStable();
+
+      clickInto(control);
+      expect([control.selectionStart, control.selectionEnd]).toEqual([5, 5]);
+    });
   });
 });

@@ -1,0 +1,39 @@
+<dialog #dialog class="download-prompt" aria-labelledby="download-prompt-title" closedby="any" (close)="onClose()">
+  @if (request(); as request) {
+    <div class="download-prompt__panel">
+      <h2 class="download-prompt__title" id="download-prompt-title">Зберегти файл?</h2>
+
+      <div class="download-prompt__file">
+        <span class="download-prompt__icon"><app-icon icon="file" /></span>
+        <span class="download-prompt__text">
+          <span class="download-prompt__name" [title]="request.fileName">{{ request.fileName }}</span>
+          <span class="download-prompt__meta">
+            {{ request.total ? formatSize(request.total) + ' · ' : '' }}{{ hostname(request.url) }}
+          </span>
+        </span>
+      </div>
+
+      <div class="download-prompt__folder">
+        <app-icon class="download-prompt__folder-icon" icon="folder" />
+        <span class="download-prompt__text">
+          <span class="download-prompt__meta">Зберегти в теку</span>
+          <span class="download-prompt__path" [title]="folder()">{{ folder() }}</span>
+        </span>
+        <button class="download-prompt__button" type="button" (click)="changeFolder()">Змінити…</button>
+      </div>
+
+      <label class="download-prompt__dont-ask">
+        <input type="checkbox" name="dont-ask" [checked]="dontAsk()" (change)="setDontAsk($event)" />
+        Більше не питати — зберігати одразу (змінити можна в налаштуваннях)
+      </label>
+
+      <div class="download-prompt__actions">
+        <button class="download-prompt__button" type="button" (click)="cancel()">Скасувати</button>
+        <!-- Фокус одразу на «Зберегти»: Enter завантажує, Esc скасовує. -->
+        <button class="download-prompt__button download-prompt__button--primary" type="button" autofocus (click)="save()">
+          Зберегти
+        </button>
+      </div>
+    </div>
+  }
+</dialog>

@@ -1,0 +1,55 @@
+<app-popover #menu class="extensions-menu" popoverId="extensions-menu" caret>
+  <h2 class="extensions-menu__title">Розширення</h2>
+
+  <ul class="extensions-menu__list">
+    <li class="extensions-menu__extension">
+      <button class="extensions-menu__open" type="button" (click)="openAdBlock()">
+        <span class="extensions-menu__icon" [class.extensions-menu__icon--off]="!active()">
+          <app-icon [icon]="active() ? 'shield-check' : 'shield-off'" />
+        </span>
+        <span class="extensions-menu__text">
+          <span class="extensions-menu__name">Блокувальник реклами</span>
+          <span class="extensions-menu__state">{{ state() }}</span>
+        </span>
+      </button>
+      <button
+        class="extensions-menu__more"
+        type="button"
+        aria-label="Дії з блокувальником реклами"
+        title="Дії"
+        popovertarget="extension-actions">
+        <app-icon icon="more" />
+      </button>
+      <app-popover class="extension-actions" popoverId="extension-actions">
+        <ul class="extension-actions__list" role="menu" aria-label="Блокувальник реклами">
+          @if (adblock.status(); as status) {
+            @if (host() && status.enabled) {
+              <li role="none">
+                <button class="extension-actions__item" type="button" role="menuitem" (click)="toggleSite()">
+                  {{ active() ? 'Вимкнути на цьому сайті' : 'Увімкнути на цьому сайті' }}
+                </button>
+              </li>
+            }
+            <li role="none">
+              <button class="extension-actions__item" type="button" role="menuitem" (click)="toggleEnabled()">
+                {{ status.enabled ? 'Вимкнути розширення' : 'Увімкнути розширення' }}
+              </button>
+            </li>
+          }
+          <li role="none">
+            <button class="extension-actions__item" type="button" role="menuitem" (click)="manage()">Керувати розширенням</button>
+          </li>
+        </ul>
+      </app-popover>
+    </li>
+  </ul>
+
+  <div class="extensions-menu__footer">
+    <button class="extensions-menu__manage" type="button" (click)="manage()">
+      <app-icon class="extensions-menu__manage-icon" icon="settings" />
+      Керувати розширеннями
+    </button>
+  </div>
+</app-popover>
+
+<app-adblock-panel [page]="page()" [pageUrl]="pageUrl()" [blocked]="blocked()" (openSettings)="openSettings.emit()" />

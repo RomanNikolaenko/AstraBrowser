@@ -67,6 +67,39 @@
     </fieldset>
   </div>
 
+  @if (downloadSettings.settings(); as downloads) {
+    <h2 class="page__group">Завантаження</h2>
+    <div class="page__list settings">
+      <div class="settings__row">
+        <span class="settings__text settings__text--wide">
+          <span class="page__name">Тека для завантажень</span>
+          <span class="page__meta" [title]="downloads.folder">{{ downloads.folder }}</span>
+        </span>
+        <div class="settings__actions">
+          @if (downloads.custom) {
+            <button class="page__button" type="button" (click)="resetFolder()">Стандартна</button>
+          }
+          <button class="page__button" type="button" (click)="openFolder()">Відкрити</button>
+          <button class="page__button" type="button" (click)="chooseFolder()">Змінити…</button>
+        </div>
+      </div>
+      <label class="settings__row" for="settings-ask-download">
+        <span class="settings__text">
+          <span class="page__name">Питати, куди зберегти файл</span>
+          <span class="page__meta">Перед кожним завантаженням показувати теку й давати вибрати іншу</span>
+        </span>
+        <input
+          class="switch"
+          id="settings-ask-download"
+          name="ask-download"
+          type="checkbox"
+          role="switch"
+          [checked]="downloads.ask"
+          (change)="setAsk($event)" />
+      </label>
+    </div>
+  }
+
   <h2 class="page__group">Конфіденційність</h2>
   <div class="page__list settings">
     <div class="settings__row">
@@ -78,7 +111,7 @@
         class="page__button page__button--danger"
         type="button"
         [disabled]="!history.entries().length"
-        (click)="confirming.set('history')">
+        (click)="confirmHistory.show()">
         Очистити
       </button>
     </div>
@@ -91,20 +124,24 @@
         class="page__button page__button--danger"
         type="button"
         [disabled]="!downloads.entries().length"
-        (click)="confirming.set('downloads')">
+        (click)="confirmDownloads.show()">
         Очистити
       </button>
     </div>
   </div>
 
-  @if (confirming(); as target) {
-    <div class="page__confirm settings__confirm" role="alert">
-      <span
-        >{{ target === 'history' ? 'Видалити всю історію переглядів?' : 'Прибрати всі записи зі списку завантажень?' }} Цю дію не
-        можна скасувати.</span
-      >
-      <button class="page__button page__button--danger" type="button" (click)="clear()">Очистити</button>
-      <button class="page__button" type="button" (click)="confirming.set(null)">Скасувати</button>
-    </div>
-  }
+  <app-confirm-dialog
+    #confirmHistory
+    heading="Очистити всю історію?"
+    message="Усі відвідані сторінки буде видалено. Цю дію не можна скасувати."
+    confirmLabel="Очистити"
+    danger
+    (confirmed)="history.clear()" />
+  <app-confirm-dialog
+    #confirmDownloads
+    heading="Очистити список завантажень?"
+    message="Записи зникнуть зі списку, а самі файли лишаться на диску."
+    confirmLabel="Очистити"
+    danger
+    (confirmed)="downloads.clear()" />
 </section>

@@ -1,0 +1,170 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+// Вікно посередині екрана поверх затемнення — як і вікно підтвердження.
+.download-prompt {
+  width: min(30rem, calc(100% - 2rem));
+  max-width: none;
+  padding: 0;
+  margin: auto;
+  color: var(--browser-text);
+  background: transparent;
+  border: 0;
+  opacity: 0;
+  transform: translateY(0.5rem) scale(0.97);
+  transition:
+    opacity $motion,
+    transform $motion,
+    overlay $motion allow-discrete,
+    display $motion allow-discrete;
+
+  &[open] {
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(0.5rem) scale(0.97);
+    }
+  }
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0%);
+    transition:
+      background-color $motion,
+      overlay $motion allow-discrete,
+      display $motion allow-discrete;
+  }
+
+  &[open]::backdrop {
+    background: rgb(0 0 0 / 45%);
+
+    @starting-style {
+      background: rgb(0 0 0 / 0%);
+    }
+  }
+
+  &__panel {
+    display: grid;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--browser-popover);
+    border: 0.0625rem solid var(--browser-popover-border);
+    border-radius: 1.25rem;
+    box-shadow: var(--browser-popover-shadow);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__file,
+  &__folder {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    min-width: 0;
+  }
+
+  &__icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--browser-icon-accent);
+    background: var(--browser-field);
+    border-radius: 0.75rem;
+
+    app-icon {
+      width: 1.375rem;
+      height: 1.375rem;
+    }
+  }
+
+  &__folder {
+    padding: 0.625rem 0.625rem 0.625rem 0.875rem;
+    background: var(--browser-field);
+    border-radius: 0.875rem;
+  }
+
+  &__folder-icon {
+    flex: 0 0 auto;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--browser-icon);
+  }
+
+  &__text {
+    display: grid;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  &__name,
+  &__path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  &__path {
+    font-size: 0.875rem;
+  }
+
+  &__meta {
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+
+  &__dont-ask {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+    cursor: pointer;
+
+    input {
+      width: 1rem;
+      height: 1rem;
+      margin: 0;
+      accent-color: var(--color-primary);
+      cursor: pointer;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  &__button {
+    @include pill-button(2.5rem);
+
+    &--primary {
+      color: #fff;
+      background: var(--gradient-brand);
+      border-color: transparent;
+
+      &:hover:not(:disabled) {
+        background: var(--gradient-brand);
+        border-color: transparent;
+        filter: brightness(1.06);
+      }
+    }
+  }
+}

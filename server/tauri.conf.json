@@ -15,7 +15,10 @@
         "title": "AstraBrowser",
         "width": 1280,
         "height": 800,
+        "center": true,
+        "maximized": true,
         "decorations": false,
+        "dragDropEnabled": false,
         "minWidth": 800,
         "minHeight": 600
       }

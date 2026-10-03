@@ -1,0 +1,133 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+// Вікно посередині екрана; з'являється й зникає разом із затемненням.
+.confirm-dialog {
+  width: min(26rem, calc(100% - 2rem));
+  max-width: none;
+  padding: 0;
+  margin: auto;
+  color: var(--browser-text);
+  background: transparent;
+  border: 0;
+  opacity: 0;
+  transform: translateY(0.5rem) scale(0.97);
+  transition:
+    opacity $motion,
+    transform $motion,
+    overlay $motion allow-discrete,
+    display $motion allow-discrete;
+
+  &[open] {
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(0.5rem) scale(0.97);
+    }
+  }
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0%);
+    backdrop-filter: blur(0);
+    transition:
+      background-color $motion,
+      backdrop-filter $motion,
+      overlay $motion allow-discrete,
+      display $motion allow-discrete;
+  }
+
+  &[open]::backdrop {
+    background: rgb(0 0 0 / 45%);
+    backdrop-filter: blur(0.125rem);
+
+    @starting-style {
+      background: rgb(0 0 0 / 0%);
+      backdrop-filter: blur(0);
+    }
+  }
+
+  &__panel {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: center;
+    padding: 1.75rem 1.5rem 1.5rem;
+    text-align: center;
+    background: var(--browser-popover);
+    border: 0.0625rem solid var(--browser-popover-border);
+    border-radius: 1.25rem;
+    box-shadow: var(--browser-popover-shadow);
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 0.5rem;
+    color: var(--browser-accent);
+    background: var(--browser-field);
+    border-radius: 50%;
+
+    app-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    .confirm-dialog--danger & {
+      color: var(--color-error);
+    }
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__message {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--browser-muted);
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+  &__button {
+    @include pill-button(2.75rem);
+
+    flex: 1 1 0;
+
+    &--confirm {
+      color: #fff;
+      background: var(--gradient-brand);
+      border-color: transparent;
+
+      &:hover:not(:disabled) {
+        background: var(--gradient-brand);
+        border-color: transparent;
+        filter: brightness(1.06);
+      }
+
+      .confirm-dialog--danger & {
+        background: var(--color-error);
+
+        &:hover:not(:disabled) {
+          background: var(--color-error);
+        }
+      }
+    }
+  }
+}

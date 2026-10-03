@@ -1,0 +1,51 @@
+<app-popover class="adblock-panel" popoverId="adblock-panel" align="end" caret>
+  <header class="adblock-panel__header">
+    <span class="adblock-panel__badge" [class.adblock-panel__badge--off]="!active()">
+      <app-icon [icon]="active() ? 'shield-check' : 'shield-off'" />
+    </span>
+    <div class="adblock-panel__heading">
+      <h2 class="adblock-panel__title">Блокувальник реклами</h2>
+      <span class="adblock-panel__host">{{ host() || 'Усі сайти' }}</span>
+    </div>
+  </header>
+
+  @if (adblock.status(); as status) {
+    @if (!status.enabled) {
+      <div class="adblock-panel__notice" role="status">
+        <span>Блокувальник вимкнено для всіх сайтів</span>
+        <button class="adblock-panel__button" type="button" (click)="enable()">Увімкнути</button>
+      </div>
+    } @else if (!status.ready) {
+      <p class="adblock-panel__notice" role="status">
+        {{ status.updating ? 'Завантаження списків фільтрів…' : 'Списки фільтрів ще не завантажено' }}
+      </p>
+    } @else if (host()) {
+      <p class="adblock-panel__count" aria-live="polite">
+        <span class="adblock-panel__number">{{ active() ? blocked() : 0 }}</span>
+        <span>{{ requests() }} заблоковано на цій сторінці</span>
+      </p>
+    } @else {
+      <p class="adblock-panel__notice" role="status">Прибирає рекламу й трекери на всіх сайтах</p>
+    }
+
+    @if (host()) {
+      <label class="adblock-panel__row" for="adblock-panel-site">
+        <span class="adblock-panel__label">Блокувати рекламу на цьому сайті</span>
+        <input
+          class="adblock-panel__switch"
+          id="adblock-panel-site"
+          name="adblock-site"
+          type="checkbox"
+          role="switch"
+          [checked]="!adblock.isSiteDisabled(host())"
+          [disabled]="!status.enabled"
+          (change)="setSiteEnabled($event)" />
+      </label>
+    }
+  }
+
+  <button class="adblock-panel__settings" type="button" (click)="showSettings()">
+    <app-icon class="adblock-panel__settings-icon" icon="settings" />
+    <span>Налаштування блокувальника</span>
+  </button>
+</app-popover>

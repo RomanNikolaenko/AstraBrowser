@@ -51,6 +51,8 @@
   </button>
 </ng-template>
 
+<app-download-prompt />
+
 <div class="chrome" (dblclick)="onChromeDoubleClick($event)">
   <div class="toolbar">
     <div class="toolbar__group">
@@ -87,6 +89,7 @@
     <app-input
       #omnibox
       class="omnibox"
+      selectOnFocus
       [class.omnibox--site]="activeSitePage()"
       shape="pill"
       inputId="omnibox"
@@ -138,6 +141,7 @@
     }
 
     <div class="toolbar__group">
+      <app-downloads-menu (openDownloads)="openPage('downloads')" />
       <button
         class="toolbar__button toolbar__button--tools"
         type="button"
@@ -152,6 +156,21 @@
         <app-icon class="profile__chevron" icon="chevron-down" />
       </button>
       <app-profile-menu />
+      <button
+        #extensionsButton
+        class="toolbar__button"
+        type="button"
+        aria-label="Розширення"
+        title="Розширення"
+        popovertarget="extensions-menu">
+        <app-icon icon="puzzle" />
+      </button>
+      <app-extensions-menu
+        [anchor]="extensionsButton"
+        [page]="activeSitePage()"
+        [pageUrl]="tabUrl(activeTab())"
+        [blocked]="activeTab().site?.blocked ?? 0"
+        (openSettings)="openPage('extensions')" />
       <button
         class="toolbar__button toolbar__button--filled toolbar__button--menu"
         type="button"
@@ -174,29 +193,12 @@
   </div>
 
   @if (settings.showBookmarksBar()) {
-    <nav class="bookmarks" aria-label="Закладки">
-      @if (bookmarks.entries().length) {
-        <ul class="bookmarks__list">
-          @for (bookmark of bookmarks.entries(); track bookmark.id) {
-            <li class="bookmarks__item">
-              <button
-                class="bookmark"
-                type="button"
-                [title]="bookmark.url"
-                (click)="openBookmark(bookmark)"
-                (appMiddleClick)="openBookmarkInNewTab(bookmark)">
-                <app-site-icon class="bookmark__favicon" [url]="bookmark.url" [size]="16" />
-                <span>{{ bookmark.title }}</span>
-              </button>
-            </li>
-          }
-        </ul>
-      } @else {
-        <p class="bookmarks__empty">
-          Щоб додати закладку, натисніть <app-icon class="bookmarks__empty-icon" icon="star" /> в адресному рядку
-        </p>
-      }
-    </nav>
+    <app-bookmarks-bar
+      [pageTitle]="tabTitle(activeTab())"
+      [pageUrl]="tabUrl(activeTab())"
+      (openBookmark)="openLink($event.url)"
+      (openBookmarkInNewTab)="openLinkInNewTab($event.url)"
+      (openBookmarks)="openAllBookmarks($event)" />
   }
 </div>
 
@@ -212,13 +214,13 @@
     @switch (activeTab().page) {
       @case ('web') {}
       @case ('history') {
-        <app-history-page />
+        <app-history-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
       }
       @case ('downloads') {
         <app-downloads-page />
       }
       @case ('bookmarks') {
-        <app-bookmarks-page />
+        <app-bookmarks-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
       }
       @case ('extensions') {
         <app-extensions-page />

@@ -1,0 +1,127 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.adblock-panel {
+  --popover-width: 22rem;
+  --popover-padding: 1rem;
+
+  &__header {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding-bottom: 0.875rem;
+    margin-bottom: 0.875rem;
+    border-bottom: 0.0625rem solid var(--browser-divider);
+  }
+
+  &__badge {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    color: var(--browser-accent);
+    background: var(--browser-field);
+    border-radius: 0.875rem;
+
+    app-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    &--off {
+      color: var(--browser-icon);
+    }
+  }
+
+  &__heading {
+    display: grid;
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__host {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+    white-space: nowrap;
+  }
+
+  &__count {
+    display: flex;
+    gap: 0.625rem;
+    align-items: baseline;
+    margin: 0 0 0.75rem;
+    font-size: 0.875rem;
+    color: var(--browser-muted);
+  }
+
+  &__number {
+    font-size: 1.75rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--browser-heading);
+  }
+
+  &__notice {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.625rem 0.625rem 0.625rem 0.875rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+    background: var(--browser-field);
+    border-radius: 0.75rem;
+
+    span {
+      flex: 1 1 auto;
+    }
+  }
+
+  &__button {
+    @include pill-button(2.25rem);
+  }
+
+  &__row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 2.75rem;
+    cursor: pointer;
+  }
+
+  &__label {
+    font-size: 0.9375rem;
+    color: var(--browser-text);
+  }
+
+  &__switch {
+    @include switch;
+  }
+
+  &__settings {
+    @include popover-item;
+
+    gap: 0.625rem;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  &__settings-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--browser-icon);
+  }
+}

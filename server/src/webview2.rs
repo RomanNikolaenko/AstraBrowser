@@ -1,5 +1,5 @@
-//! Те, чого Tauri не відкриває, — напряму через WebView2: іконка й звук сторінки, навігація історією
-//! й дозвіл сайту на автовідтворення.
+//! Те, чого Tauri не відкриває, — напряму через WebView2: іконка й звук сторінки, навігація історією,
+//! дозвіл сайту на автовідтворення й блокування реклами.
 //!
 //! Тут свідомо немає ExecuteScript (eval): скрипт, запущений через WebView2, дає сторінці «активацію
 //! користувача», і вона могла б без жодного кліку запускати відео зі звуком чи відкривати вікна.
@@ -7,22 +7,38 @@
 //! Усе виконується на головному потоці (`with_webview`), а відповіді COM приходять у колбеки,
 //! тож результат повертається через канал, який чекає команда.
 
-use std::sync::mpsc::Sender;
+use std::{
+  cell::{Cell, RefCell},
+  collections::HashMap,
+  path::{Path, PathBuf},
+  rc::Rc,
+  sync::{
+    atomic::{AtomicU64, Ordering},
+    mpsc::Sender,
+  },
+  time::{Duration, Instant},
+};
 
-use tauri::{webview::PlatformWebview, Webview};
+use tauri::{webview::PlatformWebview, AppHandle, Manager, Url, Webview};
 use webview2_com::{
-  take_pwstr, AddScriptToExecuteOnDocumentCreatedCompletedHandler, CallDevToolsProtocolMethodCompletedHandler,
-  CapturePreviewCompletedHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
+  take_pwstr, AcceleratorKeyPressedEventHandler, AddScriptToExecuteOnDocumentCreatedCompletedHandler, BytesReceivedChangedEventHandler, CallDevToolsProtocolMethodCompletedHandler,
+  CapturePreviewCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
   GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
   IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
-  SetPermissionStateCompletedHandler, SourceChangedEventHandler,
+  NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
+  WebResourceRequestedEventHandler,
 };
 use windows::Win32::{
   Foundation::E_OUTOFMEMORY,
   System::Com::{IStream, STREAM_SEEK_SET},
-  UI::Shell::SHCreateMemStream,
+  UI::{
+    Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT, VK_TAB},
+    Shell::SHCreateMemStream,
+  },
 };
-use windows_core::{IUnknown, Interface, BOOL, HSTRING, PWSTR};
+use windows_core::{w, IUnknown, Interface, BOOL, HSTRING, PWSTR};
+
+use crate::adblock::{AdBlock, Verdict};
 
 /// Відповідь, яку команда чекає з головного потоку.
 pub type Reply<T> = Sender<Result<T, String>>;
@@ -103,6 +119,32 @@ pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'stati
       unsafe { core(&platform)?.add_ContainsFullScreenElementChanged(&handler, &mut token) }
     };
     let _ = watch();
+  })
+}
+
+/// Гарячі клавіші браузера, натиснуті, поки фокус у сайті: самі клавіші отримує webview сайту,
+/// тож вони перехоплюються тут (сайт їх не бачить) і передаються інтерфейсу як `report(shortcut)`.
+/// Поки це Ctrl+Tab (`next-tab`) і Ctrl+Shift+Tab (`previous-tab`).
+pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send + 'static) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
+      let Some(args) = args else {
+        return Ok(());
+      };
+      let (mut kind, mut key) = (COREWEBVIEW2_KEY_EVENT_KIND::default(), 0u32);
+      unsafe {
+        args.KeyEventKind(&mut kind)?;
+        args.VirtualKey(&mut key)?;
+      }
+      let held = |key: VIRTUAL_KEY| unsafe { GetKeyState(i32::from(key.0)) } < 0;
+      if kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && key == u32::from(VK_TAB.0) && held(VK_CONTROL) && !held(VK_MENU) {
+        unsafe { args.SetHandled(true)? };
+        report(if held(VK_SHIFT) { "previous-tab" } else { "next-tab" });
+      }
+      Ok(())
+    }));
+    let mut token = 0;
+    let _ = unsafe { platform.controller().add_AcceleratorKeyPressed(&handler, &mut token) };
   })
 }
 
@@ -447,6 +489,53 @@ fn find_autoplay(settings: Option<ICoreWebView2PermissionSettingCollectionView>,
   Ok(Autoplay::Default)
 }
 
+/// Автовідтворення за замовчуванням заборонене — і звук, і відео. Сайту, для якого в профілі ще немає
+/// дозволу, на кожному переході (і на першій сторінці `first_url`) ставиться «заборонити»;
+/// дозволи, які вибрав користувач, не чіпаються.
+pub fn block_autoplay_by_default(webview: &Webview, first_url: String) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let watch = || -> windows_core::Result<()> {
+      let core = core(&platform)?;
+      let profile = profile(&platform)?;
+      deny_autoplay_unless_set(&profile, &first_url)?;
+      let handler = NavigationStartingEventHandler::create(Box::new(move |_, args| {
+        let Some(args) = args else {
+          return Ok(());
+        };
+        let mut uri = PWSTR::null();
+        unsafe { args.Uri(&mut uri)? };
+        deny_autoplay_unless_set(&profile, &take_pwstr(uri))
+      }));
+      let mut token = 0;
+      unsafe { core.add_NavigationStarting(&handler, &mut token) }
+    };
+    let _ = watch();
+  })
+}
+
+fn deny_autoplay_unless_set(profile: &ICoreWebView2Profile4, url: &str) -> windows_core::Result<()> {
+  let Some(origin) = Url::parse(url).ok().filter(|url| matches!(url.scheme(), "http" | "https")).map(|url| url.origin().ascii_serialization())
+  else {
+    return Ok(());
+  };
+  let target = profile.clone();
+  let handler = GetNonDefaultPermissionSettingsCompletedHandler::create(Box::new(move |result, settings| {
+    if result.is_ok() && matches!(find_autoplay(settings, &origin), Ok(Autoplay::Default)) {
+      let done = SetPermissionStateCompletedHandler::create(Box::new(|_| Ok(())));
+      unsafe {
+        target.SetPermissionState(
+          COREWEBVIEW2_PERMISSION_KIND_AUTOPLAY,
+          &HSTRING::from(origin.as_str()),
+          COREWEBVIEW2_PERMISSION_STATE_DENY,
+          &done,
+        )?
+      };
+    }
+    Ok(())
+  }));
+  unsafe { profile.GetNonDefaultPermissionSettings(&handler) }
+}
+
 /// Зберігає дозвіл для `origin` у профілі; сторінка побачить його після перезавантаження.
 pub fn set_autoplay(webview: &Webview, origin: String, autoplay: Autoplay, reply: Reply<()>) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
@@ -464,4 +553,715 @@ pub fn set_autoplay(webview: &Webview, origin: String, autoplay: Autoplay, reply
       let _ = failed.send(Err(error.to_string()));
     }
   })
+}
+
+/// Блокувальник реклами вкладки (adblock.rs): кожен запит сторінки — і з iframe, і з воркерів — перевіряється
+/// за списками фільтрів, а на початку кожного документа додається скрипт, що ховає рекламні блоки й запускає
+/// скриптлети. `report(blocked)` — скільки запитів заблоковано на поточній сторінці.
+///
+/// Перший перехід на `url` Tauri починає сам, ще до цих обробників, тож перша сторінка готується тут одразу:
+/// її мережевий запит приходить пізніше, ніж стає фільтр, а документ створюється вже з нашим скриптом.
+pub fn block_ads(webview: &Webview, app: AppHandle, url: String, report: impl Fn(u32) + Send + 'static) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let watch = core(&platform).and_then(|core| watch_requests(&core, platform.environment(), app, &url, report));
+    if let Err(error) = watch {
+      eprintln!("adblock: не вдалося під'єднатися до сторінки: {error}");
+    }
+  })
+}
+
+/// Що блокувальник знає про документ вкладки.
+#[derive(Default)]
+struct AdPage {
+  /// Адреса документа (без #…) — джерело запитів для правил — і її хост.
+  url: String,
+  host: String,
+  blocked: u32,
+  /// id скрипта сторінки й «покоління»: id, що прийшов уже після наступного переходу, теж прибирається.
+  script: Option<String>,
+  generation: u64,
+}
+
+fn watch_requests(
+  core: &ICoreWebView2,
+  environment: ICoreWebView2Environment,
+  app: AppHandle,
+  first_url: &str,
+  report: impl Fn(u32) + 'static,
+) -> windows_core::Result<()> {
+  // Усі запити, зокрема з iframe й воркерів (без ICoreWebView2_22 — лише ті, що бачить старий фільтр).
+  match core.cast::<ICoreWebView2_22>() {
+    Ok(core) => unsafe {
+      core.AddWebResourceRequestedFilterWithRequestSourceKinds(
+        w!("*"),
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+        COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL,
+      )?
+    },
+    Err(_) => unsafe { core.AddWebResourceRequestedFilter(w!("*"), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)? },
+  }
+
+  let page = Rc::new(RefCell::new(AdPage::default()));
+  let report = Rc::new(report);
+  start_page(core, &page, &app, first_url, false, &*report)?;
+  let (on_request_page, on_request_report, on_request_app) = (page.clone(), report.clone(), app.clone());
+  let mut token = 0;
+  unsafe {
+    core.add_WebResourceRequested(
+      &WebResourceRequestedEventHandler::create(Box::new(move |_, args| match args {
+        Some(args) => on_request(&args, &environment, &on_request_app, &on_request_page, &*on_request_report),
+        None => Ok(()),
+      })),
+      &mut token,
+    )?;
+    core.add_NavigationStarting(
+      &NavigationStartingEventHandler::create(Box::new(move |sender, args| match (sender, args) {
+        (Some(core), Some(args)) => on_navigation_starting(&core, &args, &app, &page, &*report),
+        _ => Ok(()),
+      })),
+      &mut token,
+    )?;
+  }
+  Ok(())
+}
+
+fn on_request(
+  args: &ICoreWebView2WebResourceRequestedEventArgs,
+  environment: &ICoreWebView2Environment,
+  app: &AppHandle,
+  page: &RefCell<AdPage>,
+  report: &dyn Fn(u32),
+) -> windows_core::Result<()> {
+  let adblock = app.state::<AdBlock>();
+  let (verdict, page_origin) = {
+    let page = page.borrow();
+    if !adblock.active_on(&page.host) {
+      return Ok(());
+    }
+    let request = unsafe { args.Request()? };
+    let (mut uri, mut method, mut context) = (PWSTR::null(), PWSTR::null(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default());
+    unsafe {
+      request.Uri(&mut uri)?;
+      request.Method(&mut method)?;
+      args.ResourceContext(&mut context)?;
+    }
+    let uri = take_pwstr(uri);
+    let Some(kind) = request_type(context, &uri, &page.url) else {
+      return Ok(());
+    };
+    let origin = Url::parse(&page.url).map(|url| url.origin().ascii_serialization()).unwrap_or_default();
+    (adblock.check(&uri, &page.url, kind, &take_pwstr(method)), origin)
+  };
+
+  let response = match verdict {
+    Verdict::Allow => return Ok(()),
+    // Без CORS-заголовків: для fetch і XHR з іншого сайту це мережева помилка, як в інших блокувальників.
+    Verdict::Block => unsafe { environment.CreateWebResourceResponse(None, 403, w!("Blocked"), w!(""))? },
+    Verdict::Replace { mime, body } => {
+      let stream = unsafe { SHCreateMemStream(Some(&body)) }.ok_or_else(|| windows_core::Error::from(E_OUTOFMEMORY))?;
+      let headers = HSTRING::from(replacement_headers(args, &mime, &page_origin));
+      unsafe { environment.CreateWebResourceResponse(&stream, 200, w!("OK"), &headers)? }
+    }
+  };
+  unsafe { args.SetResponse(&response)? };
+  let blocked = {
+    let mut page = page.borrow_mut();
+    page.blocked += 1;
+    page.blocked
+  };
+  report(blocked);
+  Ok(())
+}
+
+/// Заголовки підмінної відповіді. Дозвіл CORS — саме для джерела запиту й разом із cookies:
+/// `*` браузер для запитів з обліковими даними (fetch і XHR із credentials) не приймає, і вони падали б
+/// з помилкою CORS — як запити відео YouTube, які блокувальник підміняє порожнім відео.
+fn replacement_headers(args: &ICoreWebView2WebResourceRequestedEventArgs, mime: &str, page_origin: &str) -> String {
+  let origin = request_origin(args).ok().flatten().unwrap_or_else(|| page_origin.to_string());
+  format!("Content-Type: {mime}\r\nAccess-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Credentials: true\r\nVary: Origin")
+}
+
+/// Заголовок Origin запиту, якщо він є.
+fn request_origin(args: &ICoreWebView2WebResourceRequestedEventArgs) -> windows_core::Result<Option<String>> {
+  let headers = unsafe { args.Request()?.Headers()? };
+  let mut present = BOOL::default();
+  unsafe { headers.Contains(w!("Origin"), &mut present)? };
+  if !present.as_bool() {
+    return Ok(None);
+  }
+  let mut origin = PWSTR::null();
+  unsafe { headers.GetHeader(w!("Origin"), &mut origin)? };
+  Ok(Some(take_pwstr(origin)).filter(|origin| !origin.is_empty()))
+}
+
+/// Тип запиту в термінах списків фільтрів; `None` — запит не перевіряється (сам документ вкладки, data:, blob:…).
+fn request_type(context: COREWEBVIEW2_WEB_RESOURCE_CONTEXT, uri: &str, page: &str) -> Option<&'static str> {
+  if !["http:", "https:", "ws:", "wss:"].iter().any(|scheme| uri.starts_with(scheme)) {
+    return None;
+  }
+  Some(match context {
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT if without_fragment(uri).as_deref() == Some(page) => return None,
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT => "sub_frame",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_STYLESHEET => "stylesheet",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE => "image",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA => "media",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FONT => "font",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_SCRIPT => "script",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST | COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH => "xmlhttprequest",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_PING => "ping",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_WEBSOCKET => "websocket",
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_CSP_VIOLATION_REPORT => "csp_report",
+    _ => "other",
+  })
+}
+
+fn without_fragment(uri: &str) -> Option<String> {
+  let mut url = Url::parse(uri).ok()?;
+  url.set_fragment(None);
+  Some(url.into())
+}
+
+/// Новий документ вкладки: лічильник з нуля (якщо це не переадресація) і скрипт сторінки для нової адреси.
+fn on_navigation_starting(
+  core: &ICoreWebView2,
+  args: &ICoreWebView2NavigationStartingEventArgs,
+  app: &AppHandle,
+  page: &Rc<RefCell<AdPage>>,
+  report: &dyn Fn(u32),
+) -> windows_core::Result<()> {
+  let (mut uri, mut cancel, mut redirected) = (PWSTR::null(), BOOL::default(), BOOL::default());
+  unsafe {
+    args.Cancel(&mut cancel)?;
+    args.Uri(&mut uri)?;
+    args.IsRedirected(&mut redirected)?;
+  }
+  let uri = take_pwstr(uri);
+  // Перехід, який скасував інший обробник (не-вебова адреса тощо), сторінку не змінює.
+  if cancel.as_bool() {
+    return Ok(());
+  }
+  start_page(core, page, app, &uri, redirected.as_bool(), report)
+}
+
+/// Нова адреса документа вкладки: від неї рахуються правила, лічильник з нуля (якщо це не переадресація)
+/// і скрипт сторінки — для неї.
+fn start_page(
+  core: &ICoreWebView2,
+  page: &Rc<RefCell<AdPage>>,
+  app: &AppHandle,
+  uri: &str,
+  redirected: bool,
+  report: &dyn Fn(u32),
+) -> windows_core::Result<()> {
+  {
+    let mut page = page.borrow_mut();
+    page.url = without_fragment(uri).unwrap_or_default();
+    page.host = Url::parse(uri).ok().and_then(|url| url.host_str().map(str::to_owned)).unwrap_or_default();
+    if !redirected {
+      page.blocked = 0;
+    }
+  }
+  if !redirected {
+    report(0);
+  }
+  replace_page_script(core, page, app.state::<AdBlock>().page_script(uri))
+}
+
+fn replace_page_script(core: &ICoreWebView2, page: &Rc<RefCell<AdPage>>, script: Option<String>) -> windows_core::Result<()> {
+  let generation = {
+    let mut page = page.borrow_mut();
+    page.generation += 1;
+    if let Some(id) = page.script.take() {
+      unsafe { core.RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(id))? };
+    }
+    page.generation
+  };
+  let Some(script) = script else {
+    return Ok(());
+  };
+  let (page, owner) = (page.clone(), core.clone());
+  let handler = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |result, id| {
+    if result.is_ok() {
+      let mut page = page.borrow_mut();
+      if page.generation == generation {
+        page.script = Some(id);
+      } else {
+        unsafe { owner.RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(id))? };
+      }
+    }
+    Ok(())
+  }));
+  unsafe { core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler) }
+}
+
+/// Що інтерфейс знає про завантаження.
+pub struct DownloadUpdate {
+  pub id: u64,
+  pub url: String,
+  pub path: String,
+  pub received: i64,
+  /// 0 — розмір невідомий (сервер його не назвав).
+  pub total: i64,
+  /// in-progress, completed, failed чи canceled.
+  pub state: &'static str,
+}
+
+/// Завантаження, що триває: його COM-об'єкт, кому про нього повідомляти й з якої сторінки воно.
+struct RunningDownload {
+  operation: ICoreWebView2DownloadOperation,
+  report: Rc<dyn Fn(DownloadUpdate)>,
+  path: String,
+  label: String,
+  /// Скільки отриманих байтів WebView2 назвав на останній перевірці (check_download) і скільки перевірок поспіль
+  /// це число не змінювалося.
+  silent: (i64, u32),
+  /// Файл, що чекав підтвердження, зберігається (keep_download).
+  keeping: Option<Keeping>,
+}
+
+/// Файл, що чекав підтвердження: його друге ім'я, поки WebView2 прибирає перше.
+struct Keeping {
+  copy: PathBuf,
+  since: Instant,
+}
+
+thread_local! {
+  /// Завантаження, що тривають, — щоб їх можна було скасувати. COM-об'єкти живуть лише в головному потоці.
+  static DOWNLOADS: RefCell<HashMap<u64, RunningDownload>> = RefCell::new(HashMap::new());
+  /// Чи вже перевіряється раз на секунду, чи не скінчилися завантаження (check_downloads).
+  static CHECKING_DOWNLOADS: Cell<bool> = const { Cell::new(false) };
+}
+
+static NEXT_DOWNLOAD: AtomicU64 = AtomicU64::new(1);
+
+/// Про перебіг завантаження — не частіше, ніж раз на стільки.
+const DOWNLOAD_PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
+/// Як часто перевіряти, чи не скінчилися завантаження, про які WebView2 не повідомив.
+const DOWNLOAD_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+/// Скільки перевірок поспіль WebView2 має мовчати про завантаження, щоб вірити розміру файла на диску.
+const DOWNLOAD_SILENT_CHECKS: u32 = 2;
+/// Скільки чекати, поки WebView2 видалить файл під першим ім'ям, перш ніж повернути файлу назву (restore_kept).
+const KEEP_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Завантаження, про яке питають, куди зберегти файл: що за файл і куди WebView2 збирався його покласти.
+pub struct DownloadRequest {
+  pub id: u64,
+  pub url: String,
+  pub path: PathBuf,
+  /// 0 — розмір невідомий.
+  pub total: i64,
+}
+
+/// Завантаження, що чекає, поки користувач вибере, куди зберегти файл («Питати, куди зберегти»).
+struct PendingDownload {
+  args: ICoreWebView2DownloadStartingEventArgs,
+  deferral: ICoreWebView2Deferral,
+  report: Rc<dyn Fn(DownloadUpdate)>,
+  label: String,
+  app: AppHandle,
+}
+
+thread_local! {
+  static PENDING_DOWNLOADS: RefCell<HashMap<u64, PendingDownload>> = RefCell::new(HashMap::new());
+  /// Скільки завантажень іде з кожної сторінки (за міткою webview).
+  static PAGE_DOWNLOADS: RefCell<HashMap<String, usize>> = RefCell::new(HashMap::new());
+  /// Сторінки, які закрили під час завантаження: сховані, поки воно не скінчиться.
+  static CLOSING_PAGES: RefCell<HashMap<String, Webview>> = RefCell::new(HashMap::new());
+}
+
+/// Закриває сторінку вкладки. Якщо з неї ще щось завантажується, лише ховає: WebView2 докачує файл і без
+/// сторінки, але повідомляє про перебіг і кінець через неї — тож вона закриється сама, коли завантаження скінчаться.
+/// Лише в головному потоці.
+pub fn close_page(webview: Webview) -> tauri::Result<()> {
+  let label = webview.label().to_string();
+  if PAGE_DOWNLOADS.with(|downloads| downloads.borrow().get(&label).is_some_and(|count| *count > 0)) {
+    webview.hide()?;
+    CLOSING_PAGES.with(|pages| pages.borrow_mut().insert(label, webview));
+    return Ok(());
+  }
+  webview.close()
+}
+
+fn download_finished(label: &str) {
+  let remaining = PAGE_DOWNLOADS.with(|downloads| {
+    let mut downloads = downloads.borrow_mut();
+    let count = downloads.entry(label.to_string()).or_default();
+    *count = count.saturating_sub(1);
+    let remaining = *count;
+    if remaining == 0 {
+      downloads.remove(label);
+    }
+    remaining
+  });
+  if remaining == 0 {
+    if let Some(webview) = CLOSING_PAGES.with(|pages| pages.borrow_mut().remove(label)) {
+      // Не всередині події WebView2 цієї ж сторінки — закриття піде через цикл подій.
+      tauri::async_runtime::spawn(async move {
+        let _ = webview.close();
+      });
+    }
+  }
+}
+
+/// Повідомляє `report(update)` про кожне завантаження сторінки: коли почалося, як іде (кілька разів на секунду)
+/// і чим скінчилося. Куди зберегти файл і що власного вікна завантажень WebView2 не буде, вирішує Tauri (on_download);
+/// а якщо `ask(request)` повертає true, завантаження чекає, поки resolve_download скаже, куди саме.
+pub fn watch_downloads(
+  webview: &Webview,
+  ask: impl Fn(DownloadRequest) -> bool + Send + 'static,
+  report: impl Fn(DownloadUpdate) + Send + 'static,
+) -> tauri::Result<()> {
+  let label = webview.label().to_string();
+  let app = webview.app_handle().clone();
+  webview.with_webview(move |platform| {
+    let report: Rc<dyn Fn(DownloadUpdate)> = Rc::new(report);
+    let watch = || -> windows_core::Result<()> {
+      let core = core(&platform)?.cast::<ICoreWebView2_4>()?;
+      let handler = DownloadStartingEventHandler::create(Box::new(move |_, args| match args {
+        Some(args) => on_download_starting(&args, &app, &label, &ask, &report),
+        None => Ok(()),
+      }));
+      let mut token = 0;
+      unsafe { core.add_DownloadStarting(&handler, &mut token) }
+    };
+    let _ = watch();
+  })
+}
+
+fn on_download_starting(
+  args: &ICoreWebView2DownloadStartingEventArgs,
+  app: &AppHandle,
+  label: &str,
+  ask: &dyn Fn(DownloadRequest) -> bool,
+  report: &Rc<dyn Fn(DownloadUpdate)>,
+) -> windows_core::Result<()> {
+  let mut cancel = BOOL::default();
+  unsafe { args.Cancel(&mut cancel)? };
+  if cancel.as_bool() {
+    return Ok(());
+  }
+  let mut path = PWSTR::null();
+  unsafe { args.ResultFilePath(&mut path)? };
+  // Шлях, заданий явно (а Tauri задає його завжди), WebView2 не змінює, навіть коли такий файл уже є, — і перезаписав би
+  // його. Тож повторне завантаження стає «назва (1).exe».
+  let free = crate::downloads::unused_path(Path::new(&take_pwstr(path)));
+  unsafe { args.SetResultFilePath(&HSTRING::from(free.as_os_str()))? };
+  let path = free.to_string_lossy().into_owned();
+  let id = NEXT_DOWNLOAD.fetch_add(1, Ordering::Relaxed);
+  let operation = unsafe { args.DownloadOperation()? };
+  let known = download_update(id, &operation, &path)?;
+  if ask(DownloadRequest { id, url: known.url, path: PathBuf::from(&path), total: known.total }) {
+    let deferral = unsafe { args.GetDeferral()? };
+    let pending =
+      PendingDownload { args: args.clone(), deferral, report: report.clone(), label: label.to_string(), app: app.clone() };
+    PENDING_DOWNLOADS.with(|downloads| downloads.borrow_mut().insert(id, pending));
+    return Ok(());
+  }
+  begin_download(id, app, label, &operation, path, report)
+}
+
+/// Користувач вибрав, куди зберегти файл, чи передумав (None — завантаження скасовується).
+/// Лише в головному потоці (PENDING_DOWNLOADS).
+pub fn resolve_download(id: u64, path: Option<PathBuf>) {
+  let Some(pending) = PENDING_DOWNLOADS.with(|downloads| downloads.borrow_mut().remove(&id)) else {
+    return;
+  };
+  let resolve = || -> windows_core::Result<()> {
+    match &path {
+      Some(path) => {
+        unsafe { pending.args.SetResultFilePath(&HSTRING::from(path.as_os_str()))? };
+        let operation = unsafe { pending.args.DownloadOperation()? };
+        begin_download(id, &pending.app, &pending.label, &operation, path.to_string_lossy().into_owned(), &pending.report)
+      }
+      None => unsafe { pending.args.SetCancel(true) },
+    }
+  };
+  let _ = resolve();
+  let _ = unsafe { pending.deferral.Complete() };
+}
+
+fn begin_download(
+  id: u64,
+  app: &AppHandle,
+  label: &str,
+  operation: &ICoreWebView2DownloadOperation,
+  path: String,
+  report: &Rc<dyn Fn(DownloadUpdate)>,
+) -> windows_core::Result<()> {
+  let running = RunningDownload {
+    operation: operation.clone(),
+    report: report.clone(),
+    path: path.clone(),
+    label: label.to_string(),
+    silent: (0, 0),
+    keeping: None,
+  };
+  DOWNLOADS.with(|downloads| downloads.borrow_mut().insert(id, running));
+  PAGE_DOWNLOADS.with(|downloads| *downloads.borrow_mut().entry(label.to_string()).or_default() += 1);
+  report(download_update(id, operation, &path)?);
+  check_downloads(app);
+
+  let last = Cell::new(Instant::now());
+  let progress = report.clone();
+  let mut token = 0;
+  unsafe {
+    operation.add_BytesReceivedChanged(
+      &BytesReceivedChangedEventHandler::create(Box::new(move |operation, _| {
+        // Про те, що вже скінчилося чи зберігається (keep_download), інтерфейсу більше нічого казати.
+        let watched = DOWNLOADS.with(|downloads| downloads.borrow().get(&id).is_some_and(|running| running.keeping.is_none()));
+        if let Some(operation) = operation.filter(|_| watched) {
+          let update = download_update(id, &operation, &path)?;
+          // Скасоване завантаження WebView2 ще встигає повідомити про байти — кінець каже settle_download, один раз.
+          if update.state != "in-progress" {
+            settle_download(id);
+            return Ok(());
+          }
+          // Останні байти — завжди: інакше перебіг міг би застигнути трохи раніше за 100 %.
+          let complete = update.total > 0 && update.received >= update.total;
+          if complete || last.get().elapsed() >= DOWNLOAD_PROGRESS_INTERVAL {
+            last.set(Instant::now());
+            progress(update);
+          }
+        }
+        Ok(())
+      })),
+      &mut token,
+    )?;
+    operation.add_StateChanged(
+      &StateChangedEventHandler::create(Box::new(move |_, _| {
+        settle_download(id);
+        Ok(())
+      })),
+      &mut token,
+    )?;
+  }
+  Ok(())
+}
+
+/// Якщо завантаження скінчилося, повідомляє чим — один раз, хоч би хто спитав перший: подія StateChanged
+/// чи перевірка check_downloads. Лише в головному потоці (DOWNLOADS).
+fn settle_download(id: u64) {
+  let Some((operation, path)) = DOWNLOADS.with(|downloads| {
+    downloads
+      .borrow()
+      .get(&id)
+      // Скасування збереженого файла — наше власне (keep_download): кінець скаже check_download.
+      .filter(|running| running.keeping.is_none())
+      .map(|running| (running.operation.clone(), running.path.clone()))
+  }) else {
+    return;
+  };
+  let Ok(update) = download_update(id, &operation, &path) else {
+    return;
+  };
+  if update.state != "in-progress" {
+    finish_download(update);
+  }
+}
+
+/// Прибирає завантаження зі списку тих, що тривають, і повідомляє, чим воно скінчилося. Лише в головному потоці.
+fn finish_download(update: DownloadUpdate) {
+  let Some(running) = DOWNLOADS.with(|downloads| downloads.borrow_mut().remove(&update.id)) else {
+    return;
+  };
+  (running.report)(update);
+  download_finished(&running.label);
+}
+
+fn file_size(path: &Path) -> i64 {
+  std::fs::metadata(path).map_or(0, |metadata| i64::try_from(metadata.len()).unwrap_or(i64::MAX))
+}
+
+/// Перевірка завантаження раз на секунду (check_downloads) — для того, про що WebView2 сам не скаже.
+///
+/// Коли сторінку, з якої йде завантаження, знищено (закрили вікно, перезавантажився інтерфейс), WebView2 докачує файл,
+/// але про нього більше не повідомляє. Тож якщо WebView2 мовчить, а на диску вже більше, перебіг береться з розміру
+/// файла, а весь файл — це кінець.
+///
+/// А файл, який Chromium вважає небезпечним (.exe із сайту, де користувач раніше не бував), WebView2 докачує, але не
+/// завершує, доки його не підтвердять у власному вікні завантажень WebView2 — а воно в нас приховане. Такий файл
+/// зберігається без підтвердження (keep_download).
+/// Лише в головному потоці.
+fn check_download(id: u64) {
+  settle_download(id);
+  let Some((operation, path, report, keeping)) = DOWNLOADS.with(|downloads| {
+    downloads.borrow().get(&id).map(|running| {
+      (running.operation.clone(), running.path.clone(), running.report.clone(), running.keeping.is_some())
+    })
+  }) else {
+    return;
+  };
+  if keeping {
+    return restore_kept(id);
+  }
+  let Ok(update) = download_update(id, &operation, &path) else {
+    return;
+  };
+  let silent = DOWNLOADS.with(|downloads| {
+    let mut downloads = downloads.borrow_mut();
+    let Some(running) = downloads.get_mut(&id) else {
+      return 0;
+    };
+    running.silent = (update.received, if running.silent.0 == update.received { running.silent.1 + 1 } else { 0 });
+    running.silent.1
+  });
+  // Поки WebView2 повідомляє про перебіг, вірити треба йому: отримане з мережі він знає раніше, ніж воно ляже на диск.
+  if silent < DOWNLOAD_SILENT_CHECKS {
+    return;
+  }
+  let on_disk = file_size(Path::new(&update.path));
+  let full = update.total > 0 && on_disk >= update.total;
+  if on_disk > update.received {
+    if full {
+      finish_download(DownloadUpdate { received: on_disk, state: "completed", ..update });
+    } else {
+      report(DownloadUpdate { received: on_disk, ..update });
+    }
+    return;
+  }
+  if full && update.received >= update.total {
+    // Не вдалося — спробує наступна перевірка.
+    let _ = keep_download(id, &operation, Path::new(&update.path));
+  }
+}
+
+/// Зберігає файл, що чекає підтвердження. Підтвердити завантаження через API WebView2 не можна, тож файл (уже весь
+/// на диску) дістає друге ім'я, завантаження скасовується — WebView2 видаляє файл під першим, — і restore_kept повертає
+/// файлу його назву. Лише в головному потоці.
+fn keep_download(id: u64, operation: &ICoreWebView2DownloadOperation, path: &Path) -> std::io::Result<()> {
+  let mut name = path.file_name().unwrap_or_default().to_owned();
+  name.push(".keep");
+  let copy = crate::downloads::unused_path(&path.with_file_name(name));
+  // Друге ім'я того самого файла (жорстке посилання) — миттєво й без копіювання; де таких немає (FAT) — перейменування.
+  std::fs::hard_link(path, &copy).or_else(|_| std::fs::rename(path, &copy))?;
+  DOWNLOADS.with(|downloads| {
+    if let Some(running) = downloads.borrow_mut().get_mut(&id) {
+      running.keeping = Some(Keeping { copy, since: Instant::now() });
+    }
+  });
+  let _ = unsafe { operation.Cancel() };
+  Ok(())
+}
+
+/// Збережений файл: щойно WebView2 видалив його під першим ім'ям, воно повертається. Лише в головному потоці.
+fn restore_kept(id: u64) {
+  let Some((operation, path, copy, since)) = DOWNLOADS.with(|downloads| {
+    downloads.borrow().get(&id).and_then(|running| {
+      let keeping = running.keeping.as_ref()?;
+      Some((running.operation.clone(), running.path.clone(), keeping.copy.clone(), keeping.since))
+    })
+  }) else {
+    return;
+  };
+  let Ok(update) = download_update(id, &operation, &path) else {
+    return;
+  };
+  let path = PathBuf::from(&update.path);
+  let gone = !path.exists();
+  if !gone && since.elapsed() < KEEP_TIMEOUT {
+    return;
+  }
+  let kept = if gone {
+    std::fs::rename(&copy, &path).map_or(copy, |()| path)
+  } else if update.state != "in-progress" {
+    // Скасоване, а файл WebView2 так і не видалив — він той самий, друге ім'я зайве.
+    let _ = std::fs::remove_file(&copy);
+    path
+  } else {
+    // Скасувати не вдалося, і під першим ім'ям файл ще може зникнути — лишається другим.
+    copy
+  };
+  mark_from_internet(&kept, &update.url);
+  finish_download(DownloadUpdate { path: kept.to_string_lossy().into_owned(), received: file_size(&kept), state: "completed", ..update });
+}
+
+/// Позначка «з інтернету» (Zone.Identifier), яку WebView2 ставить завантаженим файлам, а неперевіреному ще не поставив:
+/// за нею Windows перевіряє файл перед запуском.
+fn mark_from_internet(path: &Path, url: &str) {
+  let mut stream = path.as_os_str().to_owned();
+  stream.push(":Zone.Identifier");
+  if !Path::new(&stream).exists() {
+    let _ = std::fs::write(&stream, format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={url}\r\n"));
+  }
+}
+
+/// WebView2 інколи так і не надсилає StateChanged про кінець завантаження: файл уже весь на диску, а інтерфейс
+/// показує, що він завантажується. Тож, поки щось завантажується, раз на секунду стан перевіряється й напряму
+/// (check_download).
+/// Лише в головному потоці.
+fn check_downloads(app: &AppHandle) {
+  if CHECKING_DOWNLOADS.with(|checking| checking.replace(true)) {
+    return;
+  }
+  let app = app.clone();
+  std::thread::spawn(move || loop {
+    std::thread::sleep(DOWNLOAD_CHECK_INTERVAL);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let checked = app.run_on_main_thread(move || {
+      let ids: Vec<u64> = DOWNLOADS.with(|downloads| downloads.borrow().keys().copied().collect());
+      for id in ids {
+        check_download(id);
+      }
+      // Прапорець скидається в головному потоці — тож нове завантаження не розминеться з цією перевіркою.
+      let more = DOWNLOADS.with(|downloads| !downloads.borrow().is_empty());
+      CHECKING_DOWNLOADS.with(|checking| checking.set(more));
+      let _ = sender.send(more);
+    });
+    if checked.is_err() || !receiver.recv().unwrap_or(false) {
+      break;
+    }
+  });
+}
+
+/// Куди за замовчуванням зберігати файли сторінки (у WebView2 це властивість профілю).
+pub fn set_download_folder(webview: &Webview, folder: PathBuf) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let _ = profile(&platform).and_then(|profile| unsafe { profile.SetDefaultDownloadFolderPath(&HSTRING::from(folder.as_os_str())) });
+  })
+}
+
+fn download_update(id: u64, operation: &ICoreWebView2DownloadOperation, fallback_path: &str) -> windows_core::Result<DownloadUpdate> {
+  let (mut uri, mut path, mut received, mut total) = (PWSTR::null(), PWSTR::null(), 0i64, 0i64);
+  let mut state = COREWEBVIEW2_DOWNLOAD_STATE::default();
+  unsafe {
+    operation.Uri(&mut uri)?;
+    operation.ResultFilePath(&mut path)?;
+    operation.BytesReceived(&mut received)?;
+    operation.TotalBytesToReceive(&mut total)?;
+    operation.State(&mut state)?;
+  }
+  let state = match state {
+    COREWEBVIEW2_DOWNLOAD_STATE_IN_PROGRESS => "in-progress",
+    COREWEBVIEW2_DOWNLOAD_STATE_COMPLETED => "completed",
+    _ => {
+      let mut reason = COREWEBVIEW2_DOWNLOAD_INTERRUPT_REASON::default();
+      unsafe { operation.InterruptReason(&mut reason)? };
+      if reason == COREWEBVIEW2_DOWNLOAD_INTERRUPT_REASON_USER_CANCELED {
+        "canceled"
+      } else {
+        "failed"
+      }
+    }
+  };
+  let path = take_pwstr(path);
+  Ok(DownloadUpdate {
+    id,
+    url: take_pwstr(uri),
+    path: if path.is_empty() { fallback_path.to_string() } else { path },
+    received,
+    // Невідомий розмір WebView2 повертає як -1.
+    total: total.max(0),
+    state,
+  })
+}
+
+/// Скасовує завантаження, що ще триває. Лише в головному потоці (DOWNLOADS).
+pub fn cancel_download(id: u64) {
+  DOWNLOADS.with(|downloads| {
+    // Об'єкт — поза позикою: Cancel може одразу викликати StateChanged, а той прибирає завантаження зі списку.
+    let operation = downloads.borrow().get(&id).filter(|running| running.keeping.is_none()).map(|running| running.operation.clone());
+    if let Some(operation) = operation {
+      let _ = unsafe { operation.Cancel() };
+    }
+  });
 }

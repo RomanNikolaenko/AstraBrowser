@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { BookmarksStore } from './bookmarks';
+import { BookmarkItem, BookmarksStore } from './bookmarks';
 import { DownloadsStore } from './downloads';
 import { FaviconStore } from './favicons';
 import { HistoryStore } from './history';
@@ -20,6 +20,39 @@ describe('browser data stores', () => {
 
     history.clear();
     expect(history.entries()).toEqual([]);
+  });
+
+  it('should follow a download while it runs and record how it ended', () => {
+    const downloads = TestBed.inject(DownloadsStore);
+    const progress = (id: number, received: number, state: 'in-progress' | 'completed' | 'canceled' = 'in-progress') =>
+      downloads.track({
+        id,
+        url: `https://x.example/${id}.zip`,
+        path: `C:\\D\\${id}.zip`,
+        fileName: `${id}.zip`,
+        received,
+        total: 100,
+        state,
+      });
+
+    progress(1, 10);
+    progress(2, 0);
+    progress(1, 60);
+    expect(downloads.active().map((download) => [download.id, download.received])).toEqual([
+      [2, 0],
+      [1, 60],
+    ]);
+    expect(downloads.started()).toBe(2);
+    expect(downloads.recent()).toEqual([]);
+
+    progress(1, 100, 'completed');
+    progress(2, 5, 'canceled');
+    expect(downloads.active()).toEqual([]);
+    expect(downloads.recent().map((entry) => [entry.fileName, entry.status, entry.size, entry.path])).toEqual([
+      ['2.zip', 'canceled', 5, 'C:\\D\\2.zip'],
+      ['1.zip', 'completed', 100, 'C:\\D\\1.zip'],
+    ]);
+    expect(downloads.started()).toBe(2);
   });
 
   it('should keep downloads newest first', () => {
@@ -64,6 +97,124 @@ describe('browser data stores', () => {
     TestBed.tick();
     expect(bookmarks.entries()).toEqual([]);
     expect(localStorage.getItem('astra.bookmarks')).toBe('[]');
+  });
+
+  it('should read bookmarks saved before folders existed as plain bookmarks', () => {
+    localStorage.setItem('astra.bookmarks', JSON.stringify([{ id: 'old', title: 'Стара', url: 'https://old.example/' }]));
+
+    expect(TestBed.inject(BookmarksStore).bar()).toEqual([
+      { type: 'bookmark', id: 'old', title: 'Стара', url: 'https://old.example/' },
+    ]);
+  });
+
+  it('should keep folders and separators on the bar in place', () => {
+    const bookmarks = TestBed.inject(BookmarksStore);
+    const shape = (items: readonly BookmarkItem[] = bookmarks.bar()): unknown[] =>
+      items.map((item) =>
+        item.type === 'folder' ? { [item.title]: shape(item.children) } : item.type === 'separator' ? '|' : item.title
+      );
+
+    bookmarks.add('A', 'https://a.example/');
+    bookmarks.add('B', 'https://b.example/');
+    bookmarks.addSeparator({ folder: null, index: 1 });
+    bookmarks.addFolder('Робота', { folder: null, index: 0 });
+    expect(shape()).toEqual([{ Робота: [] }, 'A', '|', 'B']);
+
+    const work = bookmarks.bar()[0].id;
+    bookmarks.add('Пошта', 'https://mail.example/', { folder: work });
+    bookmarks.addFolder('Архів', { folder: work });
+    bookmarks.add('Старе', 'https://old.example/', { folder: bookmarks.folder(work)?.children[1].id ?? '' });
+    expect(shape()).toEqual([{ Робота: ['Пошта', { Архів: ['Старе'] }] }, 'A', '|', 'B']);
+
+    // Пошук і сторінка закладок бачать і закладки з тек, а «Відкрити всі» — лише ті, що в самій теці.
+    expect(bookmarks.entries().map((bookmark) => bookmark.title)).toEqual(['Пошта', 'Старе', 'A', 'B']);
+    expect(bookmarks.find('https://old.example/')?.title).toBe('Старе');
+    expect(bookmarks.bookmarksOf(work).map((bookmark) => bookmark.title)).toEqual(['Пошта']);
+    expect(bookmarks.bookmarksOf(null).map((bookmark) => bookmark.title)).toEqual(['A', 'B']);
+
+    bookmarks.update(work, { title: 'Справи' });
+    bookmarks.update(bookmarks.find('https://old.example/')?.id ?? '', { title: 'Найстаріше', url: 'https://oldest.example/' });
+    expect(shape()).toEqual([{ Справи: ['Пошта', { Архів: ['Найстаріше'] }] }, 'A', '|', 'B']);
+    expect(bookmarks.find('https://oldest.example/')).toBeTruthy();
+
+    // Тека зникає разом з усім, що в ній.
+    bookmarks.remove(work);
+    bookmarks.remove(bookmarks.bar()[1].id);
+    expect(shape()).toEqual(['A', 'B']);
+  });
+
+  it('should color folders and move bookmarks between them', () => {
+    const bookmarks = TestBed.inject(BookmarksStore);
+    bookmarks.addFolder('Робота', { folder: null }, 'blue');
+    const work = bookmarks.bar()[0].id;
+    bookmarks.addFolder('Архів', { folder: work });
+    const archive = bookmarks.folder(work)?.children[0].id ?? '';
+    bookmarks.add('Пошта', 'https://mail.example/');
+    const mail = bookmarks.find('https://mail.example/')?.id ?? '';
+
+    expect(bookmarks.folder(work)?.color).toBe('blue');
+    expect(bookmarks.folders()).toEqual([
+      { id: work, path: 'Робота' },
+      { id: archive, path: 'Робота › Архів' },
+    ]);
+
+    // Назву без кольору — колір лишається; color: undefined — прибирає його.
+    bookmarks.update(work, { title: 'Справи' });
+    expect(bookmarks.folder(work)?.color).toBe('blue');
+    bookmarks.update(work, { title: 'Справи', color: 'green' });
+    expect(bookmarks.folder(work)?.color).toBe('green');
+    bookmarks.update(work, { title: 'Справи', color: undefined });
+    expect(bookmarks.folder(work)).not.toHaveProperty('color');
+
+    expect(bookmarks.parentOf(mail)).toBeNull();
+    bookmarks.move(mail, { folder: archive });
+    expect(bookmarks.parentOf(mail)).toBe(archive);
+    expect(bookmarks.bar().map((item) => item.id)).toEqual([work]);
+    bookmarks.move(mail, { folder: null });
+    expect(bookmarks.bar().map((item) => item.id)).toEqual([work, mail]);
+
+    // Тека не може опинитися в самій собі.
+    bookmarks.move(work, { folder: archive });
+    expect(bookmarks.parentOf(work)).toBeNull();
+    expect(bookmarks.parentOf(archive)).toBe(work);
+
+    // Невідомий колір зі сховища не ламає теку.
+    localStorage.setItem(
+      'astra.bookmarks',
+      JSON.stringify([{ type: 'folder', id: 'f', title: 'Тека', children: [], color: 'plaid' }])
+    );
+    TestBed.resetTestingModule();
+    expect(TestBed.inject(BookmarksStore).bar()).toEqual([{ type: 'folder', id: 'f', title: 'Тека', children: [] }]);
+  });
+
+  it('should move items to a place as it was before the move', () => {
+    const bookmarks = TestBed.inject(BookmarksStore);
+    const titles = () => bookmarks.bar().map((item) => (item.type === 'separator' ? '|' : item.title));
+    for (const title of ['A', 'B', 'C', 'D']) {
+      bookmarks.add(title, `https://${title.toLowerCase()}.example/`);
+    }
+    const id = (title: string) => bookmarks.bar().find((item) => item.type !== 'separator' && item.title === title)?.id ?? '';
+
+    // Місце рахується до перенесення: «перед D» для A — це третє місце після того, як A прибрали.
+    bookmarks.move(id('A'), { folder: null, index: 3 });
+    expect(titles()).toEqual(['B', 'C', 'A', 'D']);
+    bookmarks.move(id('D'), { folder: null, index: 0 });
+    expect(titles()).toEqual(['D', 'B', 'C', 'A']);
+    // На своє ж місце (перед собою чи одразу після себе) — нічого не змінюється.
+    bookmarks.move(id('B'), { folder: null, index: 1 });
+    bookmarks.move(id('B'), { folder: null, index: 2 });
+    expect(titles()).toEqual(['D', 'B', 'C', 'A']);
+
+    bookmarks.addFolder('Тека', { folder: null, index: 0 });
+    const folder = bookmarks.bar()[0].id;
+    bookmarks.move(id('C'), { folder });
+    bookmarks.move(id('A'), { folder, index: 0 });
+    expect(bookmarks.folder(folder)?.children.map((item) => (item.type === 'separator' ? '|' : item.title))).toEqual(['A', 'C']);
+    expect(titles()).toEqual(['Тека', 'D', 'B']);
+
+    expect(bookmarks.canMove(folder, folder)).toBe(false);
+    expect(bookmarks.canMove(folder, null)).toBe(true);
+    expect(bookmarks.canMove('немає', null)).toBe(false);
   });
 
   it('should use the icon a site reported, then its favicon.ico, then nothing', () => {

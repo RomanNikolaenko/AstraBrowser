@@ -26,6 +26,17 @@
       [(value)]="url.value"
       [(touched)]="url.touched"
       [error]="url.visibleError()" />
+    @if (folderOptions().length > 1) {
+      <div class="bookmark-editor__folder">
+        <label class="bookmark-editor__label" for="bookmark-editor-folder">Тека</label>
+        <app-select
+          class="bookmark-editor__select"
+          selectId="bookmark-editor-folder"
+          selectName="folder"
+          [options]="folderOptions()"
+          [(value)]="folder" />
+      </div>
+    }
     <div class="bookmark-editor__actions">
       @if (existing()) {
         <button
