@@ -170,8 +170,8 @@ describe('Browser', () => {
       element.querySelector(selector)?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       await fixture.whenStable();
     };
-    // data-tauri-drag-region="false" (список вибору) — навпаки, «не перетягувати».
-    const dragRegion = '[data-tauri-drag-region]:not([data-tauri-drag-region="false"])';
+    // data-drag-region="false" (список вибору) — навпаки, «не перетягувати».
+    const dragRegion = '[data-drag-region]:not([data-drag-region="false"])';
     expect(element.querySelector(`app-browser ${dragRegion}, .tab-list${dragRegion}`)).toBeNull();
 
     await doubleClick('.toolbar');
@@ -233,10 +233,11 @@ describe('Browser', () => {
     expect(element.querySelector<HTMLElement>('.content')?.style.zoom).toBe('1.1');
   });
 
-  it('should return to the sign-in page on sign out', async () => {
+  it('should sign out from the profile menu only', async () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    expect(menuItem('Вийти')).toBeUndefined();
 
-    await click(menuItem('Вийти'));
+    await click(element.querySelector<HTMLButtonElement>('.profile-menu__sign-out'));
 
     expect(navigate).toHaveBeenCalledWith(['/sign-in']);
   });
@@ -336,11 +337,11 @@ describe('Browser', () => {
     it('should search only the current page and close when the tab changes', async () => {
       await click(menuItem('Знайти на сторінці'));
       const input = element.querySelector<HTMLInputElement>('#find-on-page') as HTMLInputElement;
-      input.value = 'вкладка';
+      input.value = 'browser';
       input.dispatchEvent(new Event('input'));
       await fixture.whenStable();
 
-      // «Нова вкладка» є і в назві вкладки, але шукаємо лише у вмісті сторінки.
+      // «Astra Browser» на новій вкладці — один збіг: шукаємо лише у вмісті сторінки, а не в меню чи вкладках.
       expect(element.querySelector('.find-bar__status')?.textContent?.trim()).toBe('1 / 1');
 
       await openTab();

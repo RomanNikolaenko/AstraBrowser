@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
 import { UiIcon } from '../ui-icon/ui-icon';
 
 @Component({
@@ -9,6 +9,10 @@ import { UiIcon } from '../ui-icon/ui-icon';
   templateUrl: './ui-checkbox.html',
 })
 export class UiCheckbox {
-  readonly checked = input(false);
+  readonly checked = model(false);
   readonly inputName = input('');
+
+  protected onChange(event: Event): void {
+    this.checked.set((event.target as HTMLInputElement).checked);
+  }
 }

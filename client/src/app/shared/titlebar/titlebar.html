@@ -1,19 +1,24 @@
-<header class="titlebar" data-tauri-drag-region>
-  <div class="titlebar__brand" data-tauri-drag-region>
+<header class="titlebar" data-drag-region>
+  <div class="titlebar__brand" data-drag-region>
     <img class="titlebar__logo" src="/logo.webp" alt="" width="32" height="32" />
   </div>
 
   @if (slot.content(); as content) {
     <ng-container [ngTemplateOutlet]="content" />
   } @else {
-    <span class="titlebar__title" data-tauri-drag-region>Astra Browser</span>
+    <span class="titlebar__title" data-drag-region>Astra Browser</span>
   }
 
-  <div class="titlebar__spacer" data-tauri-drag-region (appMiddleClick)="slot.spacerMiddleClick()"></div>
+  <div class="titlebar__spacer" data-drag-region (appMiddleClick)="slot.spacerMiddleClick()"></div>
   @if (isPrivate) {
-    <span class="titlebar__private" data-tauri-drag-region>
+    <span class="titlebar__private" data-drag-region>
       <app-icon icon="private" />
       Приватне вікно
+    </span>
+  } @else if (isGuest) {
+    <span class="titlebar__private" data-drag-region>
+      <app-icon icon="guest" />
+      Гостьовий режим
     </span>
   }
   <app-window-controls />

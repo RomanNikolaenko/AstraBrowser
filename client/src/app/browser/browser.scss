@@ -217,19 +217,28 @@
 
   &__site,
   &__pip,
+  &__translate,
   &__action {
     @include icon-button(2.25rem, 1.25rem);
   }
 
-  // Зірочка зафарбована й акцентна, коли сторінка вже в закладках.
-  &__action {
+  &__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  // Зірочка зафарбована й акцентна, коли сторінка вже в закладках; значок перекладу — коли сторінка в перекладі.
+  &__action,
+  &__translate {
     &--active {
       color: var(--browser-accent);
     }
   }
 
   &:has(+ * .is-open) .omnibox__action,
-  &:has(~ app-site-permissions .is-open) .omnibox__site {
+  &:has(~ app-site-permissions .is-open) .omnibox__site,
+  &:has(~ .toolbar__group app-translator .is-open) .omnibox__translate {
     background: var(--browser-pressed);
   }
 }
@@ -252,19 +261,9 @@
   @include focus-ring(0.125rem);
 
   &__avatar {
-    display: grid;
-    place-items: center;
-    width: 2.125rem;
-    height: 2.125rem;
-    anchor-name: --profile-menu;
-    color: #fff;
-    background: var(--gradient-brand);
-    border-radius: 50%;
+    --avatar-size: 2.125rem;
 
-    app-icon {
-      width: 1.25rem;
-      height: 1.25rem;
-    }
+    anchor-name: --profile-menu;
   }
 
   &__chevron {

@@ -120,27 +120,43 @@ describe('SettingsPage', () => {
     expect(TestBed.inject(SettingsStore).showBookmarksBar()).toBe(false);
   });
 
-  it('should count records and clear history after confirmation', async () => {
+  it('should clear the browsing data of the chosen time, like Chrome', async () => {
     const now = Date.now();
     localStorage.setItem(
       'astra.history',
-      JSON.stringify([1, 2, 3].map((id) => ({ id: `${id}`, url: 'https://a.example', title: 'A', visitedAt: now })))
+      JSON.stringify([
+        { id: 'old', url: 'https://old.example', title: 'Давно', visitedAt: now - 3 * 3_600_000 },
+        { id: 'new', url: 'https://new.example', title: 'Щойно', visitedAt: now - 60_000 },
+      ])
     );
-    const { element, click, meta } = await setup();
-    expect(meta()).toEqual([
-      '«Як у системі» стежить за темою Windows',
-      'Показувати закладки під адресним рядком',
-      'Для запитів з адресного рядка й нової вкладки',
-      '3 записи',
-      'Порожньо · самі файли лишаються на диску',
+    const { element, click } = await setup();
+    const clearMeta = () =>
+      [...element.querySelectorAll('.settings__row')]
+        .find((row) => row.textContent?.includes('Очистити дані перегляду'))
+        ?.querySelector('.page__meta')
+        ?.textContent?.trim();
+    expect(element.querySelector('#settings-history-days')?.textContent?.trim()).toBe('90 днів');
+    expect(clearMeta()).toBe('Історія (2 записи), файли cookie, кеш, дані форм і налаштування сайтів');
+
+    await click(
+      [...element.querySelectorAll<HTMLButtonElement>('.page__button')].find((button) =>
+        button.textContent?.includes('Очистити…')
+      )
+    );
+    const names = [...element.querySelectorAll('.clear-data__name')].map((name) => name.textContent?.trim());
+    expect(names).toEqual([
+      'Історію переглядів та завантажень',
+      'Файли cookie та дані сайтів',
+      'Тимчасові кешовані файли та сторінки',
+      'Збережена інформація заповнених форм',
+      'Налаштування сайтів',
     ]);
+    const checks = [...element.querySelectorAll<HTMLInputElement>('.clear-data__check')].map((check) => check.checked);
+    expect(checks).toEqual([true, true, true, true, false]);
 
-    const clearHistory = element.querySelectorAll<HTMLButtonElement>('.settings__row .page__button')[0];
-    await click(clearHistory);
-    expect(meta()[3]).toBe('3 записи');
-
-    await click(element.querySelector<HTMLButtonElement>('.confirm-dialog__button--confirm'));
-    expect(meta()[3]).toBe('Порожньо');
-    expect(clearHistory.disabled).toBe(true);
+    // За останню годину — лише свіжий запис.
+    await click(element.querySelector<HTMLButtonElement>('.clear-data__button--primary'));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(clearMeta()).toBe('Історія (1 запис), файли cookie, кеш, дані форм і налаштування сайтів');
   });
 });

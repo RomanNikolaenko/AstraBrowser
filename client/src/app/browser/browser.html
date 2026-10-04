@@ -116,26 +116,43 @@
       } @else {
         <img class="omnibox__logo" data-input-start src="/logo.webp" alt="" width="24" height="24" />
       }
-      @if (canPictureInPicture()) {
+      <!-- Кнопки в кінці рядка — групою, щільніше, ніж відступ поля від тексту (--input-gap). -->
+      <span class="omnibox__actions">
+        @if (canPictureInPicture()) {
+          <button
+            class="omnibox__pip"
+            type="button"
+            aria-label="Картинка в картинці"
+            title="Картинка в картинці (Ctrl+Shift+])"
+            aria-keyshortcuts="Control+Shift+]"
+            (click)="togglePictureInPicture()">
+            <app-icon icon="picture-in-picture" />
+          </button>
+        }
+        @if (activeSitePage()) {
+          <!-- Перекладач — під цією кнопкою; поки сторінка в перекладі, значок акцентний. -->
+          <button
+            class="omnibox__translate"
+            type="button"
+            popovertarget="translator"
+            [class.omnibox__translate--active]="pageTranslated()"
+            [attr.aria-label]="pageTranslated() ? 'Перекладач: сторінку перекладено' : 'Перекласти сторінку'"
+            [title]="pageTranslated() ? 'Сторінку перекладено' : 'Перекласти сторінку'">
+            <app-icon icon="translate" />
+          </button>
+        }
+        <!-- Масштаб — лише коли він не 100%. -->
+        <app-zoom-badge [(zoom)]="zoom" />
         <button
-          class="omnibox__pip"
+          class="omnibox__action"
           type="button"
-          aria-label="Картинка в картинці"
-          title="Картинка в картинці (Ctrl+Shift+])"
-          aria-keyshortcuts="Control+Shift+]"
-          (click)="togglePictureInPicture()">
-          <app-icon icon="picture-in-picture" />
+          popovertarget="bookmark-editor"
+          [class.omnibox__action--active]="currentBookmark()"
+          [attr.aria-label]="currentBookmark() ? 'Редагувати закладку' : 'Додати сторінку в закладки'"
+          [title]="currentBookmark() ? 'Редагувати закладку' : 'Додати в закладки'">
+          <app-icon [icon]="currentBookmark() ? 'star-filled' : 'star'" />
         </button>
-      }
-      <button
-        class="omnibox__action"
-        type="button"
-        popovertarget="bookmark-editor"
-        [class.omnibox__action--active]="currentBookmark()"
-        [attr.aria-label]="currentBookmark() ? 'Редагувати закладку' : 'Додати сторінку в закладки'"
-        [title]="currentBookmark() ? 'Редагувати закладку' : 'Додати в закладки'">
-        <app-icon [icon]="currentBookmark() ? 'star-filled' : 'star'" />
-      </button>
+      </span>
     </app-input>
     <app-bookmark-editor [pageTitle]="tabTitle(activeTab())" [pageUrl]="tabUrl(activeTab())" />
     @if (activeSitePage(); as page) {
@@ -156,10 +173,14 @@
       <app-tools-menu (openPage)="openPage($event)" (runAction)="runTool($event)" />
       <app-translator [pageUrl]="activeSiteUrl()" (navigate)="openLink($event)" (openInNewTab)="openLinkInNewTab($event)" />
       <button class="profile" type="button" aria-label="Профіль" title="Профіль" popovertarget="profile-menu">
-        <span class="profile__avatar"><app-icon icon="user" /></span>
+        <app-avatar class="profile__avatar" [guest]="isGuest" />
         <app-icon class="profile__chevron" icon="chevron-down" />
       </button>
-      <app-profile-menu (openPage)="openPage($event)" />
+      <app-profile-menu
+        [guest]="isGuest"
+        (openPage)="openPage($event)"
+        (openGuest)="openGuestWindow()"
+        (closeGuest)="closeGuestWindow()" />
       <button
         #extensionsButton
         class="toolbar__button"
@@ -185,13 +206,14 @@
       </button>
       <app-browser-menu
         [(zoom)]="zoom"
+        [canReopenTab]="closedTabs().length > 0"
         (newTab)="openNewTab()"
+        (reopenTab)="reopenClosedTab()"
         (newWindow)="openWindow()"
         (privateWindow)="openWindow(true)"
         (openPage)="openPage($event)"
         (find)="openFind()"
         (print)="print()"
-        (signOut)="signOut()"
         (fullscreen)="toggleFullscreen()" />
     </div>
   </div>
@@ -210,7 +232,11 @@
   Область сторінки. Сайт (page === 'web') — це нативний webview поверх неї, тож тут для нього нічого не рендериться.
   Пошук на сторінці плаває над вмістом; для сайту смуга пошуку відсуває webview вниз (viewport--docked).
 -->
-<div class="viewport" #viewport [class.viewport--docked]="findOpen() && activeTab().page === 'web'">
+<div
+  class="viewport"
+  #viewport
+  [class.viewport--docked]="findOpen() && activeTab().page === 'web'"
+  (wheel)="onViewportWheel($event)">
   @if (pageCover(); as cover) {
     <img class="viewport__cover" [src]="cover.url" alt="" [width]="cover.width" [height]="cover.height" />
   }
@@ -231,6 +257,12 @@
       }
       @case ('notes') {
         <app-notes-page />
+      }
+      @case ('profile') {
+        <app-profile-page />
+      }
+      @case ('personalization') {
+        <app-personalization-page />
       }
       @case ('extensions') {
         <app-extensions-page />

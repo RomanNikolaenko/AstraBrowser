@@ -7,11 +7,26 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 // а приватне вікно впізнає себе без жодних параметрів в URL.
 const WINDOW_PREFIX = 'window-';
 const PRIVATE_PREFIX = 'private-';
+const GUEST_PREFIX = 'guest-';
 
-/** Відкриває нові вікна браузера й знає, чи поточне вікно приватне. */
+/** Яке вікно відкрити: звичайне, приватне чи гостьове. */
+export type WindowKind = 'normal' | 'private' | 'guest';
+
+const WINDOWS: Readonly<Record<WindowKind, { readonly prefix: string; readonly title: string }>> = {
+  normal: { prefix: WINDOW_PREFIX, title: 'Astra Browser' },
+  private: { prefix: PRIVATE_PREFIX, title: 'Astra Browser — приватне вікно' },
+  guest: { prefix: GUEST_PREFIX, title: 'Astra Browser — гість' },
+};
+
+/** Відкриває нові вікна браузера й знає, чи поточне вікно приватне чи гостьове. */
 @Injectable({ providedIn: 'root' })
 export class BrowserWindows {
   readonly isPrivate = isTauri() && getCurrentWindow().label.startsWith(PRIVATE_PREFIX);
+  /**
+   * Гостьове вікно: для когось іншого за цим комп'ютером. Як і приватне, нічого не зберігає (cookies, історія,
+   * закладки зникають разом із вікном), а ще не бачить паролів власника (server/src/passwords.rs).
+   */
+  readonly isGuest = isTauri() && getCurrentWindow().label.startsWith(GUEST_PREFIX);
 
   /** Вікно було розгорнуте до повноекранного режиму. */
   private restoreMaximized = false;
@@ -21,25 +36,33 @@ export class BrowserWindows {
    * (InPrivate у WebView2): cookies, сховище й історія зникають, щойно вікно закрито.
    * Розгорнуте на весь екран, якщо розгорнуте поточне (застосунок і стартує розгорнутим).
    */
-  open({ private: isPrivate = false } = {}): void {
+  open({ private: isPrivate = false, guest = false } = {}): void {
     if (!isTauri()) {
       // Поза Tauri (ng serve у звичайному браузері) приватності не відтворити — просто нова вкладка.
       window.open('/home', '_blank', 'noopener');
       return;
     }
-    void this.openWindow(isPrivate);
+    void this.openWindow(guest ? 'guest' : isPrivate ? 'private' : 'normal');
   }
 
-  private async openWindow(isPrivate: boolean): Promise<void> {
+  /** Закрити поточне вікно (вийти з гостьового режиму). */
+  async closeCurrent(): Promise<void> {
+    if (isTauri()) {
+      await getCurrentWindow().close();
+    }
+  }
+
+  private async openWindow(kind: WindowKind): Promise<void> {
     const maximized = await getCurrentWindow()
       .isMaximized()
       .catch(() => false);
-    const label = `${isPrivate ? PRIVATE_PREFIX : WINDOW_PREFIX}${crypto.randomUUID()}`;
+    const { prefix, title } = WINDOWS[kind];
+    const label = `${prefix}${crypto.randomUUID()}`;
     const webview = new WebviewWindow(label, {
       url: '/home',
-      title: isPrivate ? 'Astra Browser — приватне вікно' : 'Astra Browser',
+      title,
       width: 1280,
-      height: 800,
+      height: 600,
       minWidth: 800,
       minHeight: 600,
       center: true,
@@ -47,9 +70,16 @@ export class BrowserWindows {
       decorations: false,
       // Інакше у Windows Tauri забирає собі перетягування, і в інтерфейсі воно не працює (закладки).
       dragDropEnabled: false,
-      incognito: isPrivate,
+      incognito: kind !== 'normal',
     });
     void webview.once('tauri://error', (event) => console.error('Failed to open a window', event.payload));
+  }
+
+  /** Починає перетягування вікна за курсором (кнопка миші натиснута); поза Tauri — нічого. */
+  async startDragging(): Promise<void> {
+    if (isTauri()) {
+      await invoke('window_start_drag');
+    }
   }
 
   /** Розгортає вікно на весь робочий стіл або повертає попередній розмір; поза Tauri — нічого. */

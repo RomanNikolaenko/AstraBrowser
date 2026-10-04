@@ -1,4 +1,14 @@
-export type InternalPage = 'history' | 'downloads' | 'bookmarks' | 'passwords' | 'notes' | 'extensions' | 'settings' | 'help';
+export type InternalPage =
+  | 'history'
+  | 'downloads'
+  | 'bookmarks'
+  | 'passwords'
+  | 'notes'
+  | 'profile'
+  | 'personalization'
+  | 'extensions'
+  | 'settings'
+  | 'help';
 
 /** Що показує вкладка: нову вкладку чи внутрішню сторінку браузера. */
 export type TabPage = 'new-tab' | InternalPage;
@@ -10,6 +20,8 @@ export const TAB_PAGES: Readonly<Record<TabPage, { readonly title: string; reado
   bookmarks: { title: 'Закладки', favicon: 'star', url: 'astra://bookmarks' },
   passwords: { title: 'Паролі', favicon: 'key', url: 'astra://passwords' },
   notes: { title: 'Нотатки', favicon: 'notes', url: 'astra://notes' },
+  profile: { title: 'Керування профілем', favicon: 'user', url: 'astra://profile' },
+  personalization: { title: 'Персоналізація', favicon: 'palette', url: 'astra://personalization' },
   extensions: { title: 'Розширення', favicon: 'puzzle', url: 'astra://extensions' },
   settings: { title: 'Налаштування', favicon: 'settings', url: 'astra://settings' },
   help: { title: 'Довідка', favicon: 'help', url: 'astra://help' },
@@ -24,12 +36,16 @@ export function internalPageFor(url: string): InternalPage | null {
 /** Гарячі клавіші, що справді працюють; показуються на сторінці довідки. */
 export const SHORTCUTS: readonly { readonly keys: readonly string[]; readonly action: string }[] = [
   { keys: ['Ctrl', 'T'], action: 'Нова вкладка' },
+  { keys: ['Ctrl', 'Shift', 'T'], action: 'Відновити закриту вкладку' },
   { keys: ['Ctrl', 'N'], action: 'Нове вікно' },
   { keys: ['Ctrl', 'Shift', 'N'], action: 'Приватне вікно' },
   { keys: ['Ctrl', 'J'], action: 'Завантаження' },
   { keys: ['Ctrl', 'F'], action: 'Знайти на сторінці' },
   { keys: ['Ctrl', 'Shift', ']'], action: 'Картинка в картинці (відео YouTube)' },
   { keys: ['Ctrl', 'Shift', 'S'], action: 'Скріншот сторінки' },
+  { keys: ['Ctrl', '+'], action: 'Збільшити масштаб (і Ctrl + коліщатко вгору)' },
+  { keys: ['Ctrl', '−'], action: 'Зменшити масштаб (і Ctrl + коліщатко вниз)' },
+  { keys: ['Ctrl', '0'], action: 'Масштаб 100%' },
   { keys: ['Enter'], action: 'Наступний збіг у пошуку на сторінці' },
   { keys: ['Shift', 'Enter'], action: 'Попередній збіг у пошуку на сторінці' },
   { keys: ['Esc'], action: 'Закрити пошук або меню' },

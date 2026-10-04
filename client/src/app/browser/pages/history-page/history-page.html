@@ -12,17 +12,12 @@
         placeholder="Пошук в історії"
         autocomplete="off"
         [(value)]="query" />
-      <button class="page__button page__button--danger" type="button" (click)="confirmClear.show()">Очистити історію</button>
     }
+    <!-- Як у Chrome: з історії — те саме очищення даних перегляду, що й у налаштуваннях. -->
+    <button class="page__button page__button--danger" type="button" (click)="clearData.show()">Очистити дані перегляду…</button>
   </header>
 
-  <app-confirm-dialog
-    #confirmClear
-    heading="Очистити всю історію?"
-    message="Усі відвідані сторінки буде видалено. Цю дію не можна скасувати."
-    confirmLabel="Очистити"
-    danger
-    (confirmed)="history.clear()" />
+  <app-clear-data-dialog #clearData />
 
   @if (!history.entries().length) {
     <div class="page__empty">

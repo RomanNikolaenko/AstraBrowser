@@ -4,7 +4,7 @@ import { closePopoversOnOutsidePress } from './outside-press';
 
 @Component({
   template: `
-    <header class="drag" data-tauri-drag-region>
+    <header class="drag" data-drag-region>
       <button class="invoker" type="button" popovertarget="panel">Меню</button>
     </header>
     <div class="panel" id="panel" popover>

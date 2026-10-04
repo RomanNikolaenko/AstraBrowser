@@ -1,0 +1,53 @@
+<div class="auth__step">
+  <span class="auth__step-icon"><app-icon icon="email" /></span>
+  <h2 class="auth__step-title">Підтвердіть пошту</h2>
+  <p class="auth__step-text">
+    Ми надіслали лист із кодом на <strong class="auth__step-email">{{ email() }}</strong
+    >. Введіть код, щоб завершити вхід.
+  </p>
+</div>
+
+@if (error(); as message) {
+  <p class="auth__alert auth__alert--error" role="alert"><app-icon icon="alert" />{{ message }}</p>
+} @else if (notice(); as message) {
+  <p class="auth__alert" role="status"><app-icon icon="check" />{{ message }}</p>
+}
+
+<form class="auth__fields" id="verify-email-form" novalidate (submit)="submit($event)">
+  <div class="auth__field-label">
+    <span class="auth__field-name">Код із листа</span>
+    <app-input
+      class="auth__input"
+      icon="key"
+      inputId="verify-email-code"
+      inputName="code"
+      [(value)]="code.value"
+      [(touched)]="code.touched"
+      [error]="code.visibleError()"
+      ariaLabel="Код із листа"
+      autocomplete="one-time-code"
+      enterKeyHint="done"
+      placeholder="123456" />
+  </div>
+</form>
+<button class="auth__submit" type="submit" form="verify-email-form" [disabled]="busy()">
+  {{ busy() ? 'Перевіряємо…' : 'Підтвердити' }} <app-icon icon="arrow-right" />
+</button>
+
+<div class="auth__inline-actions">
+  <button class="auth__link" type="button" [disabled]="cooldown.seconds() > 0" (click)="resend()">
+    @if (cooldown.seconds() > 0) {
+      Надіслати ще раз за {{ cooldown.seconds() }} с
+    } @else {
+      Надіслати код ще раз
+    }
+  </button>
+  <button class="auth__link" type="button" (click)="back.emit()">Змінити пошту</button>
+</div>
+
+<div class="auth__notice">
+  <app-icon icon="email" /><span
+    >У листі лише посилання? Перейдіть за ним, а потім
+    <button class="auth__link" type="button" (click)="confirmed.emit()">увійдіть</button>.</span
+  >
+</div>

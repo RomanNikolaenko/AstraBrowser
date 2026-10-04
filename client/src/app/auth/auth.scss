@@ -253,13 +253,119 @@
   }
 
   &__link {
+    padding: 0;
+    font: inherit;
     font-weight: 600;
     color: var(--auth-accent);
     text-decoration: none;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: 0.25rem;
 
-    &:hover {
+    @include focus-ring(0.125rem);
+
+    &:hover:not(:disabled) {
       text-decoration: underline;
     }
+
+    &:disabled {
+      color: var(--auth-subtle);
+      cursor: default;
+    }
+  }
+
+  &__consent-error {
+    display: flex;
+    gap: 0.375rem;
+    align-items: center;
+    margin: 0.5rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--color-error);
+
+    app-icon {
+      flex: 0 0 auto;
+      width: 1rem;
+      height: 1rem;
+    }
+  }
+
+  // Повідомлення над формою: помилка входу чи «лист надіслано».
+  &__alert {
+    display: flex;
+    gap: 0.625rem;
+    align-items: flex-start;
+    padding: 0.75rem 0.875rem;
+    margin: 0 0 1rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--auth-text);
+    background: color-mix(in srgb, var(--auth-accent) 10%, transparent);
+    border: 0.0625rem solid color-mix(in srgb, var(--auth-accent) 28%, transparent);
+    border-radius: 0.75rem;
+
+    app-icon {
+      flex: 0 0 auto;
+      width: 1.125rem;
+      height: 1.125rem;
+      margin-block-start: 0.0625rem;
+      color: var(--auth-accent);
+    }
+
+    &--error {
+      background: color-mix(in srgb, var(--color-error) 10%, transparent);
+      border-color: color-mix(in srgb, var(--color-error) 30%, transparent);
+
+      app-icon {
+        color: var(--color-error);
+      }
+    }
+  }
+
+  // Заголовок кроку («Підтвердіть пошту», «Забули пароль?») замість вкладок.
+  &__step {
+    display: grid;
+    justify-items: center;
+    margin-block-end: 1.25rem;
+    text-align: center;
+  }
+
+  &__step-icon {
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    margin-block-end: 0.75rem;
+    color: var(--color-accent-violet);
+    background: var(--auth-soft-surface);
+    border: 0.0625rem solid var(--auth-panel-border);
+    border-radius: 1rem;
+
+    app-icon {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+  }
+
+  &__step-title {
+    margin: 0 0 0.375rem;
+    font-size: 1.375rem;
+    font-weight: 750;
+    color: var(--auth-heading);
+  }
+
+  &__step-text {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    color: var(--auth-muted);
+    text-wrap: pretty;
+  }
+
+  &__step-email {
+    font-weight: 650;
+    color: var(--auth-text);
+    overflow-wrap: anywhere;
   }
 
   &__submit {
@@ -308,74 +414,17 @@
       filter: brightness(0.97);
       transform: translateY(0) scale(0.99);
     }
-  }
 
-  &__divider {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    margin-block: 1rem;
-    font-size: 0.8125rem;
-    color: var(--auth-muted);
-
-    &::before,
-    &::after {
-      flex: 1;
-      height: 0.0625rem;
-      content: '';
-      background: var(--auth-divider);
-    }
-  }
-
-  &__socials {
-    display: grid;
-    gap: 0.625rem;
-  }
-
-  &__social {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    justify-content: center;
-    min-height: 2.625rem;
-    font-size: 0.875rem;
-    font-weight: 650;
-    color: var(--auth-input-text);
-    background: var(--auth-field);
-    border: 0.0625rem solid var(--auth-field-border);
-    border-radius: 0.75rem;
-    box-shadow: 0 0.125rem 0.625rem rgb(68 97 168 / 9%);
-    transition:
-      transform $motion,
-      border-color $motion,
-      background-color $motion,
-      box-shadow $motion,
-      outline-color $motion,
-      outline-offset $motion;
-
-    @include focus-ring;
-
-    app-icon {
-      width: 1.25rem;
-      height: 1.25rem;
-      transition: transform $motion;
-    }
-
-    &:hover,
-    &:focus-visible {
-      background: var(--color-surface);
-      border-color: var(--color-focus);
-      box-shadow: 0 0.375rem 1rem rgb(68 97 168 / 16%);
-      transform: translateY(-0.0625rem);
+    // Запит іде — кнопка чекає відповіді.
+    &:disabled {
+      cursor: progress;
+      box-shadow: none;
+      filter: saturate(0.7) opacity(0.75);
+      transform: none;
 
       app-icon {
-        transform: scale(1.08);
+        transform: none;
       }
-    }
-
-    &:active {
-      box-shadow: 0 0.125rem 0.5rem rgb(68 97 168 / 9%);
-      transform: translateY(0) scale(0.99);
     }
   }
 

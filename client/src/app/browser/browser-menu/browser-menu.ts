@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, model, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, model, output } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { InternalPage } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
+import { canZoomIn, canZoomOut, zoomIn, zoomOut } from '../zoom';
 
 interface MenuItem {
   readonly label: string;
@@ -9,13 +10,10 @@ interface MenuItem {
   readonly shortcut?: string;
   /** Для aria-keyshortcuts — лише ті скорочення, що справді працюють. */
   readonly keys?: string;
-  readonly action?: 'new-tab' | 'new-window' | 'private-window' | 'find' | 'print' | 'sign-out';
+  readonly action?: 'new-tab' | 'reopen-tab' | 'new-window' | 'private-window' | 'find' | 'print';
   /** Внутрішня сторінка, яку відкриває пункт. */
   readonly page?: InternalPage;
 }
-
-// Ті самі кроки масштабу, що й у Chrome.
-const ZOOM_LEVELS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
 
 /** Головне меню браузера (кнопка ☰): кожен пункт або виконує дію (action), або відкриває сторінку (page). */
 @Component({
@@ -27,18 +25,27 @@ const ZOOM_LEVELS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 2
 })
 export class BrowserMenu {
   readonly zoom = model(100);
+  /** Є закрита вкладка, яку можна відкрити знову. */
+  readonly canReopenTab = input(false);
   readonly newTab = output();
+  readonly reopenTab = output();
   readonly newWindow = output();
   readonly privateWindow = output();
   readonly openPage = output<InternalPage>();
   readonly find = output();
   readonly print = output();
-  readonly signOut = output();
   readonly fullscreen = output();
 
   protected readonly sections: readonly (readonly MenuItem[])[] = [
     [
       { label: 'Нова вкладка', icon: 'tab-plus', shortcut: 'Ctrl+T', keys: 'Control+T', action: 'new-tab' },
+      {
+        label: 'Відновити закриту вкладку',
+        icon: 'tab-restore',
+        shortcut: 'Ctrl+Shift+T',
+        keys: 'Control+Shift+T',
+        action: 'reopen-tab',
+      },
       { label: 'Нове вікно', icon: 'window', shortcut: 'Ctrl+N', keys: 'Control+N', action: 'new-window' },
       { label: 'Приватне вікно', icon: 'private', shortcut: 'Ctrl+Shift+N', keys: 'Control+Shift+N', action: 'private-window' },
     ],
@@ -56,21 +63,20 @@ export class BrowserMenu {
       { label: 'Налаштування', icon: 'settings', page: 'settings' },
     ],
     [{ label: 'Довідка', icon: 'help', page: 'help' }],
-    [{ label: 'Вийти', icon: 'logout', action: 'sign-out' }],
   ];
 
   /** Рядок масштабу стоїть перед секцією з цим індексом. */
   protected readonly zoomSectionIndex = 2;
 
-  protected readonly canZoomOut = computed(() => this.zoom() > ZOOM_LEVELS[0]);
-  protected readonly canZoomIn = computed(() => this.zoom() < ZOOM_LEVELS[ZOOM_LEVELS.length - 1]);
+  protected readonly canZoomOut = computed(() => canZoomOut(this.zoom()));
+  protected readonly canZoomIn = computed(() => canZoomIn(this.zoom()));
 
   protected zoomIn(): void {
-    this.zoom.set(ZOOM_LEVELS.find((level) => level > this.zoom()) ?? this.zoom());
+    this.zoom.set(zoomIn(this.zoom()));
   }
 
   protected zoomOut(): void {
-    this.zoom.set([...ZOOM_LEVELS].reverse().find((level) => level < this.zoom()) ?? this.zoom());
+    this.zoom.set(zoomOut(this.zoom()));
   }
 
   protected run(item: MenuItem): void {
@@ -83,6 +89,9 @@ export class BrowserMenu {
       case 'new-tab':
         this.newTab.emit();
         break;
+      case 'reopen-tab':
+        this.reopenTab.emit();
+        break;
       case 'new-window':
         this.newWindow.emit();
         break;
@@ -94,9 +103,6 @@ export class BrowserMenu {
         break;
       case 'print':
         this.print.emit();
-        break;
-      case 'sign-out':
-        this.signOut.emit();
         break;
     }
   }

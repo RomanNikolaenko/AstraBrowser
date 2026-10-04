@@ -5,13 +5,14 @@ import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { BookmarkFolder, BookmarkItem } from '../data/bookmarks';
 import { Popover } from '../popover/popover';
 import { SiteIcon } from '../site-icon/site-icon';
-import { BookmarkActions, folderMenuId } from './bookmark-actions';
+import { BookmarkActions, folderBookmarks, folderMenuId, openFolderInBackground } from './bookmark-actions';
 import { BookmarkDrag } from './bookmark-drag';
 import { folderColor, folderIcon } from './folder-colors';
 
 /**
  * Випадне меню теки на панелі закладок: її закладки, роздільники й вкладені теки (ті — збоку, як підменю).
  * Клік відкриває закладку й закриває всі меню, коліщатком — у новій вкладці, а меню лишається відкритим.
+ * Унизу — «Відкрити всі»: закладки саме цієї теки (без вкладених тек), кожна в новій вкладці.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,6 +33,8 @@ export class BookmarkFolderMenu {
 
   protected readonly menuId = computed(() => folderMenuId(this.folder()));
   protected readonly root = computed(() => this.rootId() ?? this.menuId());
+  /** Закладки самої теки — для «Відкрити всі». */
+  protected readonly bookmarks = computed(() => folderBookmarks(this.folder()));
   protected readonly folderMenuId = folderMenuId;
   protected readonly folderIcon = folderIcon;
   protected readonly folderColor = folderColor;
@@ -46,6 +49,11 @@ export class BookmarkFolderMenu {
       'bookmark-folder-menu__entry--drop-after': this.drag.after(folder.id, index, folder.children.length),
       'bookmark-folder-menu__entry--drop-into': this.drag.into(item.id),
     };
+  }
+
+  /** Коліщатком по вкладеній теці — усі її закладки в нових вкладках у фоні; меню лишається відкритим. */
+  protected openInBackground(folder: BookmarkFolder): void {
+    openFolderInBackground(this.actions, folder);
   }
 
   protected showMenu(event: MouseEvent, item: BookmarkItem | null, index: number): void {

@@ -13,7 +13,6 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BrowserWindows } from '../shared/browser-windows/browser-windows';
@@ -25,6 +24,7 @@ import { UiInput } from '../shared/ui-input/ui-input';
 import { TitlebarContent } from '../shared/titlebar/titlebar-content';
 import { BookmarksBar } from './bookmarks-bar/bookmarks-bar';
 import { BrowserMenu } from './browser-menu/browser-menu';
+import { Avatar } from './avatar/avatar';
 import { BookmarkEditor } from './bookmark-editor/bookmark-editor';
 import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
@@ -32,7 +32,12 @@ import { DownloadsStore } from './data/downloads';
 import { PasswordsStore } from './data/passwords';
 import { DownloadPrompt } from './download-prompt/download-prompt';
 import { Screenshot } from './screenshot/screenshot';
+import { isTranslated } from './translator/translate-urls';
+import { SyncService } from './sync/sync';
+import { TranslateLanguageStore } from './translator/translate-language';
+import { DEFAULT_ZOOM, WheelZoom, zoomIn, zoomOut } from './zoom';
 import { Translator } from './translator/translator';
+import { ZoomBadge } from './zoom-badge/zoom-badge';
 import { PasswordPrompt } from './password-prompt/password-prompt';
 import { DownloadsMenu } from './downloads-menu/downloads-menu';
 import { ExtensionsMenu } from './extensions-menu/extensions-menu';
@@ -61,6 +66,8 @@ import { ExtensionsPage } from './pages/extensions-page/extensions-page';
 import { HelpPage } from './pages/help-page/help-page';
 import { HistoryPage } from './pages/history-page/history-page';
 import { NotesPage } from './pages/notes-page/notes-page';
+import { PersonalizationPage } from './pages/personalization-page/personalization-page';
+import { ProfilePage } from './pages/profile-page/profile-page';
 import { PasswordsPage } from './pages/passwords-page/passwords-page';
 import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
@@ -91,6 +98,16 @@ interface Site {
   readonly blocked: number;
 }
 
+/** Закрита вкладка, яку можна відкрити знову (Ctrl+Shift+T): що в ній було і де вона стояла. */
+interface ClosedTab {
+  readonly page: TabPage | 'web';
+  readonly url?: string;
+  readonly index: number;
+}
+
+/** Скільки закритих вкладок пам'ятати. */
+const CLOSED_TABS_LIMIT = 25;
+
 /** Вкладка показує внутрішню сторінку або сайт (тоді page === 'web' і є site). */
 interface BrowserTab {
   readonly id: number;
@@ -105,6 +122,7 @@ interface BrowserTab {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    Avatar,
     BookmarkEditor,
     BookmarksBar,
     BookmarksPage,
@@ -122,7 +140,9 @@ interface BrowserTab {
     NotesPage,
     PasswordPrompt,
     PasswordsPage,
+    PersonalizationPage,
     ProfileMenu,
+    ProfilePage,
     ReloadMenu,
     Screenshot,
     SettingsPage,
@@ -133,6 +153,7 @@ interface BrowserTab {
     Translator,
     UiIcon,
     UiInput,
+    ZoomBadge,
   ],
   selector: 'app-browser',
   styleUrl: './browser.scss',
@@ -142,8 +163,10 @@ interface BrowserTab {
   },
 })
 export class Browser {
-  private readonly router = inject(Router);
+  private readonly sync = inject(SyncService);
   private readonly windows = inject(BrowserWindows);
+  /** Гостьове вікно: меню профілю гостя, без паролів власника. */
+  protected readonly isGuest = this.windows.isGuest;
   private readonly pageViews = inject(PageViews);
   private readonly history = inject(HistoryStore);
   private readonly downloads = inject(DownloadsStore);
@@ -159,6 +182,8 @@ export class Browser {
   protected readonly tabs = signal<readonly BrowserTab[]>([{ id: 1, page: 'new-tab' }]);
 
   protected readonly activeTabId = signal(1);
+  /** Закриті вкладки цього вікна — для «Відновити закриту вкладку»; остання — в кінці. */
+  protected readonly closedTabs = signal<readonly ClosedTab[]>([]);
 
   // Вкладок завжди щонайменше одна: closeTab замінює останню новою.
   protected readonly activeTab = computed(() => {
@@ -188,7 +213,8 @@ export class Browser {
   });
 
   /** Масштаб вмісту сторінки у відсотках; змінюється в головному меню. */
-  protected readonly zoom = signal(100);
+  protected readonly zoom = signal(DEFAULT_ZOOM);
+  private readonly wheelZoom = new WheelZoom();
 
   /** Панель «Знайти на сторінці» шукає в поточній сторінці, тож закривається, щойно сторінка інша. */
   protected readonly findOpen = signal(false);
@@ -198,6 +224,9 @@ export class Browser {
   private readonly translator = viewChild.required(Translator);
   private readonly screenshot = viewChild.required(Screenshot);
   private readonly toolsButton = viewChild.required<ElementRef<HTMLElement>>('toolsButton');
+
+  /** Сторінка у вкладці показується в перекладі Google — кнопка перекладу в адресному рядку акцентна. */
+  protected readonly pageTranslated = computed(() => isTranslated(this.activeSiteUrl()));
 
   /** Адреса сайту в активній вкладці (порожня — у вкладці не сайт): для перекладача. */
   protected readonly activeSiteUrl = computed(() => {
@@ -261,6 +290,10 @@ export class Browser {
 
   constructor() {
     const destroyRef = inject(DestroyRef);
+    // Дані облікового запису синхронізуються, поки відкритий браузер (веде одне вікно — browser/sync).
+    this.sync.start();
+    // Мова перекладу виділеного на сайтах — браузеру одразу, а не лише тоді, як відкриють «Перекладач».
+    inject(TranslateLanguageStore);
     const injector = this.injector;
 
     // Меню оновлення — про сайт, на якому його відкрили: інша вкладка чи не сайт — закриваємо.
@@ -373,10 +406,10 @@ export class Browser {
     });
 
     if (this.pageViews.available) {
-      // Список сайтів із заблокованим звуком — у скрипти всіх сторінок вікна.
+      // Правила автовідтворення — у скрипти всіх сторінок вікна.
       effect(() => {
-        const origins = this.autoplay.blockAudio();
-        untracked(() => this.ignore(this.pageViews.setAudioRules(origins)));
+        const rules = this.autoplay.rules();
+        untracked(() => this.ignore(this.pageViews.setAudioRules(rules)));
       });
 
       // Webview сайту лежить поверх області вмісту, тож іде за її розміром.
@@ -473,9 +506,14 @@ export class Browser {
       return;
     }
 
-    const site = tabs[index].site;
+    const closed = tabs[index];
+    const site = closed.site;
     if (site) {
       this.ignore(this.pageViews.close(site.label));
+    }
+    // Порожню нову вкладку відновлювати нема чого.
+    if (closed.page !== 'new-tab') {
+      this.closedTabs.update((list) => [...list, { page: closed.page, url: site?.url, index }].slice(-CLOSED_TABS_LIMIT));
     }
 
     const remaining = tabs.filter((tab) => tab.id !== id);
@@ -490,6 +528,21 @@ export class Browser {
     if (id === this.activeTabId()) {
       // Як у Chrome: активною стає вкладка праворуч, а якщо її немає — ліворуч.
       this.activeTabId.set(remaining[Math.min(index, remaining.length - 1)].id);
+    }
+  }
+
+  /** Відкриває знову останню закриту вкладку — на тому самому місці, з тим самим сайтом чи сторінкою. */
+  protected reopenClosedTab(): void {
+    const closed = this.closedTabs().at(-1);
+    if (!closed) {
+      return;
+    }
+    this.closedTabs.update((list) => list.slice(0, -1));
+    const tab: BrowserTab = closed.url ? this.createNewTab() : { id: this.nextTabId++, page: closed.page };
+    this.tabs.update((tabs) => [...tabs.slice(0, closed.index), tab, ...tabs.slice(closed.index)]);
+    this.activeTabId.set(tab.id);
+    if (closed.url) {
+      this.openSite(closed.url, tab);
     }
   }
 
@@ -626,11 +679,6 @@ export class Browser {
     }
   }
 
-  // Справжньої сесії ще немає: вихід просто повертає на сторінку входу.
-  protected signOut(): void {
-    void this.router.navigate(['/sign-in']);
-  }
-
   /**
    * Подвійний клік по порожньому місцю вкладок і панелей розгортає чи відновлює вікно, як по заголовку.
    * Перетягувати вікно за них не можна — лише за порожні місця заголовка.
@@ -682,6 +730,18 @@ export class Browser {
     }
   }
 
+  protected changeZoom(change: 'zoom-in' | 'zoom-out' | 'zoom-reset'): void {
+    this.zoom.update((zoom) => (change === 'zoom-in' ? zoomIn(zoom) : change === 'zoom-out' ? zoomOut(zoom) : DEFAULT_ZOOM));
+  }
+
+  /** Ctrl + коліщатко над сторінкою браузера (нова вкладка, налаштування…); над сайтом — його скрипт (zoom-page.js). */
+  protected onViewportWheel(event: WheelEvent): void {
+    if (event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      this.zoom.update((zoom) => this.wheelZoom.apply(zoom, event.deltaY));
+    }
+  }
+
   /** Інструмент із панелі «Інструменти», що не є сторінкою. */
   protected runTool(action: ToolAction): void {
     if (action === 'translate') {
@@ -725,6 +785,15 @@ export class Browser {
     this.windows.open({ private: isPrivate });
   }
 
+  /** Гостьове вікно — для когось іншого: нічого не зберігає й не бачить паролів власника. */
+  protected openGuestWindow(): void {
+    this.windows.open({ guest: true });
+  }
+
+  protected closeGuestWindow(): void {
+    void this.windows.closeCurrent();
+  }
+
   /** Повторне Ctrl+F при відкритій панелі лише повертає фокус у поле й виділяє запит. */
   protected openFind(): void {
     const findBar = this.findBar();
@@ -760,6 +829,9 @@ export class Browser {
       case 'KeyT':
         this.openNewTab();
         break;
+      case 'Shift+KeyT':
+        this.reopenClosedTab();
+        break;
       case 'KeyN':
         this.openWindow();
         break;
@@ -780,6 +852,20 @@ export class Browser {
         break;
       case 'Shift+KeyS':
         this.runTool('screenshot');
+        break;
+      // Масштаб: Ctrl+= і Ctrl++ (і з Shift, і на цифровому блоці), Ctrl+−, Ctrl+0.
+      case 'Equal':
+      case 'Shift+Equal':
+      case 'NumpadAdd':
+        this.changeZoom('zoom-in');
+        break;
+      case 'Minus':
+      case 'NumpadSubtract':
+        this.changeZoom('zoom-out');
+        break;
+      case 'Digit0':
+      case 'Numpad0':
+        this.changeZoom('zoom-reset');
         break;
       case 'Tab':
         this.switchTab(1);
@@ -823,14 +909,24 @@ export class Browser {
       blocked: 0,
     };
     this.replaceTab({ id: tab.id, page: 'web', site, back: back && tab.page !== 'web' ? tab.page : undefined });
-    const blockAudio = this.autoplay.blockAudio();
+    const autoplay = this.autoplay.rules();
     if (background) {
-      // Справжні межі фонова вкладка отримає, коли її відкриють.
-      this.ignore(this.pageViews.open(label, url, { x: 0, y: 0, width: 0, height: 0 }, { background, blockAudio }));
+      // Справжні межі фонова вкладка отримає, коли її відкриють. Якщо відкрили ще до того, як її webview створився
+      // («Відкрити всі закладки» одразу показує першу), показ тоді нікуди не дійшов — показуємо, щойно створився.
+      this.pageViews
+        .open(label, url, { x: 0, y: 0, width: 0, height: 0 }, { background, autoplay })
+        .then(() => {
+          if (this.visiblePage() === label) {
+            this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+            this.ignore(this.pageViews.setVisible(label, true));
+            this.scheduleClip();
+          }
+        })
+        .catch(() => undefined);
       return;
     }
     this.activeTabId.set(tab.id);
-    this.ignore(this.pageViews.open(label, url, this.pageBounds(), { blockAudio }));
+    this.ignore(this.pageViews.open(label, url, this.pageBounds(), { autoplay }));
   }
 
   private onPageLoad({ label, url, loading }: PageLoadEvent): void {
@@ -884,10 +980,20 @@ export class Browser {
     if (label !== this.visiblePage()) {
       return;
     }
-    if (shortcut === 'screenshot') {
-      this.runTool('screenshot');
-    } else {
-      this.switchTab(shortcut === 'next-tab' ? 1 : -1);
+    switch (shortcut) {
+      case 'screenshot':
+        this.runTool('screenshot');
+        break;
+      case 'reopen-tab':
+        this.reopenClosedTab();
+        break;
+      case 'zoom-in':
+      case 'zoom-out':
+      case 'zoom-reset':
+        this.changeZoom(shortcut);
+        break;
+      default:
+        this.switchTab(shortcut === 'next-tab' ? 1 : -1);
     }
   }
 

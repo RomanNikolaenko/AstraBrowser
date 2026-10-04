@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { storedSignal } from '../../shared/storage/stored-signal';
+import { accountSignal } from '../../shared/storage/stored-signal';
 
 /** Чим скінчилося завантаження. */
 export type DownloadStatus = 'completed' | 'failed' | 'canceled';
@@ -52,7 +52,7 @@ export interface ActiveDownload {
 
 @Injectable({ providedIn: 'root' })
 export class DownloadsStore {
-  private readonly items = storedSignal<readonly DownloadEntry[]>('astra.downloads', []);
+  private readonly items = accountSignal<readonly DownloadEntry[]>('astra.downloads', []);
   private readonly running = signal<readonly ActiveDownload[]>([]);
   private readonly asking = signal<readonly DownloadPromptRequest[]>([]);
   /** Завантаження цього запуску, що вже скінчилися: запізнілі звістки про них нічого не змінюють. */
@@ -117,5 +117,10 @@ export class DownloadsStore {
 
   clear(): void {
     this.items.set([]);
+  }
+
+  /** Записи завантажень, що закінчилися від `since` (мс); самі файли лишаються на диску. */
+  removeSince(since: number): void {
+    this.items.update((items) => items.filter((item) => item.finishedAt < since));
   }
 }

@@ -90,19 +90,20 @@ describe('internal pages', () => {
       ]);
     });
 
-    it('should clear history only after confirmation', async () => {
+    it('should clear browsing data from the history page with the same dialog as in settings', async () => {
       seed('astra.history', [{ id: '1', url: 'https://github.com/', title: 'GitHub', visitedAt: Date.now() }]);
       const { element, text, button, click } = await render(HistoryPage);
 
-      await click(button('Очистити історію'));
-      expect(text('.confirm-dialog__title')).toEqual(['Очистити всю історію?']);
+      await click(button('Очистити дані перегляду…'));
+      expect(text('.clear-data__title')).toEqual(['Очистити дані перегляду і файли cookie']);
       expect(text('.page__name')).toEqual(['GitHub']);
 
       await click(button('Скасувати'));
       expect(text('.page__name')).toEqual(['GitHub']);
 
-      await click(button('Очистити історію'));
-      await click(element.querySelector<HTMLButtonElement>('.confirm-dialog__button--confirm'));
+      await click(button('Очистити дані перегляду…'));
+      await click(element.querySelector<HTMLButtonElement>('.clear-data__button--primary'));
+      await new Promise((resolve) => setTimeout(resolve));
       expect(text('.page__empty-title')).toEqual(['Історія порожня']);
     });
   });

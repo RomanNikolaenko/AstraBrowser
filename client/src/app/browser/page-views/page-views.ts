@@ -61,9 +61,17 @@ export interface PageAudioEvent {
   readonly muted: boolean;
 }
 
+/** Правила автовідтворення (server/src/audio.rs): решта сайтів — «Блокувати аудіо та відео». */
+export interface AutoplayRules {
+  /** Сайти (origin), яким дозволено все. */
+  readonly allow: readonly string[];
+  /** Сайти, яким заборонено лише автовідтворення зі звуком. */
+  readonly blockAudio: readonly string[];
+}
+
 export interface PageOpenOptions {
   readonly background?: boolean;
-  readonly blockAudio?: readonly string[];
+  readonly autoplay?: AutoplayRules;
 }
 
 /** Нова адреса чи зміна історії вкладки — і після переходів без перезавантаження (history.pushState). */
@@ -92,7 +100,7 @@ export interface PageAdBlockEvent {
 /** Гаряча клавіша браузера, натиснута, поки фокус у сайті (server/src/webview2.rs, watch_shortcuts). */
 export interface PageShortcutEvent {
   readonly label: string;
-  readonly shortcut: 'next-tab' | 'previous-tab' | 'screenshot';
+  readonly shortcut: 'next-tab' | 'previous-tab' | 'reopen-tab' | 'screenshot' | 'zoom-in' | 'zoom-out' | 'zoom-reset';
 }
 
 /** Користувач увійшов на сайт — «Зберегти пароль?» (server/src/passwords.rs). */
@@ -138,7 +146,7 @@ export class PageViews {
 
   /**
    * `background` — для фонової вкладки: webview прихований і не забирає фокус.
-   * `blockAudio` — сайти, яким заборонено автовідтворення зі звуком (server/src/audio.rs).
+   * `autoplay` — правила автовідтворення сайтів (server/src/audio.rs).
    */
   open(label: string, url: string, bounds: PageBounds, options: PageOpenOptions = {}): Promise<void> {
     return invoke('page_open', {
@@ -146,7 +154,7 @@ export class PageViews {
       url,
       bounds,
       background: options.background ?? false,
-      blockAudio: options.blockAudio ?? [],
+      autoplay: options.autoplay ?? { allow: [], blockAudio: [] },
     });
   }
 
@@ -233,14 +241,19 @@ export class PageViews {
     return invoke('page_screenshot', { label, full });
   }
 
-  /** Вікно «Зберегти як» для скріншота (PNG); шлях до файла або null, якщо не зберегли. */
-  saveScreenshot(image: Uint8Array, fileName: string): Promise<string | null> {
-    return invoke('screenshot_save', image, { headers: { 'x-file-name': encodeURIComponent(fileName) } });
+  /**
+   * Вікно «Зберегти як» для файла, який зробив інтерфейс: скріншота (png) чи закладок (html).
+   * Шлях до файла або null, якщо не зберегли.
+   */
+  saveFile(content: Uint8Array, fileName: string, kind: 'png' | 'html'): Promise<string | null> {
+    return invoke('file_save', content, {
+      headers: { 'x-file-name': encodeURIComponent(fileName), 'x-file-kind': kind },
+    });
   }
 
-  /** Сайти з забороненим автовідтворенням зі звуком — для всіх сайтів вікна; діє після перезавантаження. */
-  setAudioRules(origins: readonly string[]): Promise<void> {
-    return invoke('page_set_audio_rules', { origins });
+  /** Правила автовідтворення — для всіх сайтів вікна: відкритим сторінкам одразу, а відео, що вже на них, — після перезавантаження. */
+  setAudioRules(rules: AutoplayRules): Promise<void> {
+    return invoke('page_set_audio_rules', { rules });
   }
 
   /** Збережений для сайту дозвіл на автовідтворення (у приватному вікні — лише до його закриття). */

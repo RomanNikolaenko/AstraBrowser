@@ -1,11 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiSelect, UiSelectOption } from '../../shared/ui-select/ui-select';
-import { AutoplayStore } from '../data/autoplay';
+import { AutoplayChoice, AutoplayStore } from '../data/autoplay';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
-
-type AutoplayChoice = 'allow' | 'block-audio' | 'block';
 
 /**
  * Панель дозволів сайту з кнопки на початку адресного рядка.
@@ -46,7 +44,7 @@ export class SitePermissions {
   /** Дозвіл змінено, а сторінка ще працює зі старим. */
   protected readonly changed = signal(false);
 
-  // «Блокувати аудіо та відео» — заборона в самому WebView2, «Блокувати аудіо» — наш скрипт (server/src/audio.rs).
+  // Обидві заборони — наш скрипт сторінки (server/src/audio.rs); «Блокувати аудіо та відео» ще й забороняє WebView2.
   protected readonly choices: readonly UiSelectOption<AutoplayChoice>[] = [
     { value: 'allow', label: 'Дозволити аудіо та відео' },
     { value: 'block-audio', label: 'Блокувати аудіо' },
@@ -72,13 +70,14 @@ export class SitePermissions {
     this.changed.set(false);
     this.autoplay.set(null);
     const permission = await this.pageViews.autoplay(this.page()).catch(() => 'default');
-    // За замовчуванням автовідтворення заборонене (server/src/webview2.rs, block_autoplay_by_default):
-    // дозволене — лише те, що дозволив сам користувач.
-    if (permission !== 'allow') {
-      this.autoplay.set('block');
-    } else {
-      this.autoplay.set(this.autoplayRules.blocksAudio(this.origin()) ? 'block-audio' : 'allow');
+    // За замовчуванням — «Блокувати аудіо та відео»; дозволене — лише те, що дозволив сам користувач. Сайтам,
+    // яким дозволили ще до наших правил (лише в WebView2), дозвіл переходить і в правила.
+    let choice = this.autoplayRules.choiceFor(this.origin());
+    if (choice === 'block' && permission === 'allow') {
+      choice = 'allow';
+      this.autoplayRules.setChoice(this.origin(), choice);
     }
+    this.autoplay.set(choice);
   }
 
   protected async setAutoplay(choice: AutoplayChoice | undefined): Promise<void> {
@@ -90,7 +89,7 @@ export class SitePermissions {
     try {
       // «Блокувати аудіо» — відео дозволене WebView2, а звук глушить наш скрипт (server/src/audio.rs).
       await this.pageViews.setAutoplay(this.page(), choice === 'block' ? 'block' : 'allow');
-      this.autoplayRules.setBlockAudio(this.origin(), choice === 'block-audio');
+      this.autoplayRules.setChoice(this.origin(), choice);
       this.changed.set(true);
     } catch {
       this.autoplay.set(previous);

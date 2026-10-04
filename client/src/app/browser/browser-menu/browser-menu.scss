@@ -30,6 +30,12 @@
 
   &__item {
     @include popover-item;
+
+    &:disabled {
+      cursor: default;
+      background: transparent;
+      opacity: 0.45;
+    }
   }
 
   &__icon {

@@ -22,7 +22,7 @@ use std::{
 use tauri::{webview::PlatformWebview, AppHandle, Manager, Url, Webview};
 use webview2_com::{
   take_pwstr, AcceleratorKeyPressedEventHandler, AddScriptToExecuteOnDocumentCreatedCompletedHandler, BytesReceivedChangedEventHandler, CallDevToolsProtocolMethodCompletedHandler,
-  CapturePreviewCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
+  CapturePreviewCompletedHandler, ClearBrowsingDataCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
   GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
   IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
   NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
@@ -190,6 +190,17 @@ pub fn watch_page_messages(
   })
 }
 
+/// Повідомлення сторінці сайту будь-коли, а не лише відповіддю в `watch_page_messages` (переклад приходить згодом).
+/// Отримує його поточний документ webview.
+pub fn post_page_message(webview: &Webview, message: &serde_json::Value) -> tauri::Result<()> {
+  let message = message.to_string();
+  webview.with_webview(move |platform| {
+    if let Ok(core) = core(&platform) {
+      let _ = unsafe { core.PostWebMessageAsJson(&HSTRING::from(message.as_str())) };
+    }
+  })
+}
+
 /// Повідомляє `report(fullscreen)`, коли сторінка входить у повноекранний режим (відео тощо) чи виходить з нього.
 /// Сам webview про розміри не дбає: розтягнути його на все вікно — справа інтерфейсу.
 pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'static) -> tauri::Result<()> {
@@ -210,12 +221,20 @@ pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'stati
   })
 }
 
-/// Віртуальний код клавіші S (у Windows коди літер — їхні великі ASCII).
+/// Віртуальні коди клавіш: S, T і 0 — їхні ASCII, решта — VK_OEM_PLUS, VK_OEM_MINUS і клавіші цифрового блока.
 const KEY_S: u32 = 0x53;
+const KEY_T: u32 = 0x54;
+const KEY_0: u32 = 0x30;
+const KEY_PLUS: u32 = 0xBB;
+const KEY_MINUS: u32 = 0xBD;
+const KEY_NUMPAD_0: u32 = 0x60;
+const KEY_NUMPAD_PLUS: u32 = 0x6B;
+const KEY_NUMPAD_MINUS: u32 = 0x6D;
 
 /// Гарячі клавіші браузера, натиснуті, поки фокус у сайті: самі клавіші отримує webview сайту,
 /// тож вони перехоплюються тут (сайт їх не бачить) і передаються інтерфейсу як `report(shortcut)`.
-/// Це Ctrl+Tab (`next-tab`), Ctrl+Shift+Tab (`previous-tab`) і Ctrl+Shift+S (`screenshot`).
+/// Це Ctrl+Tab (`next-tab`), Ctrl+Shift+Tab (`previous-tab`), Ctrl+Shift+T (`reopen-tab`), Ctrl+Shift+S (`screenshot`) і масштаб:
+/// Ctrl+= чи Ctrl++ (`zoom-in`), Ctrl+− (`zoom-out`), Ctrl+0 (`zoom-reset`).
 pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
@@ -234,6 +253,10 @@ pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send +
       let shortcut = match key {
         key if key == u32::from(VK_TAB.0) => Some(if held(VK_SHIFT) { "previous-tab" } else { "next-tab" }),
         KEY_S if held(VK_SHIFT) => Some("screenshot"),
+        KEY_T if held(VK_SHIFT) => Some("reopen-tab"),
+        KEY_PLUS | KEY_NUMPAD_PLUS => Some("zoom-in"),
+        KEY_MINUS | KEY_NUMPAD_MINUS => Some("zoom-out"),
+        KEY_0 | KEY_NUMPAD_0 if !held(VK_SHIFT) => Some("zoom-reset"),
         _ => None,
       };
       if let Some(shortcut) = shortcut {
@@ -386,6 +409,86 @@ pub fn reload_with(webview: &Webview, mode: ReloadMode, url: String, origin: Str
 
 fn finish(reply: &Reply<()>, result: windows_core::Result<()>) {
   let _ = reply.send(result.map_err(|error| error.to_string()));
+}
+
+/// Що очистити в діалозі «Очистити дані перегляду».
+#[derive(Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearKinds {
+  /// Cookies і сховища сайтів.
+  pub site_data: bool,
+  pub cache: bool,
+  /// Власна історія WebView2 (історію й завантаження браузера чистить інтерфейс).
+  pub history: bool,
+  pub autofill: bool,
+  /// Дозволи сайтів.
+  pub settings: bool,
+}
+
+/// Очищає дані профілю сайтів `webview`, змінені від `since` (секунди Unix; 0 — за весь час).
+///
+/// Якщо профіль спільний з інтерфейсом браузера (`shared_with_ui`, обліковий запис-власник), localStorage цілком
+/// не чиститься — у ньому дані самого браузера, — а лише для `origins` (сайти з історії) через DevTools.
+pub fn clear_browsing_data(
+  webview: &Webview,
+  kinds: ClearKinds,
+  shared_with_ui: bool,
+  since: f64,
+  origins: Vec<String>,
+  reply: Reply<()>,
+) -> tauri::Result<()> {
+  let flags = |list: &[COREWEBVIEW2_BROWSING_DATA_KINDS]| list.iter().fold(0, |all, kind| all | kind.0);
+  let mut mask = 0;
+  if kinds.site_data {
+    mask |= flags(&[
+      COREWEBVIEW2_BROWSING_DATA_KINDS_COOKIES,
+      COREWEBVIEW2_BROWSING_DATA_KINDS_INDEXED_DB,
+      COREWEBVIEW2_BROWSING_DATA_KINDS_FILE_SYSTEMS,
+      COREWEBVIEW2_BROWSING_DATA_KINDS_WEB_SQL,
+      COREWEBVIEW2_BROWSING_DATA_KINDS_CACHE_STORAGE,
+      COREWEBVIEW2_BROWSING_DATA_KINDS_SERVICE_WORKERS,
+    ]);
+    if !shared_with_ui {
+      mask |= COREWEBVIEW2_BROWSING_DATA_KINDS_LOCAL_STORAGE.0;
+    }
+  }
+  if kinds.cache {
+    mask |= COREWEBVIEW2_BROWSING_DATA_KINDS_DISK_CACHE.0;
+  }
+  if kinds.history {
+    mask |= flags(&[COREWEBVIEW2_BROWSING_DATA_KINDS_BROWSING_HISTORY, COREWEBVIEW2_BROWSING_DATA_KINDS_DOWNLOAD_HISTORY]);
+  }
+  if kinds.autofill {
+    mask |= COREWEBVIEW2_BROWSING_DATA_KINDS_GENERAL_AUTOFILL.0;
+  }
+  if kinds.settings {
+    mask |= COREWEBVIEW2_BROWSING_DATA_KINDS_SETTINGS.0;
+  }
+  webview.with_webview(move |platform| {
+    let failed = reply.clone();
+    let run = || -> windows_core::Result<()> {
+      let core = core(&platform)?;
+      if kinds.site_data && shared_with_ui {
+        for origin in &origins {
+          let params = serde_json::json!({ "origin": origin, "storageTypes": "local_storage" }).to_string();
+          devtools(&core, "Storage.clearDataForOrigin", &params, |_| ())?;
+        }
+      }
+      if mask == 0 {
+        finish(&reply, Ok(()));
+        return Ok(());
+      }
+      let handler = ClearBrowsingDataCompletedHandler::create(Box::new(move |result| {
+        finish(&reply, result);
+        Ok(())
+      }));
+      let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |time| time.as_secs_f64());
+      unsafe { profile(&platform)?.ClearBrowsingDataInTimeRange(COREWEBVIEW2_BROWSING_DATA_KINDS(mask), since, now + 60.0, &handler) }
+    };
+    if let Err(error) = run() {
+      finish(&failed, Err(error));
+    }
+  })
 }
 
 /// Метод протоколу DevTools у самому WebView2; `then` отримує відповідь як JSON.

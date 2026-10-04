@@ -32,14 +32,11 @@
         <span class="page__name">Панель закладок</span>
         <span class="page__meta">Показувати закладки під адресним рядком</span>
       </span>
-      <input
-        class="switch"
-        id="settings-bookmarks-bar"
-        name="bookmarks-bar"
-        type="checkbox"
-        role="switch"
+      <app-switch
+        inputId="settings-bookmarks-bar"
+        inputName="bookmarks-bar"
         [checked]="settings.showBookmarksBar()"
-        (change)="setBookmarksBar($event)" />
+        (checkedChange)="settings.showBookmarksBar.set($event)" />
     </label>
   </div>
 
@@ -88,14 +85,11 @@
           <span class="page__name">Питати, куди зберегти файл</span>
           <span class="page__meta">Перед кожним завантаженням показувати теку й давати вибрати іншу</span>
         </span>
-        <input
-          class="switch"
-          id="settings-ask-download"
-          name="ask-download"
-          type="checkbox"
-          role="switch"
+        <app-switch
+          inputId="settings-ask-download"
+          inputName="ask-download"
           [checked]="downloads.ask"
-          (change)="setAsk($event)" />
+          (checkedChange)="setAsk($event)" />
       </label>
     </div>
   }
@@ -104,44 +98,27 @@
   <div class="page__list settings">
     <div class="settings__row">
       <span class="settings__text">
-        <span class="page__name">Історія переглядів</span>
-        <span class="page__meta">{{ records(history.entries().length) }}</span>
+        <span class="page__name">Очистити дані перегляду</span>
+        <span class="page__meta">
+          Історія ({{ records(history.entries().length) }}), файли cookie, кеш, дані форм і налаштування сайтів
+        </span>
       </span>
-      <button
-        class="page__button page__button--danger"
-        type="button"
-        [disabled]="!history.entries().length"
-        (click)="confirmHistory.show()">
-        Очистити
-      </button>
+      <button class="page__button page__button--danger" type="button" (click)="clearData.show()">Очистити…</button>
     </div>
     <div class="settings__row">
       <span class="settings__text">
-        <span class="page__name">Список завантажень</span>
-        <span class="page__meta">{{ records(downloads.entries().length) }} · самі файли лишаються на диску</span>
+        <label class="page__name" for="settings-history-days">Зберігати історію</label>
+        <span class="page__meta">Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації</span>
       </span>
-      <button
-        class="page__button page__button--danger"
-        type="button"
-        [disabled]="!downloads.entries().length"
-        (click)="confirmDownloads.show()">
-        Очистити
-      </button>
+      <app-select
+        class="settings__select"
+        selectId="settings-history-days"
+        selectName="history-days"
+        [options]="retention"
+        [value]="'' + settings.historyDays()"
+        (valueChange)="setHistoryDays($event)" />
     </div>
   </div>
 
-  <app-confirm-dialog
-    #confirmHistory
-    heading="Очистити всю історію?"
-    message="Усі відвідані сторінки буде видалено. Цю дію не можна скасувати."
-    confirmLabel="Очистити"
-    danger
-    (confirmed)="history.clear()" />
-  <app-confirm-dialog
-    #confirmDownloads
-    heading="Очистити список завантажень?"
-    message="Записи зникнуть зі списку, а самі файли лишаться на диску."
-    confirmLabel="Очистити"
-    danger
-    (confirmed)="downloads.clear()" />
+  <app-clear-data-dialog #clearData />
 </section>

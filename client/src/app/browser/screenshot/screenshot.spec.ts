@@ -95,7 +95,7 @@ describe('Screenshot', () => {
     it('should take the visible part on Enter, then copy on Ctrl+C and save on Ctrl+S', async () => {
       const { fixture, element, pageViews } = await setup();
       vi.spyOn(pageViews, 'screenshot').mockResolvedValue(new ArrayBuffer(8));
-      const save = vi.spyOn(pageViews, 'saveScreenshot').mockResolvedValue('C:\\Users\\me\\Pictures\\shot.png');
+      const save = vi.spyOn(pageViews, 'saveFile').mockResolvedValue('C:\\Users\\me\\Pictures\\shot.png');
       const dialog = () => element.querySelector('dialog') as HTMLDialogElement;
       const press = async (init: KeyboardEventInit) => {
         dialog().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));

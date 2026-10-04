@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { UiSwitch } from '../../shared/ui-switch/ui-switch';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { AdBlockStore } from '../data/adblock';
 import { PageViews } from '../page-views/page-views';
@@ -14,7 +15,7 @@ const REQUESTS: Record<string, string> = { one: 'запит', few: 'запити
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [Popover, UiIcon, UiSwitch],
   selector: 'app-adblock-panel',
   styleUrl: './adblock-panel.scss',
   templateUrl: './adblock-panel.html',
@@ -66,13 +67,12 @@ export class AdBlockPanel {
     this.popover().show({ anchor });
   }
 
-  protected async setSiteEnabled(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
+  protected async setSiteEnabled(enabled: boolean): Promise<void> {
     try {
-      await this.adblock.setSiteEnabled(this.host(), input.checked);
+      await this.adblock.setSiteEnabled(this.host(), enabled);
       this.reload();
     } catch {
-      input.checked = !input.checked;
+      // Перемикач лишається як був: стан не змінився.
     }
   }
 

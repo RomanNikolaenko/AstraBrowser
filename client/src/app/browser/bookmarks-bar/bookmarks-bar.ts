@@ -20,7 +20,7 @@ import { bookmarkUrl, siteOrInternalPage } from '../bookmark-editor/bookmark-edi
 import { Bookmark, BookmarkFolder, BookmarkItem, BookmarkPlace, BookmarksStore, FolderColor } from '../data/bookmarks';
 import { Popover } from '../popover/popover';
 import { SiteIcon } from '../site-icon/site-icon';
-import { BookmarkActions, BookmarkMenuTarget, folderMenuId } from './bookmark-actions';
+import { BookmarkActions, BookmarkMenuTarget, folderMenuId, openFolderInBackground } from './bookmark-actions';
 import { BookmarkDrag } from './bookmark-drag';
 import { BookmarkFolderMenu } from './bookmark-folder-menu';
 import { FOLDER_PALETTE, folderColor, folderIcon } from './folder-colors';
@@ -34,7 +34,7 @@ interface BookmarkDialog {
 
 const DIALOG_TITLES = {
   bookmark: ['Нова закладка', 'Редагувати закладку'],
-  folder: ['Нова тека', 'Перейменувати теку'],
+  folder: ['Нова тека', 'Редагувати теку'],
 } as const;
 
 /**
@@ -102,6 +102,17 @@ export class BookmarksBar implements BookmarkActions {
 
   openInNewTab(bookmark: Bookmark): void {
     this.openBookmarkInNewTab.emit(bookmark);
+  }
+
+  /** Коліщатком по теці на панелі — усі її закладки в нових вкладках у фоні. */
+  protected openFolderInBackground(folder: BookmarkFolder): void {
+    openFolderInBackground(this, folder);
+  }
+
+  openAllOf(bookmarks: readonly Bookmark[]): void {
+    if (bookmarks.length) {
+      this.openBookmarks.emit(bookmarks);
+    }
   }
 
   showMenu(event: MouseEvent, target: BookmarkMenuTarget, source?: HTMLElement): void {

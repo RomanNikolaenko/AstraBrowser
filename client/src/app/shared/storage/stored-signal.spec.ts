@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { storedSignal } from './stored-signal';
+import { accountKey, accountSignal, adoptLegacyData, onStoredChange, setStorageAccount, storedSignal } from './stored-signal';
 
 describe('storedSignal', () => {
   const create = <T>(key: string, fallback: T) => TestBed.runInInjectionContext(() => storedSignal(key, fallback));
@@ -35,5 +35,49 @@ describe('storedSignal', () => {
     window.dispatchEvent(new StorageEvent('storage', { key: 'test.items' }));
 
     expect(state()).toEqual(['from another window']);
+  });
+  describe('accounts', () => {
+    const ID = '1f0c2a7e-55b1-4c3e-9d1a-7d1f1f2b3c4d';
+
+    afterEach(() => setStorageAccount(null));
+
+    it('should keep the data of each account under its own keys', () => {
+      setStorageAccount(ID);
+      const notes = TestBed.runInInjectionContext(() => accountSignal('astra.notes', ['a']));
+      notes.set(['mine']);
+      TestBed.tick();
+
+      expect(accountKey('astra.notes')).toBe(`astra.${ID}.notes`);
+      expect(JSON.parse(localStorage.getItem(`astra.${ID}.notes`) ?? 'null')).toEqual(['mine']);
+      expect(localStorage.getItem('astra.notes')).toBeNull();
+    });
+
+    it('should give the data from before accounts to the first account, but keep the device settings', () => {
+      localStorage.setItem('astra.bookmarks', '[1]');
+      localStorage.setItem('astra.profile.account', '"old"');
+      localStorage.setItem('astra.settings.theme', '"dark"');
+      localStorage.setItem(`astra.${ID}.notes`, '["already scoped"]');
+
+      adoptLegacyData(ID);
+
+      expect(localStorage.getItem(`astra.${ID}.bookmarks`)).toBe('[1]');
+      expect(localStorage.getItem('astra.bookmarks')).toBeNull();
+      expect(localStorage.getItem(`astra.${ID}.profile.account`)).toBeNull();
+      expect(localStorage.getItem('astra.settings.theme')).toBe('"dark"');
+      expect(localStorage.getItem(`astra.${ID}.notes`)).toBe('["already scoped"]');
+    });
+  });
+
+  it('should tell listeners about changes from this window and from others', () => {
+    const changed: string[] = [];
+    const stop = onStoredChange((key) => changed.push(key));
+    const state = create('test.items', ['a']);
+
+    state.set(['b']);
+    TestBed.tick();
+    window.dispatchEvent(new StorageEvent('storage', { key: 'test.other' }));
+    stop();
+
+    expect(changed).toEqual(['test.items', 'test.other']);
   });
 });

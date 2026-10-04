@@ -2,14 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, inject, output, signal } 
 import { MiddleClick } from '../../../shared/middle-click/middle-click';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
-import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
+import { ClearDataDialog } from '../../clear-data/clear-data-dialog';
 import { HistoryStore } from '../../data/history';
 import { SiteIcon } from '../../site-icon/site-icon';
 import { formatTime, groupByDay, hostname, matchesQuery } from '../internal-pages';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfirmDialog, MiddleClick, SiteIcon, UiIcon, UiInput],
+  imports: [ClearDataDialog, MiddleClick, SiteIcon, UiIcon, UiInput],
   selector: 'app-history-page',
   styleUrls: ['../internal-page.scss'],
   templateUrl: './history-page.html',

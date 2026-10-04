@@ -1,0 +1,106 @@
+@use 'sass:map';
+
+// Колір акценту інтерфейсу (Персоналізація, атрибут data-accent на <html>). Синій — стандартний, він у ui.scss.
+// Для кожного кольору — варіант світлої й темної теми, як і там.
+$accents: (
+  'violet': (
+    light: (
+      primary: #7c3aed,
+      accent: #6d28d9,
+      icon: #7c3aed,
+      focus: #8b5cf6,
+    ),
+    dark: (
+      primary: #c4b5fd,
+      accent: #c4b5fd,
+      icon: #d8b4fe,
+      focus: #c4b5fd,
+    ),
+    gradient: linear-gradient(105deg, #7c3aed 0%, #9333ea 55%, #c026d3 100%),
+  ),
+  'pink': (
+    light: (
+      primary: #db2777,
+      accent: #be185d,
+      icon: #db2777,
+      focus: #ec4899,
+    ),
+    dark: (
+      primary: #f9a8d4,
+      accent: #f9a8d4,
+      icon: #fbcfe8,
+      focus: #f9a8d4,
+    ),
+    gradient: linear-gradient(105deg, #db2777 0%, #e11d48 55%, #f43f5e 100%),
+  ),
+  'orange': (
+    light: (
+      primary: #ea580c,
+      accent: #c2410c,
+      icon: #ea580c,
+      focus: #f97316,
+    ),
+    dark: (
+      primary: #fdba74,
+      accent: #fdba74,
+      icon: #fed7aa,
+      focus: #fdba74,
+    ),
+    gradient: linear-gradient(105deg, #ea580c 0%, #f97316 55%, #f59e0b 100%),
+  ),
+  'green': (
+    light: (
+      primary: #059669,
+      accent: #047857,
+      icon: #059669,
+      focus: #10b981,
+    ),
+    dark: (
+      primary: #6ee7b7,
+      accent: #6ee7b7,
+      icon: #a7f3d0,
+      focus: #6ee7b7,
+    ),
+    gradient: linear-gradient(105deg, #059669 0%, #16a34a 55%, #65a30d 100%),
+  ),
+  'teal': (
+    light: (
+      primary: #0891b2,
+      accent: #0e7490,
+      icon: #0891b2,
+      focus: #06b6d4,
+    ),
+    dark: (
+      primary: #67e8f9,
+      accent: #67e8f9,
+      icon: #a5f3fc,
+      focus: #67e8f9,
+    ),
+    gradient: linear-gradient(105deg, #0891b2 0%, #0d9488 55%, #059669 100%),
+  ),
+);
+
+@mixin accent($colors, $gradient) {
+  --color-primary: #{map.get($colors, primary)};
+  --color-focus: #{map.get($colors, focus)};
+  --browser-accent: #{map.get($colors, accent)};
+  --browser-icon-accent: #{map.get($colors, icon)};
+  --auth-accent: #{map.get($colors, accent)};
+  --gradient-brand: #{$gradient};
+}
+
+@each $name, $accent in $accents {
+  :root[data-accent='#{$name}'] {
+    @include accent(map.get($accent, light), map.get($accent, gradient));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-accent='#{$name}']:not([data-theme='light']) {
+      @include accent(map.get($accent, dark), map.get($accent, gradient));
+    }
+  }
+
+  :root[data-accent='#{$name}'][data-theme='dark'] {
+    @include accent(map.get($accent, dark), map.get($accent, gradient));
+  }
+}

@@ -5,7 +5,7 @@
 }
 
 .bookmark-folder-menu {
-  --popover-width: 22rem;
+  --popover-width: 16rem;
   --popover-padding: 0.375rem;
 
   // Довгі назви не розпирають список (і не дають прокрутки вбік) — обрізаються трьома крапками.
@@ -33,6 +33,12 @@
     height: 1rem;
     color: var(--browser-icon);
     pointer-events: none;
+
+    // Значок теки має поля всередині — без них він здається меншим за значки сайтів.
+    &--folder {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
   }
 
   &__label {
@@ -48,6 +54,13 @@
     width: 0.875rem;
     height: 0.875rem;
     color: var(--browser-icon);
+  }
+
+  // «Відкрити всі» — під лінією, окремо від самих закладок.
+  &__footer {
+    padding-top: 0.375rem;
+    margin-top: 0.375rem;
+    border-top: 0.0625rem solid var(--browser-divider);
   }
 
   // Лінія тонка, а взяти роздільник можна вище й нижче від неї.

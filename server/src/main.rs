@@ -3,7 +3,12 @@
 mod adblock;
 mod audio;
 #[cfg(windows)]
+mod auth;
+#[cfg(windows)]
+mod browsing_data;
+#[cfg(windows)]
 mod downloads;
+mod favicons;
 #[cfg(windows)]
 mod fullscreen;
 mod pages;
@@ -11,7 +16,17 @@ mod screenshots;
 #[cfg(windows)]
 mod passwords;
 #[cfg(windows)]
+mod profiles;
+#[cfg(windows)]
+mod secure;
+#[cfg(windows)]
+mod sync;
+#[cfg(windows)]
+mod translate;
+#[cfg(windows)]
 mod webview2;
+#[cfg(windows)]
+mod window_drag;
 
 fn main() {
 	tauri::Builder::default()
@@ -25,7 +40,8 @@ fn main() {
 				tauri::Manager::manage(app, downloads::Downloads::default());
 				downloads::start(app.handle());
 				tauri::Manager::manage(app, passwords::Passwords::default());
-				passwords::start(app.handle());
+				tauri::Manager::manage(app, auth::Auth::default());
+				auth::start(app.handle());
 			}
 			Ok(())
 		})
@@ -67,6 +83,38 @@ fn main() {
 			#[cfg(windows)]
 			downloads::download_show,
 			#[cfg(windows)]
+			auth::auth_state,
+			#[cfg(windows)]
+			auth::auth_sign_in,
+			#[cfg(windows)]
+			auth::auth_sign_up,
+			#[cfg(windows)]
+			auth::auth_verify,
+			#[cfg(windows)]
+			auth::auth_resend,
+			#[cfg(windows)]
+			auth::auth_recover,
+			#[cfg(windows)]
+			auth::auth_reset_password,
+			#[cfg(windows)]
+			auth::auth_set_password,
+			#[cfg(windows)]
+			auth::auth_sign_out,
+			#[cfg(windows)]
+			auth::auth_unlock_sync,
+			#[cfg(windows)]
+			auth::auth_update_name,
+			#[cfg(windows)]
+			auth::auth_reload_user,
+			#[cfg(windows)]
+			sync::sync_pull,
+			#[cfg(windows)]
+			sync::sync_push,
+			#[cfg(windows)]
+			passwords::passwords_sync_items,
+			#[cfg(windows)]
+			passwords::passwords_sync_apply,
+			#[cfg(windows)]
 			passwords::passwords_state,
 			#[cfg(windows)]
 			passwords::password_prompt_answer,
@@ -85,10 +133,19 @@ fn main() {
 			#[cfg(windows)]
 			fullscreen::window_fill_monitor,
 			#[cfg(windows)]
+			window_drag::window_start_drag,
+			#[cfg(windows)]
+			translate::translate_set_language,
+			#[cfg(windows)]
 			pages::page_capture,
 			#[cfg(windows)]
 			pages::page_screenshot,
-			screenshots::screenshot_save,
+			screenshots::file_save,
+			favicons::favicon_find,
+			#[cfg(windows)]
+			browsing_data::browsing_data_sizes,
+			#[cfg(windows)]
+			browsing_data::browsing_data_clear,
 			#[cfg(windows)]
 			pages::page_set_clip,
 			#[cfg(windows)]

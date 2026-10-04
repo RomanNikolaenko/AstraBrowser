@@ -227,6 +227,19 @@ describe('BookmarksBar', () => {
     await fixture.whenStable();
     expect(fixture.componentInstance.opened).toEqual([['open', 'Пошта']]);
 
+    // Коліщатком по теці — її закладки в нових вкладках у фоні (по одній, як коліщатком по закладці).
+    folderButton?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.opened.at(-1)).toEqual(['new-tab', 'Пошта']);
+
+    // «Відкрити всі» — лише закладки цієї теки; у порожній вкладеній теці кнопки немає.
+    const openAll = () => folderMenu().querySelector(':scope > .bookmark-folder-menu__footer button') as HTMLButtonElement;
+    expect(openAll().textContent?.trim()).toBe('Відкрити всі (1)');
+    expect(folderMenu().querySelector('.bookmark-folder-menu .bookmark-folder-menu .bookmark-folder-menu__footer')).toBeNull();
+    openAll().click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.opened.at(-1)).toEqual(['all', 'Пошта']);
+
     // Правий клік у теці додає в саму теку — перед пунктом, на якому клацнули.
     await rightClick(folderMenu().querySelectorAll('[role="menuitem"]')[1]);
     await choose('Додати теку…');
@@ -238,7 +251,7 @@ describe('BookmarksBar', () => {
     await rightClick(element.querySelector('.bookmarks__item'));
     expect(menu()).toEqual([
       'Відкрити всі закладки',
-      'Перейменувати…',
+      'Редагувати…',
       'Видалити',
       'Додати закладку…',
       'Додати теку…',
@@ -248,8 +261,8 @@ describe('BookmarksBar', () => {
     expect(fixture.componentInstance.opened.at(-1)).toEqual(['all', 'Пошта']);
 
     await rightClick(element.querySelector('.bookmarks__item'));
-    await choose('Перейменувати…');
-    expect(element.querySelector('.bookmark-dialog__title')?.textContent).toBe('Перейменувати теку');
+    await choose('Редагувати…');
+    expect(element.querySelector('.bookmark-dialog__title')?.textContent).toBe('Редагувати теку');
     await type('bookmark-dialog-title', 'Справи');
     await save();
     expect(shape()).toEqual([{ Справи: ['Пошта', { Нове: [] }, { Архів: [] }] }]);
@@ -288,7 +301,7 @@ describe('BookmarksBar', () => {
 
     // Перейменування показує поточний колір і змінює його.
     await rightClick(element.querySelector('.bookmarks__item'));
-    await choose('Перейменувати…');
+    await choose('Редагувати…');
     expect(
       colors()
         .find((color) => color.checked)

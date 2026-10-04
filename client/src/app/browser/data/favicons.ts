@@ -1,15 +1,21 @@
 import { Injectable, signal } from '@angular/core';
-import { storedSignal } from '../../shared/storage/stored-signal';
+import { invoke, isTauri } from '@tauri-apps/api/core';
+import { accountSignal } from '../../shared/storage/stored-signal';
 
 /** Скільки сайтів пам'ятати: найстаріші записи витісняються. */
 const LIMIT = 300;
 
-/** Іконки сайтів (за host), які повідомили самі сторінки через <link rel="icon">. */
+/**
+ * Іконки сайтів (за host), які повідомили самі сторінки через <link rel="icon">. Сайт, якого тут ще не відкривали і
+ * в якого немає /favicon.ico (закладка Supabase, gmail.com), браузер один раз шукає сам (server/src/favicons.rs).
+ */
 @Injectable({ providedIn: 'root' })
 export class FaviconStore {
-  private readonly icons = storedSignal<Readonly<Record<string, string>>>('astra.favicons', {});
+  private readonly icons = accountSignal<Readonly<Record<string, string>>>('astra.favicons', {});
   /** Іконки, що не завантажилися в цьому вікні: замість них — наступний варіант. */
   private readonly broken = signal<ReadonlySet<string>>(new Set());
+  /** Сайти, значок яких уже шукали в цьому вікні: удруге не шукаємо. */
+  private readonly searched = new Set<string>();
 
   /** Іконка сторінки: повідомлена сайтом, інакше /favicon.ico; null — для не-вебових адрес чи якщо жодна не вантажиться. */
   iconFor(url: string): string | null {
@@ -38,8 +44,27 @@ export class FaviconStore {
     });
   }
 
-  markBroken(icon: string): void {
+  /** Іконка `icon` адреси `url` не завантажилася; якщо інших варіантів немає — шукаємо значок сайту. */
+  markBroken(icon: string, url?: string): void {
     this.broken.update((broken) => new Set(broken).add(icon));
+    if (url && !this.iconFor(url)) {
+      this.discover(url);
+    }
+  }
+
+  private discover(url: string): void {
+    const site = parse(url);
+    if (!site || !isTauri() || this.searched.has(site.host)) {
+      return;
+    }
+    this.searched.add(site.host);
+    invoke<string | null>('favicon_find', { url: site.href })
+      .then((icon) => {
+        if (icon) {
+          this.remember(url, icon);
+        }
+      })
+      .catch(() => undefined);
   }
 
   clear(): void {

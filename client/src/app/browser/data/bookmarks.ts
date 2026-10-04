@@ -1,5 +1,6 @@
 import { Injectable, computed } from '@angular/core';
-import { storedSignal } from '../../shared/storage/stored-signal';
+import { accountSignal } from '../../shared/storage/stored-signal';
+import type { ImportedBookmark } from './bookmarks-html';
 
 export interface Bookmark {
   readonly type: 'bookmark';
@@ -119,7 +120,7 @@ function insertAt(items: readonly BookmarkItem[], item: BookmarkItem, index = it
 
 @Injectable({ providedIn: 'root' })
 export class BookmarksStore {
-  private readonly stored = storedSignal<readonly StoredItem[]>('astra.bookmarks', []);
+  private readonly stored = accountSignal<readonly StoredItem[]>('astra.bookmarks', []);
 
   /** Панель закладок: закладки, теки й роздільники в тому порядку, як вони на ній стоять. */
   readonly bar = computed(() => this.stored().map(normalize));
@@ -159,6 +160,17 @@ export class BookmarksStore {
 
   addFolder(title: string, place: BookmarkPlace = { folder: null }, color?: FolderColor): void {
     this.insert(withColor(folderOf(crypto.randomUUID(), title, []), color), place);
+  }
+
+  /** Закладки з іншого браузера — однією текою в кінці панелі (щоб не змішалися з наявними). Повертає id теки. */
+  importTree(title: string, items: readonly ImportedBookmark[]): string {
+    const build = (item: ImportedBookmark): BookmarkItem =>
+      item.type === 'folder'
+        ? folderOf(crypto.randomUUID(), item.title, item.children.map(build))
+        : { type: 'bookmark', id: crypto.randomUUID(), title: item.title, url: item.url };
+    const folder = folderOf(crypto.randomUUID(), title, items.map(build));
+    this.insert(folder, { folder: null });
+    return folder.id;
   }
 
   addSeparator(place: BookmarkPlace = { folder: null }): void {

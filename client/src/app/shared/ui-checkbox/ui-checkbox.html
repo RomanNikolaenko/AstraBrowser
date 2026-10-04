@@ -1,5 +1,10 @@
 <label class="checkbox">
-  <input class="checkbox__input" type="checkbox" [checked]="checked()" [attr.name]="inputName() || null" />
+  <input
+    class="checkbox__input"
+    type="checkbox"
+    [checked]="checked()"
+    [attr.name]="inputName() || null"
+    (change)="onChange($event)" />
   <span class="checkbox__checkmark" aria-hidden="true">
     <app-icon icon="check" />
   </span>

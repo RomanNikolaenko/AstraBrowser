@@ -1,14 +1,25 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiSelect } from '../../shared/ui-select/ui-select';
-import { storedSignal } from '../../shared/storage/stored-signal';
 import { hostname } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
+import { TranslateLanguageStore } from './translate-language';
 import { TRANSLATE_LANGUAGES, isTranslated, originalUrl, translatePageUrl, translateTextUrl } from './translate-urls';
 
 /**
  * Перекладач (з «Інструментів»): поточна сторінка — через Google Перекладач (у тій самій вкладці, «Показати оригінал»
- * повертає її), а довільний текст — у Google Перекладачі в новій вкладці. Мова перекладу запам'ятовується.
+ * повертає її), а довільний текст — у Google Перекладачі в новій вкладці. Мова перекладу запам'ятовується
+ * (TranslateLanguageStore) — на неї ж перекладається виділене на сайтах.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,7 +36,7 @@ export class Translator {
   readonly openInNewTab = output<string>();
 
   protected readonly languages = TRANSLATE_LANGUAGES;
-  protected readonly language = storedSignal<string>('astra.translate.language', 'uk');
+  protected readonly language = inject(TranslateLanguageStore).language;
   protected readonly text = signal('');
   protected readonly translated = computed(() => isTranslated(this.pageUrl()));
   /** Сайт, що зараз у вкладці, — для перекладеної сторінки її справжній. */

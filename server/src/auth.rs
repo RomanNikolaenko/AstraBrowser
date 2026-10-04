@@ -1,0 +1,710 @@
+//! Обліковий запис Astra Browser: вхід, реєстрація з кодом із листа, відновлення пароля — через Supabase Auth.
+//!
+//! Токени сеансу не потрапляють в інтерфейс: він отримує лише користувача (auth_state, подія auth://changed), а всі
+//! запити до Supabase робить цей модуль. «Запам'ятати мене» — сеанс на диску (session.dat у теці даних застосунку),
+//! зашифрований DPAPI, як і паролі сайтів; без нього сеанс живе, лише поки застосунок відкритий.
+//!
+//! Токен доступу Supabase діє годину; фоновий потік оновлює його заздалегідь. Без інтернету сеанс лишається — браузер
+//! працює й офлайн, а вийти змусить лише відповідь сервера, що сеанс більше не дійсний (обліковий запис видалили,
+//! вийшли на всіх пристроях).
+//!
+//! Під час входу з пароля облікового запису виводиться ключ синхронізації (secure::derive_key): ним паролі сайтів
+//! шифруються перед відправкою на сервер (passwords.rs). Сам пароль ніде не зберігається, а ключ живе в сеансі.
+//! Зміна облікового запису перемикає дані браузера на його власні (profiles.rs).
+
+use std::{
+  fs,
+  path::PathBuf,
+  sync::{Mutex, OnceLock},
+  thread,
+  time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::{profiles, secure};
+
+const SUPABASE_URL: &str = "https://flhmxwjermtajpdbqgut.supabase.co";
+/// Публічний ключ проєкту: його можна вбудовувати в застосунок, доступ до даних обмежують правила Supabase (RLS).
+const SUPABASE_KEY: &str = "sb_publishable_5a3iyX7fgjhiN6xi9m_g7g_3l7QgPzp";
+const SESSION_FILE: &str = "session.dat";
+/// Додатковий «ключ» DPAPI для файла сеансу.
+const ENTROPY: &[u8] = b"AstraBrowser session v1";
+/// За скільки секунд до кінця дії токен доступу оновлюється.
+const REFRESH_AHEAD: u64 = 300;
+/// Як часто фоновий потік перевіряє, чи не пора оновити токен.
+const REFRESH_CHECK: Duration = Duration::from_secs(30);
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct User {
+  id: String,
+  email: String,
+  /// Ім'я з реєстрації; порожнє, якщо не вказали.
+  name: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Session {
+  access_token: String,
+  refresh_token: String,
+  /// Коли токен доступу перестане діяти (секунди Unix).
+  expires_at: u64,
+  user: User,
+  /// «Запам'ятати мене»: сеанс зберігається на диску.
+  remember: bool,
+  /// Ключ синхронізації (шістнадцятковий) — з пароля облікового запису. Немає, якщо сеанс давніший за синхронізацію.
+  #[serde(default)]
+  sync_key: Option<String>,
+  /// Коли сервер востаннє прийняв пароль, з якого цей ключ (секунди Unix): з двох різних ключів новіший — від
+  /// новішого пароля, а давніший ключ (пароль відтоді змінили) синхронізувати паролі вже не може.
+  #[serde(default)]
+  sync_key_at: u64,
+}
+
+/// Що бачить інтерфейс: користувач або `None`, якщо не ввійшли.
+#[derive(Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthState {
+  user: Option<User>,
+  /// Перший обліковий запис на цьому комп'ютері — йому дісталися дані, що були тут до облікових записів.
+  owner: bool,
+  /// Паролі сайтів можна синхронізувати: є ключ із пароля облікового запису.
+  sync_unlocked: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignUpResult {
+  /// Користувач, якщо пошту підтверджувати не треба й вхід уже відбувся.
+  user: Option<User>,
+  /// На пошту надіслано лист із кодом: обліковий запис запрацює після його введення.
+  confirm: bool,
+}
+
+/// Помилка для інтерфейсу: код Supabase (чи власний: offline, server) і повідомлення українською.
+#[derive(Clone, Serialize, Debug)]
+pub struct AuthError {
+  code: String,
+  message: String,
+}
+
+impl AuthError {
+  pub fn new(code: &str, message: &str) -> Self {
+    Self { code: code.to_string(), message: message.to_string() }
+  }
+}
+
+#[derive(Default)]
+pub struct Auth {
+  session: Mutex<Option<Session>>,
+  file: OnceLock<PathBuf>,
+  /// Не дає двом потокам одночасно оновлювати токен: refresh token Supabase одноразовий.
+  refreshing: Mutex<()>,
+  /// Сеанс із коду відновлення пароля — чекає, поки новий пароль приймуть (тоді він і стане сеансом входу).
+  recovery: Mutex<Option<(String, Session)>>,
+  /// Ключ синхронізації з реєстрації (пошта, id користувача, ключ) — чекає коду з листа.
+  pending_key: Mutex<Option<(String, String, String)>>,
+}
+
+fn now() -> u64 {
+  SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |time| time.as_secs())
+}
+
+fn agent() -> &'static ureq::Agent {
+  static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+  AGENT.get_or_init(|| {
+    ureq::Agent::config_builder()
+      .http_status_as_error(false)
+      .timeout_global(Some(Duration::from_secs(20)))
+      .user_agent("AstraBrowser")
+      .build()
+      .into()
+  })
+}
+
+pub enum Method {
+  Get,
+  Post,
+  Put,
+}
+
+/// Найбільша відповідь сервера: сторінка синхронізації з фото профілю й історією.
+const RESPONSE_LIMIT: u64 = 64 * 1024 * 1024;
+
+/// Запит до Supabase: статус і JSON відповіді (без відповіді — Null).
+fn request(method: Method, url: &str, token: Option<&str>, body: &Value) -> Result<(u16, Value), AuthError> {
+  let bearer = token.map(|token| format!("Bearer {token}"));
+  let response = match method {
+    Method::Get => {
+      let mut request = agent().get(url).header("apikey", SUPABASE_KEY);
+      if let Some(bearer) = &bearer {
+        request = request.header("Authorization", bearer);
+      }
+      request.call()
+    }
+    Method::Post | Method::Put => {
+      let request = if matches!(method, Method::Put) { agent().put(url) } else { agent().post(url) };
+      let mut request = request.header("apikey", SUPABASE_KEY).header("Content-Type", "application/json");
+      if let Some(bearer) = &bearer {
+        request = request.header("Authorization", bearer);
+      }
+      request.send(body.to_string())
+    }
+  };
+  let mut response = response.map_err(|_| offline())?;
+  let status = response.status().as_u16();
+  let text = response.body_mut().with_config().limit(RESPONSE_LIMIT).read_to_string().map_err(|_| offline())?;
+  let value = if text.trim().is_empty() { Value::Null } else { serde_json::from_str(&text).unwrap_or(Value::Null) };
+  Ok((status, value))
+}
+
+/// Запит до Supabase Auth (`path` — після /auth/v1/). Відповідь з помилкою стає [`AuthError`].
+fn call(method: Method, path: &str, token: Option<&str>, body: &Value) -> Result<Value, AuthError> {
+  let (status, value) = request(method, &format!("{SUPABASE_URL}/auth/v1/{path}"), token, body)?;
+  if (200..300).contains(&status) {
+    Ok(value)
+  } else {
+    Err(api_error(status, &value))
+  }
+}
+
+/// Помилка REST API бази (PostgREST): `{"code": "PGRST205", "message": "..."}`.
+fn rest_error(status: u16, body: &Value) -> AuthError {
+  match text(body, "code").unwrap_or_default() {
+    // Таблиці чи функції синхронізації ще немає (SQL з інструкції не виконали) чи немає до неї доступу.
+    "PGRST202" | "PGRST205" | "42P01" | "42883" | "42501" => {
+      AuthError::new("sync_not_configured", "Синхронізацію ще не налаштовано на сервері.")
+    }
+    "PGRST301" | "PGRST303" => AuthError::new("session_expired", "Сеанс завершився. Увійдіть знову."),
+    _ if status >= 500 => AuthError::new("server", "Сервер синхронізації зараз недоступний. Спробуйте пізніше."),
+    code => AuthError::new(if code.is_empty() { "server" } else { code }, "Не вдалося синхронізувати дані. Спробуємо ще раз згодом."),
+  }
+}
+
+fn offline() -> AuthError {
+  AuthError::new("offline", "Немає з'єднання з сервером. Перевірте інтернет і спробуйте ще раз.")
+}
+
+fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+  value.get(key).and_then(Value::as_str).filter(|text| !text.is_empty())
+}
+
+/// Відповідь Supabase з помилкою: `{"error_code": "...", "msg": "..."}` (а в старіших — `{"error": "...", ...}`).
+fn api_error(status: u16, body: &Value) -> AuthError {
+  let code = text(body, "error_code").or_else(|| text(body, "error")).unwrap_or(if status >= 500 { "server" } else { "unknown" });
+  let message = match code {
+    "invalid_credentials" | "invalid_grant" => "Неправильна пошта або пароль.",
+    "email_not_confirmed" => "Пошту ще не підтверджено. Введіть код із листа, який ми надіслали.",
+    "user_already_exists" | "email_exists" | "identity_already_exists" => {
+      "Обліковий запис із цією поштою вже існує. Увійдіть або відновіть пароль."
+    }
+    "weak_password" => return weak_password(body),
+    "same_password" => "Новий пароль має відрізнятися від попереднього.",
+    "otp_expired" | "otp_disabled" => "Код неправильний або застарів. Надішліть новий.",
+    "over_email_send_rate_limit" => "Забагато листів за короткий час. Зачекайте трохи й спробуйте знову.",
+    "over_request_rate_limit" => "Забагато спроб. Зачекайте хвилину й спробуйте знову.",
+    "email_address_invalid" | "validation_failed" => "Перевірте адресу електронної пошти.",
+    "email_address_not_authorized" => "На цю адресу зараз не можна надіслати лист. Спробуйте іншу пошту.",
+    "signup_disabled" | "email_provider_disabled" => "Реєстрацію тимчасово вимкнено.",
+    "user_banned" => "Цей обліковий запис заблоковано.",
+    "user_not_found" => "Обліковий запис не знайдено.",
+    "reauthentication_needed" | "reauthentication_not_valid" => "Щоб змінити пароль, вийдіть і увійдіть знову.",
+    "session_not_found" | "session_expired" | "refresh_token_not_found" | "refresh_token_already_used" | "bad_jwt" => {
+      "Сеанс завершився. Увійдіть знову."
+    }
+    _ if status >= 500 => "Сервер облікових записів зараз недоступний. Спробуйте пізніше.",
+    _ => "Не вдалося виконати дію. Спробуйте ще раз.",
+  };
+  AuthError::new(code, message)
+}
+
+/// Supabase каже, чим пароль слабкий: `weak_password.reasons` — length, characters, pwned.
+fn weak_password(body: &Value) -> AuthError {
+  let reasons: Vec<&str> = body
+    .pointer("/weak_password/reasons")
+    .and_then(Value::as_array)
+    .map(|reasons| reasons.iter().filter_map(Value::as_str).collect())
+    .unwrap_or_default();
+  let message = if reasons.contains(&"pwned") {
+    "Цей пароль трапляється у витоках даних. Виберіть інший."
+  } else if reasons.contains(&"characters") {
+    "Пароль має містити великі й малі літери, цифри та символи."
+  } else {
+    "Пароль закороткий. Виберіть довший."
+  };
+  AuthError::new("weak_password", message)
+}
+
+fn user_of(value: &Value) -> Option<User> {
+  let metadata = value.get("user_metadata");
+  let name = metadata.and_then(|metadata| text(metadata, "name").or_else(|| text(metadata, "full_name")));
+  Some(User {
+    id: text(value, "id")?.to_string(),
+    email: text(value, "email").unwrap_or_default().to_string(),
+    name: name.unwrap_or_default().trim().to_string(),
+  })
+}
+
+/// Сеанс із відповіді `token`/`verify`/`signup` Supabase; `None`, якщо токенів у відповіді немає.
+fn session_of(value: &Value, remember: bool) -> Option<Session> {
+  let expires_at = value
+    .get("expires_at")
+    .and_then(Value::as_u64)
+    .or_else(|| value.get("expires_in").and_then(Value::as_u64).map(|seconds| now() + seconds))?;
+  Some(Session {
+    access_token: text(value, "access_token")?.to_string(),
+    refresh_token: text(value, "refresh_token")?.to_string(),
+    expires_at,
+    user: user_of(value.get("user")?)?,
+    remember,
+    sync_key: None,
+    sync_key_at: 0,
+  })
+}
+
+fn session_or_error(value: &Value, remember: bool) -> Result<Session, AuthError> {
+  session_of(value, remember).ok_or_else(unexpected)
+}
+
+fn state_of(app: &AppHandle, session: Option<&Session>) -> AuthState {
+  AuthState {
+    user: session.map(|session| session.user.clone()),
+    owner: session.is_some_and(|session| profiles::is_owner(app, &session.user.id)),
+    sync_unlocked: session.is_some_and(|session| session.sync_key.is_some()),
+  }
+}
+
+impl Session {
+  /// Ключ синхронізації з пароля, який сервер щойно прийняв.
+  fn unlock(&mut self, password: &str) {
+    if let Some(key) = secure::derive_key(password, &self.user.id) {
+      self.sync_key = Some(secure::hex(&key));
+      self.sync_key_at = now();
+    }
+  }
+}
+
+/// Тепер увійшов `user` (`None` — вийшли): браузер перемикається на його дані.
+fn activate(app: &AppHandle, user: Option<&str>) {
+  profiles::set_current(user);
+  crate::passwords::switch_account(app, user);
+}
+
+impl Auth {
+  fn current(&self) -> Option<Session> {
+    self.session.lock().ok()?.clone()
+  }
+
+  /// Новий сеанс (або вихід із `None`): у пам'ять, на диск, якщо його треба пам'ятати, і всім вікнам.
+  fn set(&self, app: &AppHandle, session: Option<Session>) -> AuthState {
+    self.replace(app, session, |_| true)
+  }
+
+  /// Як [`Auth::set`], але лише якщо поточний сеанс підходить `allowed` — інакше лишається поточний.
+  fn replace(&self, app: &AppHandle, session: Option<Session>, allowed: impl FnOnce(Option<&Session>) -> bool) -> AuthState {
+    let state = state_of(app, session.as_ref());
+    let (changed, switched) = {
+      let Ok(mut current) = self.session.lock() else {
+        return state;
+      };
+      if !allowed(current.as_ref()) {
+        return state_of(app, current.as_ref());
+      }
+      let changed = state_of(app, current.as_ref()) != state;
+      let user_id = |session: Option<&Session>| session.map(|session| session.user.id.clone());
+      let switched = user_id(current.as_ref()) != user_id(session.as_ref());
+      self.write(session.as_ref());
+      *current = session;
+      (changed, switched)
+    };
+    if switched {
+      activate(app, state.user.as_ref().map(|user| user.id.as_str()));
+    }
+    if changed {
+      let _ = app.emit("auth://changed", state.clone());
+    }
+    state
+  }
+
+  /// Змінює поточний сеанс (якщо за цей час не вийшли й не ввійшли іншим обліковим записом).
+  fn modify(&self, app: &AppHandle, change: impl FnOnce(&mut Session)) -> AuthState {
+    let Some(mut session) = self.current() else {
+      return state_of(app, None);
+    };
+    let user = session.user.id.clone();
+    change(&mut session);
+    self.replace(app, Some(session), |current| current.is_some_and(|current| current.user.id == user))
+  }
+
+  /// Сеанс «Запам'ятати мене» — на диск, решту з диска прибираємо.
+  fn write(&self, session: Option<&Session>) {
+    let Some(file) = self.file.get() else {
+      return;
+    };
+    let Some(session) = session.filter(|session| session.remember) else {
+      let _ = fs::remove_file(file);
+      return;
+    };
+    let Ok(sealed) = serde_json::to_vec(session).map_err(|error| error.to_string()).and_then(|json| secure::protect(&json, ENTROPY)) else {
+      return;
+    };
+    if let Some(dir) = file.parent() {
+      let _ = fs::create_dir_all(dir);
+    }
+    // Спершу в тимчасовий файл, потім заміна: обірваний запис не зіпсує сеанс.
+    let temporary = file.with_extension("dat.tmp");
+    if fs::write(&temporary, sealed).is_ok() {
+      let _ = fs::rename(&temporary, file);
+    }
+  }
+
+  /// Оновлює токен доступу, якщо той скоро спливе (чи `force`). Відповідь сервера, що сеанс недійсний, — вихід;
+  /// без інтернету сеанс лишається як є.
+  fn refresh(&self, app: &AppHandle, force: bool) -> Result<Option<Session>, AuthError> {
+    let _guard = self.refreshing.lock().map_err(|_| AuthError::new("internal", "Не вдалося оновити сеанс."))?;
+    let Some(session) = self.current() else {
+      return Ok(None);
+    };
+    if !force && session.expires_at > now() + REFRESH_AHEAD {
+      return Ok(Some(session));
+    }
+    // Поки чекали на сервер, могли вийти чи ввійти наново — тоді відповідь уже не про поточний сеанс.
+    let same = |current: Option<&Session>| current.is_some_and(|current| current.refresh_token == session.refresh_token);
+    match call(Method::Post, "token?grant_type=refresh_token", None, &json!({ "refresh_token": session.refresh_token })) {
+      Ok(reply) => {
+        let mut fresh = session_or_error(&reply, session.remember)?;
+        fresh.sync_key = session.sync_key.clone();
+        fresh.sync_key_at = session.sync_key_at;
+        self.replace(app, Some(fresh.clone()), same);
+        Ok(Some(fresh))
+      }
+      Err(error) if is_session_gone(&error) => {
+        self.replace(app, None, same);
+        Err(error)
+      }
+      Err(error) => Err(error),
+    }
+  }
+
+  /// Чинний токен доступу (оновлений, якщо спливає) — для запитів від імені користувача.
+  fn access_token(&self, app: &AppHandle) -> Result<String, AuthError> {
+    self.refresh(app, false)?.map(|session| session.access_token).ok_or_else(signed_out)
+  }
+}
+
+fn signed_out() -> AuthError {
+  AuthError::new("signed_out", "Ви не ввійшли в обліковий запис.")
+}
+
+/// Ключ синхронізації паролів поточного облікового запису і коли його отримано з пароля (секунди Unix).
+pub fn sync_key(app: &AppHandle) -> Option<(secure::SyncKey, u64)> {
+  let session = app.state::<Auth>().current()?;
+  let key = secure::from_hex(&session.sync_key?)?;
+  Some((key.try_into().ok()?, session.sync_key_at))
+}
+
+/// Запит до бази Supabase (REST API, `path` — після /rest/v1/) від імені користувача. Якщо сервер каже, що токен
+/// протермінований, токен оновлюється, і запит повторюється один раз.
+pub fn rest(app: &AppHandle, method: fn() -> Method, path: &str, body: &Value) -> Result<Value, AuthError> {
+  let auth = app.state::<Auth>();
+  let url = format!("{SUPABASE_URL}/rest/v1/{path}");
+  let (mut status, mut value) = request(method(), &url, Some(&auth.access_token(app)?), body)?;
+  if status == 401 {
+    let token = auth.refresh(app, true)?.map(|session| session.access_token).ok_or_else(signed_out)?;
+    (status, value) = request(method(), &url, Some(&token), body)?;
+  }
+  if (200..300).contains(&status) {
+    Ok(value)
+  } else {
+    Err(rest_error(status, &value))
+  }
+}
+
+/// Помилки, після яких сеанс уже не відновити: потрібен новий вхід.
+fn is_session_gone(error: &AuthError) -> bool {
+  matches!(
+    error.code.as_str(),
+    "invalid_grant"
+      | "refresh_token_not_found"
+      | "refresh_token_already_used"
+      | "session_not_found"
+      | "session_expired"
+      | "user_not_found"
+      | "user_banned"
+      | "bad_jwt"
+  )
+}
+
+/// Сеанс із диска й фоновий потік, що вчасно оновлює токен. Викликається при запуску.
+pub fn start(app: &AppHandle) {
+  let auth = app.state::<Auth>();
+  if let Ok(dir) = app.path().app_data_dir() {
+    let file = dir.join(SESSION_FILE);
+    let saved = fs::read(&file)
+      .ok()
+      .and_then(|sealed| secure::unprotect(&sealed, ENTROPY).ok())
+      .and_then(|json| serde_json::from_slice::<Session>(&json).ok());
+    let user = saved.as_ref().map(|session| session.user.id.clone());
+    if let (Some(session), Ok(mut current)) = (saved, auth.session.lock()) {
+      *current = Some(session);
+    }
+    let _ = auth.file.set(file);
+    activate(app, user.as_deref());
+  }
+
+  let app = app.clone();
+  thread::spawn(move || loop {
+    let _ = app.state::<Auth>().refresh(&app, false);
+    thread::sleep(REFRESH_CHECK);
+  });
+}
+
+/// Мережеві запити — не в потоці подій інтерфейсу.
+pub async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, AuthError> + Send + 'static) -> Result<T, AuthError> {
+  tauri::async_runtime::spawn_blocking(work)
+    .await
+    .map_err(|_| AuthError::new("internal", "Не вдалося виконати дію. Спробуйте ще раз."))?
+}
+
+fn clean_email(email: &str) -> String {
+  email.trim().to_lowercase()
+}
+
+#[tauri::command]
+pub fn auth_state(app: AppHandle, auth: State<'_, Auth>) -> AuthState {
+  state_of(&app, auth.current().as_ref())
+}
+
+#[tauri::command]
+pub async fn auth_sign_in(app: AppHandle, email: String, password: String, remember: bool) -> Result<AuthState, AuthError> {
+  blocking(move || {
+    let reply = call(Method::Post, "token?grant_type=password", None, &json!({ "email": clean_email(&email), "password": password }))?;
+    let mut session = session_or_error(&reply, remember)?;
+    session.unlock(&password);
+    Ok(app.state::<Auth>().set(&app, Some(session)))
+  })
+  .await
+}
+
+#[tauri::command]
+pub async fn auth_sign_up(app: AppHandle, name: String, email: String, password: String) -> Result<SignUpResult, AuthError> {
+  blocking(move || {
+    let reply = call(
+      Method::Post,
+      "signup",
+      None,
+      &json!({ "email": clean_email(&email), "password": password, "data": { "name": name.trim() } }),
+    )?;
+    // Підтвердження пошти вимкнено — Supabase одразу дає сеанс.
+    if let Some(mut session) = session_of(&reply, true) {
+      session.unlock(&password);
+      let user = session.user.clone();
+      app.state::<Auth>().set(&app, Some(session));
+      return Ok(SignUpResult { user: Some(user), confirm: false });
+    }
+    // На вже зареєстровану й підтверджену пошту Supabase не каже «зайнято» (щоб не видавати, чия це пошта), а
+    // повертає користувача без жодної identity.
+    if reply.get("identities").and_then(Value::as_array).is_some_and(Vec::is_empty) {
+      return Err(api_error(422, &json!({ "error_code": "user_already_exists" })));
+    }
+    // Ключ синхронізації — зараз, поки є пароль: знадобиться, щойно пошту підтвердять кодом.
+    if let Some(user) = text(&reply, "id") {
+      let key = secure::derive_key(&password, user).map(|key| secure::hex(&key));
+      if let (Some(key), Ok(mut pending)) = (key, app.state::<Auth>().pending_key.lock()) {
+        *pending = Some((clean_email(&email), user.to_string(), key));
+      }
+    }
+    Ok(SignUpResult { user: None, confirm: true })
+  })
+  .await
+}
+
+/// Код із листа «Підтвердіть пошту» — і вхід.
+#[tauri::command]
+pub async fn auth_verify(app: AppHandle, email: String, code: String) -> Result<AuthState, AuthError> {
+  blocking(move || {
+    let email = clean_email(&email);
+    let reply = call(Method::Post, "verify", None, &json!({ "type": "email", "email": email, "token": code.trim() }))?;
+    let mut session = session_or_error(&reply, true)?;
+    let auth = app.state::<Auth>();
+    let pending = auth.pending_key.lock().ok().and_then(|mut pending| pending.take());
+    if let Some((_, _, key)) = pending.filter(|(owner, user, _)| *owner == email && *user == session.user.id) {
+      session.sync_key = Some(key);
+      session.sync_key_at = now();
+    }
+    Ok(auth.set(&app, Some(session)))
+  })
+  .await
+}
+
+/// Новий лист із кодом підтвердження пошти.
+#[tauri::command]
+pub async fn auth_resend(email: String) -> Result<(), AuthError> {
+  blocking(move || call(Method::Post, "resend", None, &json!({ "type": "signup", "email": clean_email(&email) })).map(drop)).await
+}
+
+/// Лист із кодом відновлення пароля. Supabase відповідає однаково, є така пошта чи ні.
+#[tauri::command]
+pub async fn auth_recover(email: String) -> Result<(), AuthError> {
+  blocking(move || call(Method::Post, "recover", None, &json!({ "email": clean_email(&email) })).map(drop)).await
+}
+
+/// Код відновлення й новий пароль — і вхід. Якщо пароль не прийняли (наприклад, заслабкий), код уже використано,
+/// тож його сеанс чекає наступної спроби з тією самою поштою.
+#[tauri::command]
+pub async fn auth_reset_password(app: AppHandle, email: String, code: String, password: String) -> Result<AuthState, AuthError> {
+  blocking(move || {
+    let email = clean_email(&email);
+    let auth = app.state::<Auth>();
+    let pending = auth.recovery.lock().ok().and_then(|mut recovery| recovery.take()).filter(|(owner, _)| *owner == email);
+    let mut session = match pending {
+      Some((_, session)) if session.expires_at > now() => session,
+      _ => {
+        let reply = call(Method::Post, "verify", None, &json!({ "type": "recovery", "email": email, "token": code.trim() }))?;
+        session_or_error(&reply, true)?
+      }
+    };
+    if let Err(error) = call(Method::Put, "user", Some(&session.access_token), &json!({ "password": password })) {
+      if let Ok(mut recovery) = auth.recovery.lock() {
+        *recovery = Some((email, session));
+      }
+      return Err(error);
+    }
+    // Новий пароль — новий ключ: паролі сайтів перешифруються ним під час синхронізації.
+    session.unlock(&password);
+    Ok(auth.set(&app, Some(session)))
+  })
+  .await
+}
+
+/// Новий пароль для того, хто вже ввійшов. Ключ синхронізації теж новий: паролі сайтів перешифруються ним.
+#[tauri::command]
+pub async fn auth_set_password(app: AppHandle, password: String) -> Result<(), AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let token = auth.access_token(&app)?;
+    call(Method::Put, "user", Some(&token), &json!({ "password": password }))?;
+    auth.modify(&app, |session| session.unlock(&password));
+    Ok(())
+  })
+  .await
+}
+
+/// Пароль облікового запису ще раз — щоб отримати ключ синхронізації паролів (сеанс давніший за синхронізацію
+/// чи пароль змінили на іншому комп'ютері).
+#[tauri::command]
+pub async fn auth_unlock_sync(app: AppHandle, password: String) -> Result<AuthState, AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let current = auth.current().ok_or_else(signed_out)?;
+    let reply = call(Method::Post, "token?grant_type=password", None, &json!({ "email": current.user.email, "password": password }))?;
+    let mut session = session_or_error(&reply, current.remember)?;
+    if session.user.id != current.user.id {
+      return Err(signed_out());
+    }
+    session.unlock(&password);
+    Ok(auth.set(&app, Some(session)))
+  })
+  .await
+}
+
+/// Нове ім'я — в обліковий запис Supabase (user_metadata.name), звідки його візьмуть інші комп'ютери.
+#[tauri::command]
+pub async fn auth_update_name(app: AppHandle, name: String) -> Result<AuthState, AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let token = auth.access_token(&app)?;
+    let reply = call(Method::Put, "user", Some(&token), &json!({ "data": { "name": name.trim() } }))?;
+    let user = user_of(&reply).ok_or_else(unexpected)?;
+    Ok(auth.modify(&app, |session| session.user = user))
+  })
+  .await
+}
+
+/// Свіжі дані облікового запису з сервера (ім'я могли змінити на іншому комп'ютері).
+#[tauri::command]
+pub async fn auth_reload_user(app: AppHandle) -> Result<AuthState, AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let token = auth.access_token(&app)?;
+    match call(Method::Get, "user", Some(&token), &Value::Null) {
+      Ok(reply) => {
+        let user = user_of(&reply).ok_or_else(unexpected)?;
+        Ok(auth.modify(&app, |session| session.user = user))
+      }
+      Err(error) if is_session_gone(&error) => {
+        auth.set(&app, None);
+        Err(error)
+      }
+      Err(error) => Err(error),
+    }
+  })
+  .await
+}
+
+fn unexpected() -> AuthError {
+  AuthError::new("server", "Сервер облікових записів відповів неочікувано. Спробуйте ще раз.")
+}
+
+/// Вихід: сеанс забувається одразу, а Supabase повідомляємо, як вийде (без інтернету — ні).
+#[tauri::command]
+pub async fn auth_sign_out(app: AppHandle) -> Result<(), AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let session = auth.current();
+    auth.set(&app, None);
+    if let Some(session) = session {
+      let _ = call(Method::Post, "logout?scope=local", Some(&session.access_token), &json!({}));
+    }
+    Ok(())
+  })
+  .await
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn reads_the_session_and_user_from_a_token_reply() {
+    let reply = json!({
+      "access_token": "access",
+      "refresh_token": "refresh",
+      "expires_in": 3600,
+      "expires_at": 2_000_000_000u64,
+      "user": { "id": "u1", "email": "user@example.com", "user_metadata": { "name": " Роман " } }
+    });
+    let session = session_of(&reply, true).expect("session");
+    assert_eq!(session.expires_at, 2_000_000_000);
+    assert_eq!(session.user, User { id: "u1".into(), email: "user@example.com".into(), name: "Роман".into() });
+
+    // Відповідь на реєстрацію з підтвердженням пошти — лише користувач, без токенів.
+    assert!(session_of(&json!({ "id": "u1", "email": "user@example.com" }), true).is_none());
+  }
+
+  #[test]
+  fn explains_database_errors() {
+    assert_eq!(rest_error(404, &json!({ "code": "PGRST205", "message": "Could not find the table" })).code, "sync_not_configured");
+    assert_eq!(rest_error(401, &json!({ "code": "PGRST303" })).code, "session_expired");
+    assert_eq!(rest_error(502, &Value::Null).code, "server");
+  }
+
+  #[test]
+  fn explains_supabase_errors_in_ukrainian() {
+    let error = api_error(400, &json!({ "code": 400, "error_code": "invalid_credentials", "msg": "Invalid login credentials" }));
+    assert_eq!(error.code, "invalid_credentials");
+    assert_eq!(error.message, "Неправильна пошта або пароль.");
+
+    let old = api_error(400, &json!({ "error": "invalid_grant", "error_description": "Invalid Refresh Token" }));
+    assert!(is_session_gone(&old));
+
+    let weak = api_error(422, &json!({ "error_code": "weak_password", "weak_password": { "reasons": ["pwned"] } }));
+    assert_eq!(weak.message, "Цей пароль трапляється у витоках даних. Виберіть інший.");
+
+    assert_eq!(api_error(503, &Value::Null).code, "server");
+    assert!(!is_session_gone(&offline()));
+  }
+}

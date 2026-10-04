@@ -1,0 +1,71 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.zoom-badge {
+  flex: 0 0 auto;
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  margin-inline: 0.25rem;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--browser-text);
+  cursor: pointer;
+  background: var(--browser-pressed);
+  border: 0.0625rem solid var(--browser-chrome-border);
+  border-radius: 999px;
+  transition:
+    background-color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
+  @include focus-ring(0.125rem);
+
+  &:hover {
+    background: var(--browser-hover);
+  }
+}
+
+.zoom-popover {
+  --popover-padding: 0.5rem;
+
+  &__row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding-inline-start: 0.5rem;
+  }
+
+  &__label {
+    font-size: 0.9375rem;
+  }
+
+  &__control {
+    display: flex;
+    align-items: center;
+    background: var(--browser-field);
+    border-radius: 0.75rem;
+  }
+
+  &__value {
+    min-width: 3.5rem;
+    font-size: 0.9375rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  &__step {
+    @include icon-button(2.25rem, 1.25rem, $radius: 0.75rem);
+  }
+
+  &__reset {
+    @include pill-button(2.25rem);
+
+    padding-inline: 0.875rem;
+  }
+}

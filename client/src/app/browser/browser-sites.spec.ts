@@ -12,7 +12,7 @@ import { DownloadsStore } from './data/downloads';
 import { HistoryStore } from './data/history';
 import { AdBlockStatus, AdBlockStore, adBlockSite } from './data/adblock';
 import { AutoplayStore } from './data/autoplay';
-import { AutoplayPermission, PageOpenOptions, PageViews } from './page-views/page-views';
+import { AutoplayPermission, AutoplayRules, PageOpenOptions, PageViews } from './page-views/page-views';
 
 @Component({
   imports: [Browser, Titlebar],
@@ -32,14 +32,14 @@ class FakePageViews {
     if (options.background) {
       this.calls.push(['background', label]);
     }
-    this.calls.push(['block-audio', label, options.blockAudio ?? []]);
+    this.calls.push(['autoplay', label, options.autoplay ?? { allow: [], blockAudio: [] }]);
     return this.record('open', label, url);
   }
   capture() {
     return Promise.resolve(new ArrayBuffer(8));
   }
-  setAudioRules(origins: readonly string[]) {
-    return this.record('audio-rules', [...origins]);
+  setAudioRules(rules: AutoplayRules) {
+    return this.record('audio-rules', rules);
   }
   navigate(label: string, url: string) {
     return this.record('navigate', label, url);
@@ -249,6 +249,35 @@ describe('Browser with sites', () => {
     expect(element.querySelector('.tab__spinner')).toBeTruthy();
     expect(element.querySelector('app-new-tab')).toBeNull();
     expect(omnibox().value).toBe('https://angular.dev/');
+  });
+
+  it('should reopen the last closed tab in its place with Ctrl+Shift+T, also from a site', async () => {
+    await typeInOmnibox('angular.dev');
+    button('Нова вкладка').click();
+    await stable();
+    await typeInOmnibox('github.com');
+    expect(titles()).toEqual(['angular.dev', 'github.com']);
+
+    button('Закрити вкладку «angular.dev»').click();
+    await stable();
+    expect(titles()).toEqual(['github.com']);
+
+    // Фокус у сайті: клавіші ловить його webview і передає як гарячу клавішу.
+    pages.emit('page://shortcut', { label: label(2), shortcut: 'reopen-tab' });
+    await stable();
+    expect(titles()).toEqual(['angular.dev', 'github.com']);
+    expect(pages.called('open').at(-1)?.[1]).toBe('https://angular.dev/');
+
+    // Порожня нова вкладка не запам'ятовується, і відновлювати більше нічого.
+    button('Нова вкладка').click();
+    await stable();
+    button('Закрити вкладку «Нова вкладка»').click();
+    await stable();
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, code: 'KeyT', key: 'T', cancelable: true })
+    );
+    await stable();
+    expect(titles()).toEqual(['angular.dev', 'github.com']);
   });
 
   it('should search anything that is not an address', async () => {
@@ -551,6 +580,70 @@ describe('Browser with sites', () => {
     expect(audio()).toBeNull();
   });
 
+  it('should zoom with Ctrl and the wheel or the keys, also while the site has focus', async () => {
+    const badge = () => element.querySelector('.zoom-badge')?.textContent?.trim();
+    await typeInOmnibox('www.hltv.org');
+    expect(badge()).toBeUndefined();
+
+    // Сайт (скрипт zoom-page.js чи гаряча клавіша у webview) повідомляє про крок.
+    pages.emit('page://shortcut', { label: label(1), shortcut: 'zoom-in' });
+    await stable();
+    expect(badge()).toBe('110%');
+    expect(pages.called('zoom').at(-1)).toEqual([label(1), 1.1]);
+
+    pages.emit('page://shortcut', { label: label(1), shortcut: 'zoom-reset' });
+    await stable();
+    expect(badge()).toBeUndefined();
+
+    const press = async (code: string, key: string) => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, code, key, cancelable: true }));
+      await stable();
+    };
+    await press('Minus', '-');
+    expect(badge()).toBe('90%');
+    await press('Equal', '=');
+    expect(badge()).toBeUndefined();
+    await press('NumpadAdd', '+');
+    expect(badge()).toBe('110%');
+    await press('Digit0', '0');
+    expect(badge()).toBeUndefined();
+  });
+
+  it('should zoom an internal page with Ctrl and the mouse wheel', async () => {
+    const viewport = element.querySelector('.viewport') as HTMLElement;
+    const wheel = new WheelEvent('wheel', { ctrlKey: true, deltaY: -100, bubbles: true, cancelable: true });
+    viewport.dispatchEvent(wheel);
+    await stable();
+
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(element.querySelector('.zoom-badge')?.textContent?.trim()).toBe('110%');
+
+    // Без Ctrl — звичайна прокрутка.
+    const scroll = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true });
+    viewport.dispatchEvent(scroll);
+    expect(scroll.defaultPrevented).toBe(false);
+  });
+
+  it('should offer to translate a site from the address bar and mark a translated page', async () => {
+    const translate = () => element.querySelector('.omnibox__translate') as HTMLButtonElement | null;
+    expect(translate()).toBeNull();
+
+    await typeInOmnibox('www.hltv.org');
+    expect(translate()?.getAttribute('popovertarget')).toBe('translator');
+    expect(translate()?.getAttribute('aria-label')).toBe('Перекласти сторінку');
+    expect(translate()?.classList).not.toContain('omnibox__translate--active');
+
+    pages.emit('page://navigation', {
+      label: label(1),
+      url: 'https://www-hltv-org.translate.goog/?_x_tr_sl=auto&_x_tr_tl=uk',
+      canGoBack: true,
+      canGoForward: false,
+    });
+    await stable();
+    expect(translate()?.classList).toContain('omnibox__translate--active');
+    expect(translate()?.getAttribute('title')).toBe('Сторінку перекладено');
+  });
+
   it('should take a screenshot of the site on Ctrl+Shift+S, also while the site has focus', async () => {
     await typeInOmnibox('www.hltv.org');
 
@@ -641,8 +734,12 @@ describe('Browser with sites', () => {
       await openPanel();
       expect(autoplay().textContent?.trim()).toBe('Дозволити аудіо та відео');
 
+      // Дозвіл, даний ще до наших правил (лише в WebView2), перейшов і в правила скрипта сторінки.
+      expect(TestBed.inject(AutoplayStore).rules().allow).toEqual(['https://www.twitch.tv']);
+
       await choose('Блокувати аудіо та відео');
       expect(pages.called('set-autoplay')).toEqual([[label(1), 'block']]);
+      expect(TestBed.inject(AutoplayStore).rules()).toEqual({ allow: [], blockAudio: [] });
     });
 
     it('should block only the sound of autoplay with a page script', async () => {
@@ -653,15 +750,16 @@ describe('Browser with sites', () => {
 
       // Відео сайту дозволене, а звук глушить скрипт сторінки.
       expect(pages.called('set-autoplay')).toEqual([[label(1), 'allow']]);
-      expect(TestBed.inject(AutoplayStore).blockAudio()).toEqual(['https://www.twitch.tv']);
-      expect(pages.called('audio-rules').at(-1)).toEqual([['https://www.twitch.tv']]);
+      const rules = { allow: [], blockAudio: ['https://www.twitch.tv'] };
+      expect(TestBed.inject(AutoplayStore).rules()).toEqual(rules);
+      expect(pages.called('audio-rules').at(-1)).toEqual([rules]);
       expect(autoplay().textContent?.trim()).toBe('Блокувати аудіо');
 
       // Нові вкладки отримують список одразу, разом зі скриптом.
       element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
       await stable();
       await typeInOmnibox('twitch.tv');
-      expect(pages.called('block-audio').at(-1)).toEqual([label(2), ['https://www.twitch.tv']]);
+      expect(pages.called('autoplay').at(-1)).toEqual([label(2), rules]);
 
       // І панель це пам'ятає.
       await typeInOmnibox('www.twitch.tv/other');
@@ -894,6 +992,11 @@ describe('Browser with sites', () => {
       [label(3), 'https://angular.dev/'],
     ]);
     expect(element.querySelectorAll('.tab')[1].classList).toContain('tab--active');
+    // Першу показано вже після того, як її webview створився, — інакше вона лишалася б порожньою, доки не перемкнути вкладку.
+    const opened = pages.calls.findIndex(([call, page]) => call === 'open' && page === label(2));
+    expect(pages.calls.slice(opened).some(([call, page, visible]) => call === 'visible' && page === label(2) && visible)).toBe(
+      true
+    );
   });
 
   describe('fullscreen video', () => {

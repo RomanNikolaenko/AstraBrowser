@@ -1,5 +1,5 @@
 import { Injectable, computed } from '@angular/core';
-import { storedSignal } from '../../shared/storage/stored-signal';
+import { accountSignal } from '../../shared/storage/stored-signal';
 
 export interface Note {
   readonly id: string;
@@ -18,7 +18,7 @@ export interface Note {
  */
 @Injectable({ providedIn: 'root' })
 export class NotesStore {
-  private readonly items = storedSignal<readonly Note[]>('astra.notes', []);
+  private readonly items = accountSignal<readonly Note[]>('astra.notes', []);
 
   /** Спершу закріплені, далі — від щойно змінених. */
   readonly entries = computed(() =>

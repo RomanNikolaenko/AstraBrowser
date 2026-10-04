@@ -17,4 +17,5 @@ import { TitlebarSlot } from './titlebar-content';
 export class Titlebar {
   protected readonly slot = inject(TitlebarSlot);
   protected readonly isPrivate = inject(BrowserWindows).isPrivate;
+  protected readonly isGuest = inject(BrowserWindows).isGuest;
 }

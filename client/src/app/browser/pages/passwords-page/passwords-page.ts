@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import { BrowserWindows } from '../../../shared/browser-windows/browser-windows';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
+import { UiSwitch } from '../../../shared/ui-switch/ui-switch';
 import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
 import { PasswordSettings, PasswordsStore, SavedPassword } from '../../data/passwords';
 import { SiteIcon } from '../../site-icon/site-icon';
@@ -21,13 +23,15 @@ const COPIED_FOR = 1500;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfirmDialog, PasswordEditor, SiteIcon, UiIcon, UiInput],
+  imports: [ConfirmDialog, PasswordEditor, SiteIcon, UiIcon, UiInput, UiSwitch],
   selector: 'app-passwords-page',
   styleUrls: ['../internal-page.scss', './passwords-page.scss'],
   templateUrl: './passwords-page.html',
 })
 export class PasswordsPage {
   protected readonly passwords = inject(PasswordsStore);
+  /** У гостьовому вікні паролів власника не видно, а свої не зберігаються (server/src/passwords.rs). */
+  protected readonly guest = inject(BrowserWindows).isGuest;
 
   protected readonly query = signal('');
   protected readonly filtered = computed(() =>
@@ -93,10 +97,9 @@ export class PasswordsPage {
     void this.passwords.allowSaving(origin).catch(() => undefined);
   }
 
-  protected setSetting(key: keyof PasswordSettings, event: Event): void {
+  protected setSetting(key: keyof PasswordSettings, value: boolean): void {
     const settings = this.passwords.settings();
     if (settings) {
-      const value = (event.target as HTMLInputElement).checked;
       void this.passwords.setSettings({ ...settings, [key]: value }).catch(() => undefined);
     }
   }

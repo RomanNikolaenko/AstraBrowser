@@ -14,15 +14,13 @@
           listsState().text
         }}</span>
       </div>
-      <input
+      <app-switch
         class="extension__switch"
-        type="checkbox"
-        role="switch"
-        name="adblock-enabled"
-        aria-label="Блокувальник реклами"
+        inputName="adblock-enabled"
+        ariaLabel="Блокувальник реклами"
         [checked]="adblock.status()?.enabled ?? false"
         [disabled]="!adblock.status()"
-        (change)="setEnabled($event)" />
+        (checkedChange)="setEnabled($event)" />
     </div>
 
     @if (adblock.status(); as status) {

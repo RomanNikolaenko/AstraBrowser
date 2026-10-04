@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { UiSwitch } from '../../../shared/ui-switch/ui-switch';
 import { UiAccordion } from '../../../shared/ui-accordion/ui-accordion';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { AdBlockStore } from '../../data/adblock';
@@ -9,7 +10,7 @@ const updatedFormat = new Intl.DateTimeFormat('uk', { day: 'numeric', month: 'lo
 /** Вбудовані розширення браузера; поки це блокувальник реклами (server/src/adblock.rs). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SiteIcon, UiAccordion, UiIcon],
+  imports: [SiteIcon, UiAccordion, UiIcon, UiSwitch],
   selector: 'app-extensions-page',
   styleUrls: ['../internal-page.scss', './extensions-page.scss'],
   templateUrl: './extensions-page.html',
@@ -40,9 +41,8 @@ export class ExtensionsPage {
     return { text: 'Списки фільтрів ще не завантажено', error: false };
   });
 
-  protected setEnabled(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.adblock.setEnabled(input.checked).catch(() => (input.checked = !input.checked));
+  protected setEnabled(enabled: boolean): void {
+    void this.adblock.setEnabled(enabled).catch(() => undefined);
   }
 
   protected update(): void {

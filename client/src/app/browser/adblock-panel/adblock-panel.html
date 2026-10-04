@@ -31,15 +31,12 @@
     @if (host()) {
       <label class="adblock-panel__row" for="adblock-panel-site">
         <span class="adblock-panel__label">Блокувати рекламу на цьому сайті</span>
-        <input
-          class="adblock-panel__switch"
-          id="adblock-panel-site"
-          name="adblock-site"
-          type="checkbox"
-          role="switch"
+        <app-switch
+          inputId="adblock-panel-site"
+          inputName="adblock-site"
           [checked]="!adblock.isSiteDisabled(host())"
           [disabled]="!status.enabled"
-          (change)="setSiteEnabled($event)" />
+          (checkedChange)="setSiteEnabled($event)" />
       </label>
     }
   }

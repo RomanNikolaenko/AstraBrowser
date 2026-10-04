@@ -39,61 +39,15 @@
     flex-wrap: wrap;
     gap: 0.5rem;
   }
+
+  &__select {
+    @include select-colors;
+
+    min-width: 10rem;
+  }
 }
 
-// Перемикач теми: справжні radio, оформлені як сегменти.
+// Перемикач теми: справжні radio, оформлені як сегменти (segmented-control у _browser-ui.scss).
 .segmented {
-  display: flex;
-  flex-wrap: wrap;
-  padding: 0.25rem;
-  background: var(--browser-field);
-  border-radius: 999px;
-
-  &__option {
-    position: relative;
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    min-height: 2.25rem;
-    padding: 0 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--browser-muted);
-    cursor: pointer;
-    border-radius: 999px;
-    transition:
-      background-color $motion,
-      color $motion,
-      box-shadow $motion;
-
-    &:hover {
-      color: var(--browser-text);
-    }
-
-    &:has(.segmented__input:checked) {
-      color: var(--browser-text);
-      background: var(--browser-popover);
-      box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 12%);
-    }
-
-    &:has(.segmented__input:focus-visible) {
-      outline: 0.1875rem solid var(--color-focus);
-      outline-offset: 0.125rem;
-    }
-  }
-
-  &__input {
-    position: absolute;
-    pointer-events: none;
-    opacity: 0;
-  }
-
-  &__icon {
-    width: 1.125rem;
-    height: 1.125rem;
-  }
-}
-
-.switch {
-  @include switch;
+  @include segmented-control;
 }

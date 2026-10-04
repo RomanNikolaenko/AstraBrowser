@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { SettingsStore } from '../../shared/settings/settings';
 import { BookmarkItem, BookmarksStore } from './bookmarks';
 import { DownloadsStore } from './downloads';
 import { FaviconStore } from './favicons';
@@ -8,6 +9,8 @@ describe('browser data stores', () => {
   beforeEach(() => localStorage.clear());
 
   it('should keep history newest first and remove or clear it', () => {
+    // Записи з 1970 року: щоб їх не прибрало як давні, історія — «Завжди».
+    TestBed.inject(SettingsStore).historyDays.set(0);
     const history = TestBed.inject(HistoryStore);
     history.record('https://a.example', 'A', 1000);
     history.record('https://b.example', 'B', 3000);
@@ -20,6 +23,21 @@ describe('browser data stores', () => {
 
     history.clear();
     expect(history.entries()).toEqual([]);
+  });
+
+  it('should drop history older than the chosen number of days', () => {
+    const day = 86_400_000;
+    const history = TestBed.inject(HistoryStore);
+    history.record('https://old.example', 'Давно', Date.now() - 100 * day);
+    history.record('https://month.example', 'Місяць тому', Date.now() - 40 * day);
+    history.record('https://today.example', 'Сьогодні');
+
+    // Стандартно — 90 днів, як у Chrome.
+    expect(history.entries().map((entry) => entry.title)).toEqual(['Сьогодні', 'Місяць тому']);
+
+    TestBed.inject(SettingsStore).historyDays.set(30);
+    TestBed.tick();
+    expect(history.entries().map((entry) => entry.title)).toEqual(['Сьогодні']);
   });
 
   it('should follow a download while it runs and record how it ended', () => {

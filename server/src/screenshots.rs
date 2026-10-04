@@ -1,5 +1,5 @@
-//! Скріншоти сторінок: збереження картинки, яку зняв (і, може, обрізав) інтерфейс, через вікно «Зберегти як» Windows.
-//! Саме знімання — webview2::screenshot (команда pages::page_screenshot).
+//! Збереження файлів, які зробив інтерфейс (скріншот PNG, експорт закладок HTML), через вікно «Зберегти як» Windows.
+//! Саме знімання сторінки — webview2::screenshot (команда pages::page_screenshot).
 
 use std::{fs, sync::mpsc};
 
@@ -30,30 +30,29 @@ fn decode_component(text: &str) -> String {
   String::from_utf8_lossy(&decoded).into_owned()
 }
 
-/// Зберігає скріншот: PNG — тілом запиту, запропонована назва — у заголовку x-file-name. Тека спершу — «Зображення».
+/// Зберігає файл: вміст — тілом запиту, запропонована назва — у заголовку x-file-name, вид — у x-file-kind
+/// (png — скріншот, тека «Зображення»; html — закладки, тека «Документи»).
 /// Повертає шлях до файла або None, якщо вікно закрили, нічого не вибравши.
 #[tauri::command]
-pub async fn screenshot_save(app: AppHandle, window: Window, request: Request<'_>) -> Result<Option<String>, String> {
-  let InvokeBody::Raw(image) = request.body() else {
-    return Err("Немає картинки".into());
+pub async fn file_save(app: AppHandle, window: Window, request: Request<'_>) -> Result<Option<String>, String> {
+  let InvokeBody::Raw(content) = request.body() else {
+    return Err("Немає вмісту файла".into());
   };
-  let image = image.clone();
-  let name = request
-    .headers()
-    .get("x-file-name")
-    .and_then(|value| value.to_str().ok())
-    .map(decode_component)
+  let content = content.clone();
+  let header = |name: &str| request.headers().get(name).and_then(|value| value.to_str().ok()).map(decode_component);
+  let html = header("x-file-kind").as_deref() == Some("html");
+  let name = header("x-file-name")
     .filter(|name| !name.trim().is_empty())
-    .unwrap_or_else(|| "Скріншот.png".into());
-  let mut dialog = app
-    .dialog()
-    .file()
-    .set_parent(&window)
-    .set_title("Зберегти скріншот")
-    .set_file_name(name)
-    .add_filter("Зображення PNG", &["png"]);
-  if let Ok(pictures) = app.path().picture_dir() {
-    dialog = dialog.set_directory(pictures);
+    .unwrap_or_else(|| if html { "Закладки.html".into() } else { "Скріншот.png".into() });
+  let (title, filter, extension) = if html {
+    ("Зберегти закладки", "Закладки HTML", "html")
+  } else {
+    ("Зберегти скріншот", "Зображення PNG", "png")
+  };
+  let mut dialog = app.dialog().file().set_parent(&window).set_title(title).set_file_name(name).add_filter(filter, &[extension]);
+  let folder = if html { app.path().document_dir() } else { app.path().picture_dir() };
+  if let Ok(folder) = folder {
+    dialog = dialog.set_directory(folder);
   }
   let (sender, receiver) = mpsc::channel();
   dialog.save_file(move |picked| {
@@ -65,7 +64,7 @@ pub async fn screenshot_save(app: AppHandle, window: Window, request: Request<'_
   let Some(path) = picked else {
     return Ok(None);
   };
-  fs::write(&path, image).map_err(|error| error.to_string())?;
+  fs::write(&path, content).map_err(|error| error.to_string())?;
   Ok(Some(path.display().to_string()))
 }
 

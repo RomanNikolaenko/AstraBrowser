@@ -107,10 +107,6 @@
     color: var(--browser-text);
   }
 
-  &__switch {
-    @include switch;
-  }
-
   &__settings {
     @include popover-item;
 

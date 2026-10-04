@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for all AstraBrowser windows: the main one and those opened as new or private windows.",
-  "windows": ["main", "window-*", "private-*"],
+  "windows": ["main", "window-*", "private-*", "guest-*"],
   "permissions": [
     "core:default",
     "core:webview:allow-create-webview-window",

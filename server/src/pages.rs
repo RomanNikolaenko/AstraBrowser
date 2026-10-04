@@ -13,11 +13,13 @@ use crate::audio;
 use crate::webview2::{self, Autoplay};
 use tauri::{
   webview::{NewWindowResponse, PageLoadEvent, PageLoadPayload},
-  Emitter, LogicalPosition, LogicalSize, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl, Window,
+  AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl, Window,
 };
 
-/// Мітки webview сайтів; webview інтерфейсу називаються як їхні вікна (main, window-…, private-…).
-const PAGE_PREFIX: &str = "page-";
+/// Мітки webview сайтів; webview інтерфейсу називаються як їхні вікна (main, window-…, private-…, guest-…).
+pub(crate) const PAGE_PREFIX: &str = "page-";
+/// Мітки гостьових вікон: сайти в них без збережених даних, а паролів власника гість не бачить.
+pub const GUEST_PREFIX: &str = "guest-";
 
 /// Положення й розмір області вмісту в логічних пікселях вікна.
 #[derive(Deserialize)]
@@ -154,9 +156,41 @@ fn place(webview: &Webview, bounds: &Bounds) -> Result<(), String> {
   webview.set_size(LogicalSize::new(bounds.width, bounds.height)).map_err(|error| error.to_string())
 }
 
+/// Скрипт сторінки для Ctrl + коліщатка (zoom-page.js) з токеном сторінки.
+#[cfg(windows)]
+fn zoom_script(token: &str) -> String {
+  format!("({})({});", include_str!("zoom-page.js"), serde_json::Value::from(token))
+}
+
+/// Повідомлення скриптів сторінки: паролі — до passwords.rs, переклад виділеного — до translate.rs, крок масштабу —
+/// інтерфейсу вікна як гаряча клавіша.
+#[cfg(windows)]
+fn on_page_message(
+  app: &AppHandle,
+  ui: &str,
+  label: &str,
+  token: &str,
+  source: &str,
+  message: &serde_json::Value,
+) -> Option<serde_json::Value> {
+  match message.get("astra")?.as_str()? {
+    "zoom" if message.get("token")?.as_str()? == token => {
+      let shortcut = match message.get("step")?.as_str()? {
+        "in" => "zoom-in",
+        "out" => "zoom-out",
+        _ => return None,
+      };
+      let _ = app.emit_to(ui, "page://shortcut", ShortcutEvent { label: label.to_string(), shortcut });
+      None
+    }
+    "translate" if message.get("token")?.as_str()? == token => crate::translate::on_page_message(app, label, message),
+    _ => crate::passwords::on_page_message(app, ui, label, token, source, message),
+  }
+}
+
 /// Відкриває сайт у новому webview. Async, бо на Windows створення webview з синхронної команди блокує головний потік.
 /// `background` — вкладка відкривається у фоні: webview прихований і не забирає фокус.
-/// `block_audio` — сайти, яким заборонено автовідтворення зі звуком (audio.rs).
+/// `autoplay` — правила автовідтворення сайтів (audio.rs).
 #[tauri::command]
 pub async fn page_open(
   window: Window,
@@ -164,7 +198,7 @@ pub async fn page_open(
   url: String,
   bounds: Bounds,
   background: bool,
-  block_audio: Vec<String>,
+  autoplay: audio::AutoplayRules,
 ) -> Result<(), String> {
   if !label.starts_with(PAGE_PREFIX) {
     return Err(format!("Page label must start with {PAGE_PREFIX}"));
@@ -174,18 +208,19 @@ pub async fn page_open(
   let app = window.app_handle().clone();
   #[cfg(windows)]
   let address = url.to_string();
-  // Токен скрипта паролів цієї сторінки: без нього паролі сторінці не віддаються (passwords.rs).
+  // Токен скриптів цієї сторінки (паролі, масштаб коліщатком, переклад виділеного): повідомлення без нього
+  // не приймаються, тож скрипти самого сайту не можуть ні просити паролів, ні крутити масштаб, ні перекладати.
   #[cfg(windows)]
-  let password_token = crate::passwords::new_token();
+  let page_token = crate::passwords::new_token();
 
   let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
     // У приватному вікні сторінки теж без збережених cookies, кешу й сховища.
-    .incognito(ui.starts_with("private-"))
+    .incognito(ui.starts_with("private-") || ui.starts_with(GUEST_PREFIX))
     .focused(!background)
     // Перетягування на сайтах (файли в пошту, картки в Trello) — самому сайту, а не обробникові Tauri,
     // який у Windows його перехоплює.
     .disable_drag_drop_handler()
-    .initialization_script_for_all_frames(audio::guard_script(&block_audio))
+    .initialization_script_for_all_frames(audio::guard_script(&autoplay))
     // Сайт не може перейти на file:, tauri: чи інші не-вебові схеми.
     .on_navigation(|url| is_web(url) || url.as_str() == "about:blank")
     .on_page_load({
@@ -217,7 +252,17 @@ pub async fn page_open(
     .on_download(|_, _| true);
   // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу.
   #[cfg(windows)]
-  let builder = builder.initialization_script(crate::passwords::page_script(&password_token));
+  let builder = builder
+    .initialization_script(crate::passwords::page_script(&page_token))
+    .initialization_script(zoom_script(&page_token))
+    .initialization_script(crate::translate::page_script(&page_token));
+
+  // Cookies, входи й сховище сайтів — свої в кожного облікового запису Astra (profiles.rs).
+  #[cfg(windows)]
+  let builder = match crate::profiles::site_data_dir(&app) {
+    Some(dir) if !ui.starts_with("private-") && !ui.starts_with(GUEST_PREFIX) => builder.data_directory(dir),
+    _ => builder,
+  };
 
   let webview = window
     .add_child(builder, LogicalPosition::new(bounds.x, bounds.y), LogicalSize::new(bounds.width, bounds.height))
@@ -238,8 +283,18 @@ pub async fn page_open(
   #[cfg(windows)]
   webview2::block_autoplay_by_default(&webview, address.clone()).map_err(|error| error.to_string())?;
 
+  // Фонова вкладка — прихована. Ховаємо в головному потоці й чекаємо: інакше прихування стояло б у черзі, і показ,
+  // який інтерфейс робить одразу після відкриття ("Відкрити всі закладки" показує першу), виконався б раніше за нього —
+  // і сторінка лишалася б прихованою, доки не перемкнути вкладку.
   if background {
-    webview.hide().map_err(|error| error.to_string())?;
+    let (done, hidden) = mpsc::channel();
+    let page = webview.clone();
+    app
+      .run_on_main_thread(move || {
+        let _ = done.send(page.hide().map_err(|error| error.to_string()));
+      })
+      .map_err(|error| error.to_string())?;
+    receive(hidden).await??;
   }
 
   // Іконка сторінки — та, яку обрав сам WebView2 (без скриптів на сторінці).
@@ -288,7 +343,7 @@ pub async fn page_open(
   #[cfg(windows)]
   webview2::watch_page_messages(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-    move |source, message| crate::passwords::on_page_message(&app, &ui, &label, &password_token, source, message)
+    move |source, message| on_page_message(&app, &ui, &label, &page_token, source, message)
   })
   .map_err(|error| error.to_string())?;
 
@@ -453,11 +508,11 @@ fn page_origin(webview: &Webview) -> Result<String, String> {
   }
 }
 
-/// Новий список сайтів із заблокованим звуком для всіх сайтів вікна; діє після перезавантаження сторінки.
+/// Нові правила автовідтворення (audio.rs) для всіх сайтів вікна: відкритим сторінкам — одразу, новим — зі скриптом.
 #[cfg(windows)]
 #[tauri::command]
-pub fn page_set_audio_rules(window: Window, origins: Vec<String>) -> Result<(), String> {
-  let script = audio::rules_script(&origins);
+pub fn page_set_audio_rules(window: Window, rules: audio::AutoplayRules) -> Result<(), String> {
+  let script = audio::rules_script(&rules);
   let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(PAGE_PREFIX));
   for webview in pages {
     let label = webview.label().to_string();
@@ -470,6 +525,9 @@ pub fn page_set_audio_rules(window: Window, origins: Vec<String>) -> Result<(), 
       }
     })
     .map_err(|error| error.to_string())?;
+    // І вже відкритим сторінкам — одразу: дозволили YouTube й перейшли на інше відео без перезавантаження сторінки —
+    // нове правило вже діє.
+    let _ = webview.eval(script.clone());
   }
   Ok(())
 }

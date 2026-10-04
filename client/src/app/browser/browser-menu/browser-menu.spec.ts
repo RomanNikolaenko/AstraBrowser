@@ -14,7 +14,6 @@ import { BrowserMenu } from './browser-menu';
     (openPage)="events.push($event)"
     (find)="events.push('find')"
     (print)="events.push('print')"
-    (signOut)="events.push('sign-out')"
     (fullscreen)="events.push('fullscreen')" />`,
 })
 class Host {
@@ -78,7 +77,6 @@ describe('BrowserMenu', () => {
       'Розширення',
       'Налаштування',
       'Довідка',
-      'Вийти',
     ];
     for (const label of labels) {
       item(label)?.click();
@@ -97,7 +95,6 @@ describe('BrowserMenu', () => {
       'extensions',
       'settings',
       'help',
-      'sign-out',
       'fullscreen',
     ]);
   });

@@ -42,8 +42,12 @@
               [appTooltip]="child.title"
               [attr.popovertarget]="folderMenuId(child)"
               (dragstart)="drag.start($event, child)"
+              (appMiddleClick)="openInBackground(child)"
               (contextmenu)="showMenu($event, child, index)">
-              <app-icon class="bookmark-folder-menu__icon" [icon]="folderIcon(child)" [style.color]="folderColor(child)" />
+              <app-icon
+                class="bookmark-folder-menu__icon bookmark-folder-menu__icon--folder"
+                [icon]="folderIcon(child)"
+                [style.color]="folderColor(child)" />
               <span class="bookmark-folder-menu__label">{{ child.title }}</span>
               <app-icon class="bookmark-folder-menu__chevron" icon="chevron-right" />
             </button>
@@ -71,4 +75,18 @@
       </li>
     }
   </ul>
+
+  @if (bookmarks().length) {
+    <div class="bookmark-folder-menu__footer">
+      <button
+        class="bookmark-folder-menu__item"
+        type="button"
+        [attr.popovertarget]="root()"
+        popovertargetaction="hide"
+        (click)="actions.openAllOf(bookmarks())">
+        <app-icon class="bookmark-folder-menu__icon" icon="tab-plus" />
+        <span class="bookmark-folder-menu__label">Відкрити всі ({{ bookmarks().length }})</span>
+      </button>
+    </div>
+  }
 </app-popover>

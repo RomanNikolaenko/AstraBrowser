@@ -1,7 +1,8 @@
 <section class="new-tab">
-  <img class="new-tab__logo" src="/logo.webp" alt="" width="104" height="104" fetchpriority="high" />
-  <h1 class="new-tab__title">Нова вкладка</h1>
-  <p class="new-tab__subtitle">Швидкий доступ до пошуку, закладок і часто відвідуваних сторінок.</p>
+  <h1 class="new-tab__brand">
+    <img class="new-tab__logo" src="/logo.webp" alt="" width="104" height="104" fetchpriority="high" />
+    <span class="new-tab__name"><strong>Astra</strong> Browser</span>
+  </h1>
 
   <form class="search-form" role="search" (submit)="submit($event)">
     <app-input
@@ -15,14 +16,6 @@
       placeholder="Пошук у Astra або введіть адресу сайту..."
       autocomplete="off"
       enterKeyHint="search"
-      [(value)]="query">
-      <span class="search__divider" aria-hidden="true"></span>
-      <button class="search__action" type="button" aria-label="Екранна клавіатура" title="Екранна клавіатура">
-        <app-icon icon="keyboard" />
-      </button>
-      <button class="search__action search__action--accent" type="button" aria-label="Голосовий пошук" title="Голосовий пошук">
-        <app-icon icon="mic" />
-      </button>
-    </app-input>
+      [(value)]="query" />
   </form>
 </section>

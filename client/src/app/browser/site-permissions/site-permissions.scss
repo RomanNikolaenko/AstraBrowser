@@ -38,15 +38,7 @@
   }
 
   &__select {
-    --select-background: var(--browser-field);
-    --select-hover: var(--browser-hover);
-    --select-border: var(--browser-chrome-border);
-    --select-text: var(--browser-text);
-    --select-icon: var(--browser-icon);
-    --select-picker-background: var(--browser-popover);
-    --select-picker-border: var(--browser-popover-border);
-    --select-picker-shadow: var(--browser-popover-shadow);
-    --select-option-hover: var(--browser-hover);
+    @include select-colors;
 
     flex: 0 0 auto;
   }

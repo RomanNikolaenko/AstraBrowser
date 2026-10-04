@@ -1,22 +1,49 @@
 <app-popover class="profile-menu" popoverId="profile-menu" caret>
   <h2 class="profile-menu__title">Профіль</h2>
-  <span class="profile-menu__avatar" aria-hidden="true"><app-icon icon="user" /></span>
-  <a class="profile-menu__sign-in" [routerLink]="'/sign-in'">Увійти / Синхронізація</a>
 
-  <ul class="profile-menu__list">
-    @for (item of items; track item.label) {
-      <li>
-        <button
-          class="profile-menu__item"
-          type="button"
-          popovertarget="profile-menu"
-          popovertargetaction="hide"
-          (click)="run(item.page)">
-          <app-icon class="profile-menu__icon" [icon]="item.icon" />
-          <span class="profile-menu__label">{{ item.label }}</span>
-          <app-icon class="profile-menu__chevron" icon="chevron-right" />
-        </button>
-      </li>
-    }
-  </ul>
+  @if (guest()) {
+    <app-avatar class="profile-menu__avatar" guest />
+    <p class="profile-menu__name">Гість</p>
+    <p class="profile-menu__meta">Історія, закладки й паролі цього вікна не зберігаються.</p>
+    <button
+      class="profile-menu__sign-in"
+      type="button"
+      popovertarget="profile-menu"
+      popovertargetaction="hide"
+      (click)="closeGuest.emit()">
+      Вийти з гостьового режиму
+    </button>
+  } @else {
+    <app-avatar class="profile-menu__avatar" />
+    <p class="profile-menu__name">{{ profile.displayName() }}</p>
+    <p class="profile-menu__meta">{{ auth.user()?.email || 'Обліковий запис Astra' }}</p>
+
+    <ul class="profile-menu__list">
+      @for (item of items; track item.label) {
+        <li>
+          <button
+            class="profile-menu__item"
+            type="button"
+            popovertarget="profile-menu"
+            popovertargetaction="hide"
+            (click)="run(item)">
+            <app-icon class="profile-menu__icon" [icon]="item.icon" />
+            <span class="profile-menu__label">{{ item.label }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+
+    <div class="profile-menu__footer">
+      <button
+        class="profile-menu__item profile-menu__sign-out"
+        type="button"
+        popovertarget="profile-menu"
+        popovertargetaction="hide"
+        (click)="signOut()">
+        <app-icon class="profile-menu__icon" icon="logout" />
+        <span class="profile-menu__label">Вийти</span>
+      </button>
+    </div>
+  }
 </app-popover>

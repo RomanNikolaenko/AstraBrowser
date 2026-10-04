@@ -1,0 +1,212 @@
+<section class="page">
+  <header class="page__header">
+    <h1 class="page__title">Керування профілем</h1>
+  </header>
+
+  <h2 class="page__group">Профіль</h2>
+  <div class="page__list profile">
+    <div class="profile__identity">
+      <app-avatar class="profile__avatar" />
+      <div class="profile__photo-actions">
+        <button class="page__button" type="button" (click)="photoInput.click()">
+          {{ profile.photo() ? 'Змінити фото…' : 'Додати фото…' }}
+        </button>
+        @if (profile.photo()) {
+          <button class="page__button" type="button" (click)="profile.photo.set('')">Прибрати фото</button>
+        }
+        <input
+          #photoInput
+          class="profile__file"
+          type="file"
+          accept="image/*"
+          aria-label="Фото профілю"
+          (change)="choosePhoto($event)" />
+      </div>
+    </div>
+    @if (photoError()) {
+      <p class="profile__error" role="alert">{{ photoError() }}</p>
+    }
+
+    <label class="profile__row" for="profile-name">
+      <span class="page__text">
+        <span class="page__name">Ім'я</span>
+        <span class="page__meta">Видно в меню профілю; ініціали — на аватарі без фото</span>
+      </span>
+      <app-input
+        class="profile__name"
+        inputId="profile-name"
+        inputName="profile-name"
+        placeholder="Користувач"
+        autocomplete="name"
+        [value]="profile.name()"
+        (valueChange)="profile.rename($event)" />
+    </label>
+
+    @if (!profile.photo()) {
+      <fieldset class="profile__row profile__fieldset">
+        <legend class="page__text">
+          <span class="page__name">Колір аватара</span>
+        </legend>
+        <div class="swatches">
+          @for (color of colors; track color.value) {
+            <label class="swatches__item" [title]="color.label" [style.--swatch]="color.background">
+              <input
+                class="swatches__input"
+                type="radio"
+                name="avatar-color"
+                [value]="color.value"
+                [attr.aria-label]="color.label"
+                [checked]="profile.color() === color.value"
+                (change)="profile.color.set(color.value)" />
+            </label>
+          }
+        </div>
+      </fieldset>
+    }
+  </div>
+
+  <h2 class="page__group">Обліковий запис</h2>
+  <div class="page__list profile">
+    <div class="profile__row">
+      <span class="page__text profile__text">
+        <span class="page__name">{{ auth.user()?.email || 'Обліковий запис Astra' }}</span>
+        <span class="page__meta">Ви ввійшли в Astra Browser</span>
+      </span>
+      <button class="page__button" type="button" (click)="signOut()">Вийти</button>
+    </div>
+    <div class="profile__row">
+      <span class="page__text profile__text">
+        <span class="page__name">Пароль</span>
+        <span class="page__meta">Пароль для входу в Astra Browser</span>
+      </span>
+      @if (!changingPassword()) {
+        <button class="page__button" type="button" (click)="startPasswordChange()">Змінити пароль…</button>
+      }
+    </div>
+    @if (changingPassword()) {
+      <form class="profile__password" novalidate (submit)="savePassword($event)">
+        <app-input
+          class="profile__field"
+          inputId="profile-new-password"
+          inputName="new-password"
+          type="password"
+          ariaLabel="Новий пароль"
+          placeholder="Новий пароль"
+          autocomplete="new-password"
+          [(value)]="newPassword.value"
+          [(touched)]="newPassword.touched"
+          [error]="newPassword.visibleError()" />
+        <app-input
+          class="profile__field"
+          inputId="profile-new-password-confirmation"
+          inputName="new-password-confirmation"
+          type="password"
+          ariaLabel="Підтвердіть пароль"
+          placeholder="Повторіть пароль"
+          autocomplete="new-password"
+          [(value)]="passwordConfirmation.value"
+          [(touched)]="passwordConfirmation.touched"
+          [error]="passwordConfirmation.visibleError()" />
+        <div class="profile__password-actions">
+          <button class="page__button" type="submit" [disabled]="passwordBusy()">
+            {{ passwordBusy() ? 'Зберігаємо…' : 'Зберегти пароль' }}
+          </button>
+          <button class="page__button" type="button" (click)="changingPassword.set(false)">Скасувати</button>
+        </div>
+      </form>
+    }
+    @if (passwordMessage(); as message) {
+      <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+    }
+  </div>
+
+  @if (sync.available()) {
+    <h2 class="page__group">Синхронізація</h2>
+    <div class="page__list profile">
+      <div class="profile__row">
+        <span class="page__text profile__text">
+          <span class="page__name profile__sync-title">
+            <app-icon class="profile__sync-icon" [class.profile__sync-icon--problem]="syncProblem()" icon="cloud" />
+            {{ syncTitle() }}
+          </span>
+          <span class="page__meta">{{ syncDetail() }}</span>
+        </span>
+        <button class="page__button" type="button" [disabled]="sync.status().state === 'syncing'" (click)="sync.syncNow()">
+          Синхронізувати зараз
+        </button>
+      </div>
+      @if (sync.status().passwords !== 'ok') {
+        <form class="profile__password" novalidate (submit)="unlockSync($event)">
+          <p class="profile__hint">
+            @if (sync.status().passwords === 'stale') {
+              Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів.
+            } @else {
+              Щоб синхронізувати паролі сайтів, введіть пароль облікового запису: з нього створюється ключ, яким паролі шифруються
+              ще на цьому комп'ютері.
+            }
+          </p>
+          <app-input
+            class="profile__field"
+            inputId="profile-sync-password"
+            inputName="account-password"
+            type="password"
+            ariaLabel="Пароль облікового запису"
+            placeholder="Пароль облікового запису"
+            autocomplete="current-password"
+            [(value)]="syncPassword.value"
+            [(touched)]="syncPassword.touched"
+            [error]="syncPassword.visibleError()" />
+          <button class="page__button" type="submit" [disabled]="syncBusy()">
+            {{ syncBusy() ? 'Перевіряємо…' : 'Синхронізувати паролі' }}
+          </button>
+        </form>
+      }
+      @if (syncMessage(); as message) {
+        <p class="profile__message profile__error" role="alert">{{ message }}</p>
+      }
+    </div>
+  }
+
+  <h2 class="page__group">Закладки</h2>
+  <div class="page__list profile">
+    <div class="profile__row">
+      <span class="page__text profile__text">
+        <span class="page__name">Імпорт з іншого браузера</span>
+        <span class="page__meta">
+          Файл закладок HTML: у Chrome чи Edge — «Закладки → Диспетчер закладок → ⋯ → Експортувати закладки»
+        </span>
+      </span>
+      <button class="page__button" type="button" (click)="bookmarksInput.click()">Імпортувати…</button>
+      <input
+        #bookmarksInput
+        class="profile__file"
+        type="file"
+        accept=".html,.htm,text/html"
+        aria-label="Файл закладок"
+        (change)="importBookmarks($event)" />
+    </div>
+    <div class="profile__row">
+      <span class="page__text profile__text">
+        <span class="page__name">Експорт закладок</span>
+        <span class="page__meta">Файл HTML, який відкриють Chrome, Edge, Firefox та інші браузери</span>
+      </span>
+      <button class="page__button" type="button" [disabled]="!bookmarks.bar().length" (click)="exportBookmarks()">
+        Експортувати…
+      </button>
+    </div>
+    @if (bookmarksMessage(); as message) {
+      <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+    }
+  </div>
+
+  <h2 class="page__group">Дані в цьому браузері</h2>
+  <ul class="page__list profile profile__stats">
+    @for (stat of stats(); track stat.label) {
+      <li class="profile__stat">
+        <app-icon class="profile__stat-icon" [icon]="stat.icon" />
+        <span class="profile__stat-label">{{ stat.label }}</span>
+        <span class="profile__stat-value">{{ stat.value }}</span>
+      </li>
+    }
+  </ul>
+</section>

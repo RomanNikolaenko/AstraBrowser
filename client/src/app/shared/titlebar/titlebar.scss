@@ -4,7 +4,7 @@
   container: titlebar / inline-size;
 }
 
-// Порожні місця заголовка (з data-tauri-drag-region) тягнуть вікно.
+// Порожні місця заголовка (з data-drag-region) тягнуть вікно (shared/window-drag).
 .titlebar {
   display: flex;
   gap: 0.25rem;

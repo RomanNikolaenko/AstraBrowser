@@ -10,10 +10,12 @@
       content="Astra Browser — швидкий і безпечний браузер із синхронізацією закладок, паролів і налаштувань між усіма вашими пристроями." />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <script>
-      // Тема з налаштувань (SettingsStore) ще до старту Angular, щоб не блимала тема системи.
+      // Тема й колір акценту з налаштувань (SettingsStore) ще до старту Angular, щоб не блимали стандартні.
       try {
         const theme = JSON.parse(localStorage.getItem('astra.settings.theme') ?? '"system"');
         if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+        const accent = JSON.parse(localStorage.getItem('astra.settings.accent') ?? '"blue"');
+        if (accent !== 'blue') document.documentElement.dataset.accent = accent;
       } catch {}
     </script>
     <!-- Застосунок рендериться в браузері, тож без preload картинки почали б вантажитися лише після JS. -->

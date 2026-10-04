@@ -18,6 +18,14 @@ ureq = "3"
 base64 = "0.22"
 regex = "1"
 tauri-plugin-dialog = "2"
+# Наскрізне шифрування паролів для синхронізації: AES-256-GCM і HMAC (сам ключ з пароля — PBKDF2 Windows, secure.rs).
+aes-gcm = "0.10"
+hmac = "0.12"
+sha2 = "0.10"
+
+[dev-dependencies]
+# Перевірка, що PBKDF2 Windows рахує так само, як незалежна реалізація.
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 
 # Звук, іконки й дозволи сайтів — через WebView2 напряму, повноекранне вікно — через Win32 (ті самі версії, що й у Tauri/wry).
 [target.'cfg(windows)'.dependencies]
@@ -31,3 +39,4 @@ opt-level = 3
 
 [profile.dev.package.regex-automata]
 opt-level = 3
+

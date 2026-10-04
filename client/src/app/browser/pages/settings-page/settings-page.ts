@@ -1,9 +1,16 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { SEARCH_ENGINES, SearchEngine, SettingsStore, ThemePreference } from '../../../shared/settings/settings';
+import {
+  HISTORY_RETENTION,
+  SEARCH_ENGINES,
+  SearchEngine,
+  SettingsStore,
+  ThemePreference,
+} from '../../../shared/settings/settings';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
-import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
+import { UiSelect } from '../../../shared/ui-select/ui-select';
+import { UiSwitch } from '../../../shared/ui-switch/ui-switch';
+import { ClearDataDialog } from '../../clear-data/clear-data-dialog';
 import { DownloadSettingsStore } from '../../data/download-settings';
-import { DownloadsStore } from '../../data/downloads';
 import { HistoryStore } from '../../data/history';
 
 const plural = new Intl.PluralRules('uk');
@@ -11,7 +18,7 @@ const RECORDS: Record<string, string> = { one: 'запис', few: 'записи'
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfirmDialog, UiIcon],
+  imports: [ClearDataDialog, UiIcon, UiSelect, UiSwitch],
   selector: 'app-settings-page',
   styleUrls: ['../internal-page.scss', './settings-page.scss'],
   templateUrl: './settings-page.html',
@@ -19,7 +26,6 @@ const RECORDS: Record<string, string> = { one: 'запис', few: 'записи'
 export class SettingsPage {
   protected readonly settings = inject(SettingsStore);
   protected readonly history = inject(HistoryStore);
-  protected readonly downloads = inject(DownloadsStore);
   protected readonly downloadSettings = inject(DownloadSettingsStore);
 
   protected readonly themes: readonly { readonly value: ThemePreference; readonly label: string; readonly icon: string }[] = [
@@ -32,6 +38,15 @@ export class SettingsPage {
     value: value as SearchEngine,
     label: engine.label,
   }));
+
+  protected readonly retention = HISTORY_RETENTION.map((option) => ({ value: `${option.days}`, label: option.label }));
+
+  protected setHistoryDays(value: string | undefined): void {
+    const days = Number(value);
+    if (value !== undefined && Number.isFinite(days)) {
+      this.settings.historyDays.set(days);
+    }
+  }
 
   protected records(count: number): string {
     return count ? `${count} ${RECORDS[plural.select(count)]}` : 'Порожньо';
@@ -49,12 +64,7 @@ export class SettingsPage {
     void this.downloadSettings.openFolder().catch(() => undefined);
   }
 
-  protected setAsk(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.downloadSettings.setAsk(input.checked).catch(() => (input.checked = !input.checked));
-  }
-
-  protected setBookmarksBar(event: Event): void {
-    this.settings.showBookmarksBar.set((event.target as HTMLInputElement).checked);
+  protected setAsk(ask: boolean): void {
+    void this.downloadSettings.setAsk(ask).catch(() => undefined);
   }
 }

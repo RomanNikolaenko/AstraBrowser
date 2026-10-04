@@ -202,7 +202,7 @@ export class Screenshot {
     this.error.set(null);
     try {
       const bytes = new Uint8Array(await shot.blob.arrayBuffer());
-      const path = await this.pageViews.saveScreenshot(bytes, screenshotFileName(this.page?.url ?? ''));
+      const path = await this.pageViews.saveFile(bytes, screenshotFileName(this.page?.url ?? ''), 'png');
       if (path) {
         this.savedPath.set(path);
       }

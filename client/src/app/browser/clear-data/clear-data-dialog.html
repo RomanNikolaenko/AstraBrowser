@@ -1,0 +1,79 @@
+<dialog #dialog class="clear-data" aria-labelledby="clear-data-title" closedby="any">
+  <div class="clear-data__panel">
+    <h2 class="clear-data__title" id="clear-data-title">Очистити дані перегляду і файли cookie</h2>
+
+    <div class="clear-data__range">
+      <label class="clear-data__range-label" for="clear-data-range">Коли:</label>
+      <app-select
+        class="clear-data__select"
+        selectId="clear-data-range"
+        selectName="range"
+        [options]="ranges"
+        [value]="range()"
+        (valueChange)="setRange($event)" />
+    </div>
+
+    <ul class="clear-data__list">
+      <li>
+        <label class="clear-data__item">
+          <input class="clear-data__check" type="checkbox" [checked]="choice().history" (change)="toggle('history', $event)" />
+          <span class="clear-data__text">
+            <span class="clear-data__name">Історію переглядів та завантажень</span>
+            <span class="clear-data__meta">Очищення історії сайтів і завантажень</span>
+          </span>
+        </label>
+      </li>
+      <li>
+        <label class="clear-data__item">
+          <input class="clear-data__check" type="checkbox" [checked]="choice().siteData" (change)="toggle('siteData', $event)" />
+          <span class="clear-data__text">
+            <span class="clear-data__name">Файли cookie та дані сайтів{{ size(sizes()?.siteData) }}</span>
+            <span class="clear-data__meta">Може призвести до виходу на сайтах або очищення кошика для покупок</span>
+          </span>
+        </label>
+      </li>
+      <li>
+        <label class="clear-data__item">
+          <input class="clear-data__check" type="checkbox" [checked]="choice().cache" (change)="toggle('cache', $event)" />
+          <span class="clear-data__text">
+            <span class="clear-data__name">Тимчасові кешовані файли та сторінки{{ size(sizes()?.cache) }}</span>
+            <span class="clear-data__meta">Очищає елементи, які допомагають сайтам завантажуватися швидше</span>
+          </span>
+        </label>
+      </li>
+      <li>
+        <label class="clear-data__item">
+          <input class="clear-data__check" type="checkbox" [checked]="choice().autofill" (change)="toggle('autofill', $event)" />
+          <span class="clear-data__text">
+            <span class="clear-data__name">Збережена інформація заповнених форм</span>
+            <span class="clear-data__meta">Очищення імен, адрес електронної пошти й інших даних, які ви вводите у форми</span>
+          </span>
+        </label>
+      </li>
+      <li>
+        <label class="clear-data__item">
+          <input class="clear-data__check" type="checkbox" [checked]="choice().settings" (change)="toggle('settings', $event)" />
+          <span class="clear-data__text">
+            <span class="clear-data__name">Налаштування сайтів</span>
+            <span class="clear-data__meta">Відновлює початкові налаштування дозволів і параметрів сайтів</span>
+          </span>
+        </label>
+      </li>
+    </ul>
+
+    @if (error(); as message) {
+      <p class="clear-data__error" role="alert">{{ message }}</p>
+    }
+
+    <div class="clear-data__actions">
+      <button
+        class="clear-data__button clear-data__button--primary"
+        type="button"
+        [disabled]="busy() || nothing()"
+        (click)="clear()">
+        {{ busy() ? 'Очищаємо…' : 'Очистити' }}
+      </button>
+      <button class="clear-data__button" type="button" (click)="hide()">Скасувати</button>
+    </div>
+  </div>
+</dialog>
