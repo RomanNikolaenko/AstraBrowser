@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { FormField, required, validateFields } from '../../shared/form-field/form-field';
 import { MiddleClick } from '../../shared/middle-click/middle-click';
+import { Tooltip } from '../../shared/tooltip/tooltip';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
 import { bookmarkUrl, siteOrInternalPage } from '../bookmark-editor/bookmark-editor';
@@ -44,7 +45,7 @@ const DIALOG_TITLES = {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BookmarkFolderMenu, MiddleClick, Popover, SiteIcon, UiIcon, UiInput],
+  imports: [BookmarkFolderMenu, MiddleClick, Popover, SiteIcon, Tooltip, UiIcon, UiInput],
   providers: [{ provide: BookmarkActions, useExisting: BookmarksBar }, BookmarkDrag],
   selector: 'app-bookmarks-bar',
   styleUrl: './bookmarks-bar.scss',

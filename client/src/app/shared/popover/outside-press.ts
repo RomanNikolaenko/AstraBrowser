@@ -18,12 +18,14 @@ export function closePopoversOnOutsidePress(): void {
     if (event.button !== 0 || !(target instanceof Element) || target.closest('[popovertarget]')) {
       return;
     }
-    // Від верхньої до нижньої: вкладена (список у панелі) закривається, а панель, у якій клікнули, лишається.
     const open = [...document.querySelectorAll<HTMLElement>('[popover="auto"], [popover=""]')].filter((popover) =>
       popover.matches(':popover-open')
     );
+    // Натиснули в панелі: закриваються лише вкладені в неї (список у панелі). Панелі, з яких її відкрили, але які
+    // живуть деінде в DOM (контекстне меню з меню теки закладок), лишаються: закрити їх — закрити й цю панель.
+    const clicked = open.filter((popover) => popover.contains(target)).at(-1);
     for (const popover of open.reverse()) {
-      if (!popover.contains(target)) {
+      if (!popover.contains(target) && (!clicked || clicked.contains(popover))) {
         popover.hidePopover();
       }
     }

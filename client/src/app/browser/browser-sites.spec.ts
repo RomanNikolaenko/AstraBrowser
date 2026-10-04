@@ -63,6 +63,13 @@ class FakePageViews {
   setVisible(label: string, visible: boolean) {
     return this.record('visible', label, visible);
   }
+  setClip(label: string, holes: unknown) {
+    return this.record('clip', label, holes);
+  }
+  screenshot(label: string, full: boolean) {
+    this.calls.push(['screenshot', label, full]);
+    return Promise.reject(new Error('jsdom не знімає сторінок'));
+  }
   setZoom(label: string, scale: number) {
     return this.record('zoom', label, scale);
   }
@@ -544,6 +551,23 @@ describe('Browser with sites', () => {
     expect(audio()).toBeNull();
   });
 
+  it('should take a screenshot of the site on Ctrl+Shift+S, also while the site has focus', async () => {
+    await typeInOmnibox('www.hltv.org');
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'І', cancelable: true })
+    );
+    await stable();
+    expect(pages.called('screenshot')).toEqual([[label(1), false]]);
+
+    pages.emit('page://shortcut', { label: label(1), shortcut: 'screenshot' });
+    await stable();
+    expect(pages.called('screenshot')).toEqual([
+      [label(1), false],
+      [label(1), false],
+    ]);
+  });
+
   describe('site permissions', () => {
     const panel = () => element.querySelector('.site-permissions .popover') as HTMLElement;
     const autoplay = () => panel().querySelector('[role="combobox"]') as HTMLButtonElement;
@@ -563,22 +587,22 @@ describe('Browser with sites', () => {
       await stable();
     };
 
-    it('should hide a panel opening over a site at once, before its first frame', async () => {
-      const beforeToggle = (newState: string) => panel()?.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState }));
+    it('should keep the site playing under an open panel and hide it only under a modal window', async () => {
       const covering = () => document.documentElement.classList.contains('page-covering');
-
-      // Без сайту знімати нічого — панель з'являється одразу.
-      element
-        .querySelector('app-bookmark-editor div')
-        ?.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
-      expect(covering()).toBe(false);
-
       await typeInOmnibox('www.twitch.tv');
-      beforeToggle('open');
-      // Без жодного очікування: клас має стояти раніше, ніж браузер намалює панель.
-      expect(covering()).toBe(true);
+      const shown = pages.called('visible').length;
 
-      panel().dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
+      // Панель над сайтом: сайт не ховається й не знімається — у ньому вирізається отвір під панель.
+      panel().dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
+      expect(covering()).toBe(false);
+      await openPanel();
+      expect(pages.called('visible').slice(shown)).not.toContainEqual([label(1), false]);
+
+      // Модальне вікно затемнює все, тож сайт під ним, як і раніше, ховається — ще до першого кадру вікна.
+      const dialog = element.querySelector('dialog.download-prompt') as HTMLDialogElement;
+      dialog.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
+      expect(covering()).toBe(true);
+      dialog.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
       expect(covering()).toBe(false);
     });
 

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, inject, input } from '@angular/core';
 import { MiddleClick } from '../../shared/middle-click/middle-click';
+import { Tooltip } from '../../shared/tooltip/tooltip';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { BookmarkFolder, BookmarkItem } from '../data/bookmarks';
 import { Popover } from '../popover/popover';
@@ -14,7 +15,7 @@ import { folderColor, folderIcon } from './folder-colors';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MiddleClick, Popover, SiteIcon, UiIcon],
+  imports: [MiddleClick, Popover, SiteIcon, Tooltip, UiIcon],
   selector: 'app-bookmark-folder-menu',
   styleUrl: './bookmark-folder-menu.scss',
   templateUrl: './bookmark-folder-menu.html',

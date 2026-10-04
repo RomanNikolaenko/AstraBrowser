@@ -1,0 +1,112 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.translator {
+  --popover-width: 22rem;
+  --popover-padding: 1rem;
+
+  &__title {
+    @include popover-title;
+
+    margin-bottom: 0.75rem;
+  }
+
+  &__language {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  &__label {
+    flex: 0 0 auto;
+    font-size: 0.875rem;
+    color: var(--browser-muted);
+  }
+
+  &__select {
+    --select-background: var(--browser-field);
+    --select-hover: var(--browser-hover);
+    --select-border: var(--browser-chrome-border);
+    --select-text: var(--browser-text);
+    --select-icon: var(--browser-icon);
+    --select-picker-background: var(--browser-popover);
+    --select-picker-border: var(--browser-popover-border);
+    --select-picker-shadow: var(--browser-popover-shadow);
+    --select-option-hover: var(--browser-hover);
+
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  &__section {
+    display: grid;
+    gap: 0.5rem;
+    padding-top: 0.875rem;
+    margin-top: 0.875rem;
+    border-top: 0.0625rem solid var(--browser-divider);
+  }
+
+  &__heading {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--browser-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__note {
+    margin: 0;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+  }
+
+  &__text {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 5.5rem;
+    padding: 0.625rem 0.75rem;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--browser-text);
+    resize: vertical;
+    background: var(--browser-field);
+    border: 0.0625rem solid var(--browser-chrome-border);
+    border-radius: 0.75rem;
+
+    @include focus-ring(0.125rem);
+
+    &::placeholder {
+      color: var(--browser-placeholder);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  &__button {
+    @include pill-button(2.25rem);
+
+    &--primary {
+      @include primary-button;
+    }
+  }
+
+  &__button-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  &__credit {
+    margin: 0.875rem 0 0;
+    font-size: 0.75rem;
+    color: var(--browser-muted);
+  }
+}

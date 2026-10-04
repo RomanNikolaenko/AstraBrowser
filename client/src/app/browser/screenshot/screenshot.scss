@@ -1,0 +1,227 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.screenshot {
+  @include modal-dialog(48rem);
+
+  // Саме вікно фокус лише тримає (кнопки — всередині), рамка фокусу довкола нього зайва.
+  outline: none;
+
+  // Виділення області: вікно на весь екран без панелі, знімок сторінки — точно на її місці.
+  &--select {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    transform: none;
+
+    &[open] {
+      @starting-style {
+        transform: none;
+      }
+    }
+
+    &::backdrop,
+    &[open]::backdrop {
+      background: transparent;
+    }
+  }
+
+  &__stage {
+    position: fixed;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+    user-select: none;
+  }
+
+  &__shot {
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  // Поки не виділено нічого, затемнений увесь знімок; виділена область — світла, решта затемнена її тінню.
+  &__dim {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 35%);
+  }
+
+  &__area {
+    position: absolute;
+    outline: 0.125rem solid #fff;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 45%);
+  }
+
+  &__toolbar {
+    position: absolute;
+    top: 0.75rem;
+    left: 50%;
+    display: flex;
+    gap: 0.375rem;
+    align-items: center;
+    padding: 0.375rem 0.375rem 0.375rem 0.875rem;
+    cursor: default;
+    background: var(--browser-popover);
+    border: 0.0625rem solid var(--browser-popover-border);
+    border-radius: 999px;
+    box-shadow: var(--browser-popover-shadow);
+    transform: translateX(-50%);
+  }
+
+  &__hint {
+    margin: 0 0.375rem 0 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--browser-text);
+    white-space: nowrap;
+  }
+
+  &__tool {
+    @include pill-button(2rem);
+
+    padding-inline: 0.875rem;
+    font-size: 0.8125rem;
+
+    &:has(app-icon) {
+      @include icon-button(2rem, 1rem);
+    }
+  }
+
+  &__panel {
+    @include modal-panel;
+  }
+
+  &__key {
+    display: inline-block;
+    padding: 0 0.375rem;
+    font-family: inherit;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.375rem;
+    color: var(--browser-muted);
+    background: var(--browser-field);
+    border: 0.0625rem solid var(--browser-chrome-border);
+    border-radius: 0.375rem;
+  }
+
+  &__keys {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+
+  &__status {
+    position: fixed;
+    inset: auto;
+    padding: 0.5rem 1rem;
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--browser-text);
+    background: var(--browser-popover);
+    border: 0.0625rem solid var(--browser-popover-border);
+    border-radius: 999px;
+    box-shadow: var(--browser-popover-shadow);
+  }
+
+  &__head {
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__meta {
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+
+  // Довгий знімок (уся сторінка) прокручується всередині.
+  &__preview {
+    max-height: min(60vh, 36rem);
+    overflow: auto;
+    background: var(--browser-field);
+    border-radius: 0.75rem;
+  }
+
+  &__image {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  &__saved,
+  &__message,
+  &__error {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  &__saved {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    align-items: baseline;
+    color: var(--browser-muted);
+  }
+
+  &__path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--browser-text);
+    white-space: nowrap;
+  }
+
+  &__link {
+    padding: 0;
+    font: inherit;
+    color: var(--browser-accent);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: 0.25rem;
+
+    @include focus-ring(0.125rem);
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__error {
+    color: var(--color-error);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  &__button {
+    @include pill-button(2.5rem);
+
+    &--primary {
+      @include primary-button;
+    }
+  }
+
+  &__button-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}

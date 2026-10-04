@@ -1,4 +1,4 @@
-export type InternalPage = 'history' | 'downloads' | 'bookmarks' | 'extensions' | 'settings' | 'help';
+export type InternalPage = 'history' | 'downloads' | 'bookmarks' | 'passwords' | 'notes' | 'extensions' | 'settings' | 'help';
 
 /** Що показує вкладка: нову вкладку чи внутрішню сторінку браузера. */
 export type TabPage = 'new-tab' | InternalPage;
@@ -8,6 +8,8 @@ export const TAB_PAGES: Readonly<Record<TabPage, { readonly title: string; reado
   history: { title: 'Історія', favicon: 'clock', url: 'astra://history' },
   downloads: { title: 'Завантаження', favicon: 'download', url: 'astra://downloads' },
   bookmarks: { title: 'Закладки', favicon: 'star', url: 'astra://bookmarks' },
+  passwords: { title: 'Паролі', favicon: 'key', url: 'astra://passwords' },
+  notes: { title: 'Нотатки', favicon: 'notes', url: 'astra://notes' },
   extensions: { title: 'Розширення', favicon: 'puzzle', url: 'astra://extensions' },
   settings: { title: 'Налаштування', favicon: 'settings', url: 'astra://settings' },
   help: { title: 'Довідка', favicon: 'help', url: 'astra://help' },
@@ -27,6 +29,7 @@ export const SHORTCUTS: readonly { readonly keys: readonly string[]; readonly ac
   { keys: ['Ctrl', 'J'], action: 'Завантаження' },
   { keys: ['Ctrl', 'F'], action: 'Знайти на сторінці' },
   { keys: ['Ctrl', 'Shift', ']'], action: 'Картинка в картинці (відео YouTube)' },
+  { keys: ['Ctrl', 'Shift', 'S'], action: 'Скріншот сторінки' },
   { keys: ['Enter'], action: 'Наступний збіг у пошуку на сторінці' },
   { keys: ['Shift', 'Enter'], action: 'Попередній збіг у пошуку на сторінці' },
   { keys: ['Esc'], action: 'Закрити пошук або меню' },

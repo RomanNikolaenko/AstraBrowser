@@ -7,6 +7,9 @@ mod downloads;
 #[cfg(windows)]
 mod fullscreen;
 mod pages;
+mod screenshots;
+#[cfg(windows)]
+mod passwords;
 #[cfg(windows)]
 mod webview2;
 
@@ -21,6 +24,8 @@ fn main() {
 			{
 				tauri::Manager::manage(app, downloads::Downloads::default());
 				downloads::start(app.handle());
+				tauri::Manager::manage(app, passwords::Passwords::default());
+				passwords::start(app.handle());
 			}
 			Ok(())
 		})
@@ -62,9 +67,30 @@ fn main() {
 			#[cfg(windows)]
 			downloads::download_show,
 			#[cfg(windows)]
+			passwords::passwords_state,
+			#[cfg(windows)]
+			passwords::password_prompt_answer,
+			#[cfg(windows)]
+			passwords::password_reveal,
+			#[cfg(windows)]
+			passwords::password_add,
+			#[cfg(windows)]
+			passwords::password_edit,
+			#[cfg(windows)]
+			passwords::password_remove,
+			#[cfg(windows)]
+			passwords::passwords_never_remove,
+			#[cfg(windows)]
+			passwords::passwords_set_settings,
+			#[cfg(windows)]
 			fullscreen::window_fill_monitor,
 			#[cfg(windows)]
 			pages::page_capture,
+			#[cfg(windows)]
+			pages::page_screenshot,
+			screenshots::screenshot_save,
+			#[cfg(windows)]
+			pages::page_set_clip,
 			#[cfg(windows)]
 			pages::page_reload_with,
 			#[cfg(windows)]

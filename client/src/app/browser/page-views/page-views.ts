@@ -3,12 +3,22 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
+import { PasswordPromptRequest } from '../data/passwords';
 
 export interface PageBounds {
   readonly x: number;
   readonly y: number;
   readonly width: number;
   readonly height: number;
+}
+
+/** Отвір у сайті під панель: у логічних пікселях від лівого верхнього кута сторінки, з радіусом кутів панелі. */
+export interface PageHole {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly radius: number;
 }
 
 export interface PageLoadEvent {
@@ -82,7 +92,17 @@ export interface PageAdBlockEvent {
 /** Гаряча клавіша браузера, натиснута, поки фокус у сайті (server/src/webview2.rs, watch_shortcuts). */
 export interface PageShortcutEvent {
   readonly label: string;
-  readonly shortcut: 'next-tab' | 'previous-tab';
+  readonly shortcut: 'next-tab' | 'previous-tab' | 'screenshot';
+}
+
+/** Користувач увійшов на сайт — «Зберегти пароль?» (server/src/passwords.rs). */
+export interface PagePasswordPromptEvent extends PasswordPromptRequest {
+  readonly label: string;
+}
+
+/** «Керувати паролями…» у списку облікових записів на сайті. */
+export interface PagePasswordsManageEvent {
+  readonly label: string;
 }
 
 /** Дозвіл сайту на автовідтворення; `default` у WebView2 теж дозволяє. */
@@ -100,6 +120,8 @@ interface PageEvents {
   'page://download-prompt': PageDownloadPromptEvent;
   'page://adblock': PageAdBlockEvent;
   'page://shortcut': PageShortcutEvent;
+  'page://password-prompt': PagePasswordPromptEvent;
+  'page://passwords-manage': PagePasswordsManageEvent;
 }
 
 /**
@@ -166,6 +188,11 @@ export class PageViews {
     return invoke('page_set_visible', { label, visible });
   }
 
+  /** Отвори в сайті під панелі інтерфейсу (server/src/webview2.rs, set_clip); порожній список — сайт знову цілий. */
+  setClip(label: string, holes: readonly PageHole[]): Promise<void> {
+    return invoke('page_set_clip', { label, holes });
+  }
+
   setZoom(label: string, scale: number): Promise<void> {
     return invoke('page_set_zoom', { label, scale });
   }
@@ -199,6 +226,16 @@ export class PageViews {
   /** Знімок того, що показує сторінка (JPEG): лежить на місці webview, поки той прихований під панеллю. */
   capture(label: string): Promise<ArrayBuffer> {
     return invoke('page_capture', { label });
+  }
+
+  /** Скріншот сторінки (PNG): видима частина чи вся сторінка з прокруткою (`full`). */
+  screenshot(label: string, full: boolean): Promise<ArrayBuffer> {
+    return invoke('page_screenshot', { label, full });
+  }
+
+  /** Вікно «Зберегти як» для скріншота (PNG); шлях до файла або null, якщо не зберегли. */
+  saveScreenshot(image: Uint8Array, fileName: string): Promise<string | null> {
+    return invoke('screenshot_save', image, { headers: { 'x-file-name': encodeURIComponent(fileName) } });
   }
 
   /** Сайти з забороненим автовідтворенням зі звуком — для всіх сайтів вікна; діє після перезавантаження. */

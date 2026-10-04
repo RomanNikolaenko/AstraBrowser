@@ -193,3 +193,81 @@
     opacity: 0.5;
   }
 }
+
+// Модальне вікно посередині екрана поверх затемнення (<dialog> з showModal): з'являється й зникає плавно.
+// Вміст — у панелі з класом, що його задає @include modal-panel.
+@mixin modal-dialog($width: 30rem) {
+  width: min(#{$width}, calc(100% - 2rem));
+  max-width: none;
+  padding: 0;
+  margin: auto;
+  color: var(--browser-text);
+  background: transparent;
+  border: 0;
+  opacity: 0;
+  transform: translateY(0.5rem) scale(0.97);
+  transition:
+    opacity $motion,
+    transform $motion,
+    overlay $motion allow-discrete,
+    display $motion allow-discrete;
+
+  &[open] {
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(0.5rem) scale(0.97);
+    }
+  }
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0%);
+    transition:
+      background-color $motion,
+      overlay $motion allow-discrete,
+      display $motion allow-discrete;
+  }
+
+  &[open]::backdrop {
+    background: rgb(0 0 0 / 45%);
+
+    @starting-style {
+      background: rgb(0 0 0 / 0%);
+    }
+  }
+}
+
+@mixin modal-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--browser-popover);
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--browser-popover-shadow);
+}
+
+// Поле вводу в спливному вікні браузера.
+@mixin field-colors {
+  --input-background: var(--browser-field);
+  --input-background-focus: var(--browser-popover);
+  --input-border: var(--browser-chrome-border);
+  --input-icon: var(--browser-icon);
+  --input-text: var(--browser-text);
+  --input-placeholder: var(--browser-placeholder);
+}
+
+// Головна дія вікна — кнопка з фірмовим градієнтом.
+@mixin primary-button {
+  color: #fff;
+  background: var(--gradient-brand);
+  border-color: transparent;
+
+  &:hover:not(:disabled) {
+    background: var(--gradient-brand);
+    border-color: transparent;
+    filter: brightness(1.06);
+  }
+}

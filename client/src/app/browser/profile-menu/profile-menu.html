@@ -6,7 +6,12 @@
   <ul class="profile-menu__list">
     @for (item of items; track item.label) {
       <li>
-        <button class="profile-menu__item" type="button" popovertarget="profile-menu" popovertargetaction="hide">
+        <button
+          class="profile-menu__item"
+          type="button"
+          popovertarget="profile-menu"
+          popovertargetaction="hide"
+          (click)="run(item.page)">
           <app-icon class="profile-menu__icon" [icon]="item.icon" />
           <span class="profile-menu__label">{{ item.label }}</span>
           <app-icon class="profile-menu__chevron" icon="chevron-right" />

@@ -174,6 +174,9 @@ pub async fn page_open(
   let app = window.app_handle().clone();
   #[cfg(windows)]
   let address = url.to_string();
+  // Токен скрипта паролів цієї сторінки: без нього паролі сторінці не віддаються (passwords.rs).
+  #[cfg(windows)]
+  let password_token = crate::passwords::new_token();
 
   let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
     // У приватному вікні сторінки теж без збережених cookies, кешу й сховища.
@@ -212,6 +215,9 @@ pub async fn page_open(
     // Файл зберігається в «Завантаження» Windows, а власне вікно завантажень WebView2 сховане:
     // перебіг показує інтерфейс (webview2::watch_downloads).
     .on_download(|_, _| true);
+  // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу.
+  #[cfg(windows)]
+  let builder = builder.initialization_script(crate::passwords::page_script(&password_token));
 
   let webview = window
     .add_child(builder, LogicalPosition::new(bounds.x, bounds.y), LogicalSize::new(bounds.width, bounds.height))
@@ -276,6 +282,13 @@ pub async fn page_open(
     move |playing, muted| {
       let _ = app.emit_to(&ui, "page://audio", AudioEvent { label: label.clone(), playing, muted });
     }
+  })
+  .map_err(|error| error.to_string())?;
+
+  #[cfg(windows)]
+  webview2::watch_page_messages(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |source, message| crate::passwords::on_page_message(&app, &ui, &label, &password_token, source, message)
   })
   .map_err(|error| error.to_string())?;
 
@@ -362,6 +375,15 @@ pub fn page_set_bounds(window: Window, label: String, bounds: Bounds) -> Result<
 pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<(), String> {
   let webview = page(&window, &label)?;
   if visible { webview.show() } else { webview.hide() }.map_err(|error| error.to_string())
+}
+
+/// Отвори в сайті під відкриті панелі інтерфейсу (webview2::set_clip); порожній список — сайт знову цілий.
+#[cfg(windows)]
+#[tauri::command]
+pub fn page_set_clip(window: Window, label: String, holes: Vec<webview2::Hole>) -> Result<(), String> {
+  let webview = page(&window, &label)?;
+  let scale = window.scale_factor().map_err(|error| error.to_string())?;
+  webview2::set_clip(&webview, holes, scale).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -467,6 +489,20 @@ pub async fn page_capture(window: Window, label: String) -> Result<tauri::ipc::R
   let (reply, receiver) = mpsc::channel();
   webview2::capture(&page(&window, &label)?, reply).map_err(|error| error.to_string())?;
   Ok(tauri::ipc::Response::new(receive(receiver).await??))
+}
+
+/// Скріншот сторінки PNG: видима частина чи вся сторінка з прокруткою (`full`). Уся сторінка знімається довше,
+/// тож і чекаємо довше, ніж на звичайні відповіді WebView2.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn page_screenshot(window: Window, label: String, full: bool) -> Result<tauri::ipc::Response, String> {
+  let (reply, receiver) = mpsc::channel();
+  webview2::screenshot(&page(&window, &label)?, full, reply).map_err(|error| error.to_string())?;
+  let image = tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(20)))
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())??;
+  Ok(tauri::ipc::Response::new(image))
 }
 
 /// «Картинка в картинці» для відео на сторінці: opened, closed чи no-video.

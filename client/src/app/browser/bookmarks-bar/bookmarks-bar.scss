@@ -98,6 +98,9 @@
   display: flex;
   gap: 0.5rem;
   align-items: center;
+
+  // Довга назва не розтягує панель: обрізається трьома крапками, повна — у підказці (appTooltip).
+  max-width: 13rem;
   height: 1.75rem;
   padding-inline: 0.625rem;
   font-size: 0.8125rem;
@@ -115,10 +118,17 @@
 
   // Іконка не перетягується сама по собі (картинку браузер потягнув би окремо) — тягнеться вся закладка.
   &__favicon {
+    flex: 0 0 auto;
     width: 1rem;
     height: 1rem;
     pointer-events: none;
     transition: transform $motion;
+  }
+
+  &__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &:hover,

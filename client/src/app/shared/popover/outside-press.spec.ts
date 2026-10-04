@@ -11,6 +11,7 @@ import { closePopoversOnOutsidePress } from './outside-press';
       <button class="inside" type="button">Пункт</button>
       <div class="list" popover></div>
     </div>
+    <div class="context" popover><button class="context-item" type="button">Змінити</button></div>
   `,
 })
 class Host {
@@ -62,5 +63,14 @@ describe('closePopoversOnOutsidePress', () => {
     press('.inside');
 
     expect(hidden).toEqual(['.list']);
+  });
+
+  it('should keep the panel a menu was opened from when the press is in that menu', async () => {
+    // Контекстне меню, відкрите з панелі (showPopover({ source })), але в іншому місці DOM: закрити панель — закрити й його.
+    const { press, hidden } = await setup('.panel', '.context');
+
+    press('.context-item');
+
+    expect(hidden).toEqual([]);
   });
 });

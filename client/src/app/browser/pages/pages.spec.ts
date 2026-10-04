@@ -134,6 +134,8 @@ describe('internal pages', () => {
     });
 
     it('should show what is downloading, open finished files and show them in their folder', async () => {
+      // Один момент на обидва записи: інакше між двома Date.now() могла б пройти мілісекунда, і порядок записів «поплив» би.
+      const now = Date.now();
       seed('astra.downloads', [
         {
           id: '1',
@@ -141,7 +143,7 @@ describe('internal pages', () => {
           url: 'https://files.example.com/report.pdf',
           size: 1536,
           status: 'completed',
-          finishedAt: Date.now(),
+          finishedAt: now,
           path: 'C:\\Users\\me\\Downloads\\report.pdf',
         },
         {
@@ -150,7 +152,7 @@ describe('internal pages', () => {
           url: 'https://files.example.com/old.zip',
           size: 10,
           status: 'canceled',
-          finishedAt: Date.now() - 1,
+          finishedAt: now - 1000,
         },
       ]);
       const { fixture, element, text, click } = await render(DownloadsPage);

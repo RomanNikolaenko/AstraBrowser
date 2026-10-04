@@ -3,13 +3,19 @@ import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { InternalPage } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
 
+/** Інструмент, що не є сторінкою: його відкриває сам браузер. */
+export type ToolAction = 'translate' | 'screenshot';
+
 interface Tool {
   readonly label: string;
   readonly icon: string;
   readonly page?: InternalPage;
+  readonly action?: ToolAction;
+  /** Гаряча клавіша — у підказці плитки. */
+  readonly shortcut?: string;
 }
 
-/** Панель інструментів (кнопка-сітка). Інструменти без page поки лише закривають панель. */
+/** Панель інструментів (кнопка-сітка): внутрішня сторінка чи інструмент браузера (перекладач, скріншот). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Popover, UiIcon],
@@ -19,22 +25,25 @@ interface Tool {
 })
 export class ToolsMenu {
   readonly openPage = output<InternalPage>();
+  readonly runAction = output<ToolAction>();
 
   protected readonly tools: readonly Tool[] = [
-    { label: 'Завантаження', icon: 'download', page: 'downloads' },
+    { label: 'Завантаження', icon: 'download', page: 'downloads', shortcut: 'Ctrl+J' },
     { label: 'Історія', icon: 'clock', page: 'history' },
     { label: 'Закладки', icon: 'star', page: 'bookmarks' },
-    { label: 'Паролі', icon: 'key' },
+    { label: 'Паролі', icon: 'key', page: 'passwords' },
     { label: 'Розширення', icon: 'puzzle', page: 'extensions' },
-    { label: 'Нотатки', icon: 'notes' },
-    { label: 'Перекладач', icon: 'translate' },
-    { label: 'Скріншот', icon: 'crop' },
+    { label: 'Нотатки', icon: 'notes', page: 'notes' },
+    { label: 'Перекладач', icon: 'translate', action: 'translate' },
+    { label: 'Скріншот', icon: 'crop', action: 'screenshot', shortcut: 'Ctrl+Shift+S' },
     { label: 'Налаштування', icon: 'settings', page: 'settings' },
   ];
 
   protected run(tool: Tool): void {
     if (tool.page) {
       this.openPage.emit(tool.page);
+    } else if (tool.action) {
+      this.runAction.emit(tool.action);
     }
   }
 }

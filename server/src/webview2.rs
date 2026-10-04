@@ -26,14 +26,16 @@ use webview2_com::{
   GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
   IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
   NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
-  WebResourceRequestedEventHandler,
+  WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
 };
 use windows::Win32::{
-  Foundation::E_OUTOFMEMORY,
+  Foundation::{E_OUTOFMEMORY, HWND, RECT},
+  Graphics::Gdi::{CombineRgn, CreateRectRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, RGN_DIFF},
   System::Com::{IStream, STREAM_SEEK_SET},
   UI::{
     Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT, VK_TAB},
     Shell::SHCreateMemStream,
+    WindowsAndMessaging::GetClientRect,
   },
 };
 use windows_core::{w, IUnknown, Interface, BOOL, HSTRING, PWSTR};
@@ -79,6 +81,52 @@ fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreWebView2Prof
   unsafe { core(platform)?.cast::<ICoreWebView2_13>()?.Profile()?.cast() }
 }
 
+/// Отвір у сторінці під панель інтерфейсу: прямокутник із заокругленими кутами, у логічних пікселях від лівого
+/// верхнього кута сторінки.
+#[derive(serde::Deserialize)]
+pub struct Hole {
+  x: f64,
+  y: f64,
+  width: f64,
+  height: f64,
+  radius: f64,
+}
+
+/// Отвори в сайті під відкриті панелі інтерфейсу. Webview сайту малюється поверх HTML інтерфейсу, тож панель над ним
+/// видно лише крізь вирізаний у ньому отвір (регіон вікна Windows), — а сам сайт лишається живим: відео грає далі.
+/// Клік в отворі дістається панелі. Порожній `holes` — сторінка знову ціла.
+pub fn set_clip(webview: &Webview, holes: Vec<Hole>, scale: f64) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let apply = || -> windows_core::Result<()> {
+      let mut window = HWND::default();
+      unsafe { platform.controller().ParentWindow(&mut window)? };
+      if holes.is_empty() {
+        unsafe { SetWindowRgn(window, None, true) };
+        return Ok(());
+      }
+      let mut size = RECT::default();
+      unsafe { GetClientRect(window, &mut size)? };
+      let pixels = |value: f64| (value * scale).round() as i32;
+      unsafe {
+        let region = CreateRectRgn(0, 0, size.right, size.bottom);
+        for hole in &holes {
+          let diameter = pixels(hole.radius * 2.0);
+          let (left, top) = (pixels(hole.x), pixels(hole.y));
+          let (right, bottom) = (pixels(hole.x + hole.width), pixels(hole.y + hole.height));
+          // У CreateRoundRectRgn правий і нижній край не входять у регіон — тому +1.
+          let cut = CreateRoundRectRgn(left, top, right + 1, bottom + 1, diameter, diameter);
+          CombineRgn(Some(region), Some(region), Some(cut), RGN_DIFF);
+          let _ = DeleteObject(cut.into());
+        }
+        // Після SetWindowRgn регіоном володіє вікно — видаляти його самим не треба.
+        SetWindowRgn(window, Some(region), true);
+      }
+      Ok(())
+    };
+    let _ = apply();
+  })
+}
+
 /// Повідомляє `report(page_url, icon_url)`, коли WebView2 визначив іконку сторінки (порожня — іконки немає).
 pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
@@ -97,6 +145,46 @@ pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String) + Send +
       }));
       let mut token = 0;
       unsafe { core.add_FaviconChanged(&handler, &mut token) }
+    };
+    let _ = watch();
+  })
+}
+
+/// Повідомлення скрипта сторінки (скрипт паролів, passwords.rs) — JSON-об'єкт рядком через chrome.webview.postMessage:
+/// `on_message(адреса документа, повідомлення)` вирішує, що відповісти, — відповідь іде лише цій сторінці.
+/// Саме рядком, бо перший цю подію отримує обробник IPC Tauri (wry): повідомлення-об'єкт він відкидає з помилкою,
+/// і далі WebView2 його вже не передає. Рядки, що не є JSON-об'єктом (IPC Tauri), тут пропускаються.
+pub fn watch_page_messages(
+  webview: &Webview,
+  on_message: impl Fn(&str, &serde_json::Value) -> Option<serde_json::Value> + Send + 'static,
+) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let watch = || -> windows_core::Result<()> {
+      let handler = WebMessageReceivedEventHandler::create(Box::new(move |sender, args| {
+        let (Some(sender), Some(args)) = (sender, args) else {
+          return Ok(());
+        };
+        let (mut source, mut text) = (PWSTR::null(), PWSTR::null());
+        unsafe {
+          args.Source(&mut source)?;
+          if args.TryGetWebMessageAsString(&mut text).is_err() {
+            return Ok(());
+          }
+        }
+        let (source, text) = (take_pwstr(source), take_pwstr(text));
+        let Ok(message) = serde_json::from_str::<serde_json::Value>(&text) else {
+          return Ok(());
+        };
+        if !message.is_object() {
+          return Ok(());
+        }
+        if let Some(reply) = on_message(&source, &message) {
+          unsafe { sender.PostWebMessageAsJson(&HSTRING::from(reply.to_string()))? };
+        }
+        Ok(())
+      }));
+      let mut token = 0;
+      unsafe { core(&platform)?.add_WebMessageReceived(&handler, &mut token) }
     };
     let _ = watch();
   })
@@ -122,9 +210,12 @@ pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'stati
   })
 }
 
+/// Віртуальний код клавіші S (у Windows коди літер — їхні великі ASCII).
+const KEY_S: u32 = 0x53;
+
 /// Гарячі клавіші браузера, натиснуті, поки фокус у сайті: самі клавіші отримує webview сайту,
 /// тож вони перехоплюються тут (сайт їх не бачить) і передаються інтерфейсу як `report(shortcut)`.
-/// Поки це Ctrl+Tab (`next-tab`) і Ctrl+Shift+Tab (`previous-tab`).
+/// Це Ctrl+Tab (`next-tab`), Ctrl+Shift+Tab (`previous-tab`) і Ctrl+Shift+S (`screenshot`).
 pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
@@ -137,9 +228,17 @@ pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send +
         args.VirtualKey(&mut key)?;
       }
       let held = |key: VIRTUAL_KEY| unsafe { GetKeyState(i32::from(key.0)) } < 0;
-      if kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && key == u32::from(VK_TAB.0) && held(VK_CONTROL) && !held(VK_MENU) {
+      if kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN || !held(VK_CONTROL) || held(VK_MENU) {
+        return Ok(());
+      }
+      let shortcut = match key {
+        key if key == u32::from(VK_TAB.0) => Some(if held(VK_SHIFT) { "previous-tab" } else { "next-tab" }),
+        KEY_S if held(VK_SHIFT) => Some("screenshot"),
+        _ => None,
+      };
+      if let Some(shortcut) = shortcut {
         unsafe { args.SetHandled(true)? };
-        report(if held(VK_SHIFT) { "previous-tab" } else { "next-tab" });
+        report(shortcut);
       }
       Ok(())
     }));
@@ -290,6 +389,85 @@ fn finish(reply: &Reply<()>, result: windows_core::Result<()>) {
 }
 
 /// Метод протоколу DevTools у самому WebView2; `then` отримує відповідь як JSON.
+/// Найбільша висота знімка всієї сторінки: довші сторінки обрізаються (більших картинок Chromium не малює).
+const SCREENSHOT_MAX_HEIGHT: f64 = 16384.0;
+
+/// Скріншот сторінки PNG (DevTools Page.captureScreenshot): видима частина чи вся сторінка з прокруткою (`full`).
+pub fn screenshot(webview: &Webview, full: bool, reply: Reply<Vec<u8>>) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let failed = reply.clone();
+    let request = move || -> windows_core::Result<()> {
+      let core = core(&platform)?;
+      if full {
+        return shoot_full_page(core, reply);
+      }
+      devtools(&core, "Page.captureScreenshot", r#"{"format":"png"}"#, move |result| {
+        let _ = reply.send(decode_screenshot(result));
+      })
+    };
+    if let Err(error) = request() {
+      let _ = failed.send(Err(error.to_string()));
+    }
+  })
+}
+
+/// Уся сторінка. captureBeyondViewport у WebView2 зависає, тож сторінці на мить дається область перегляду заввишки
+/// з неї саму (Emulation.setDeviceMetricsOverride), знімається видиме, а тоді все повертається — разом із місцем,
+/// де сторінку гортали.
+fn shoot_full_page(core: ICoreWebView2, reply: Reply<Vec<u8>>) -> windows_core::Result<()> {
+  let page = core.clone();
+  devtools(&core, "Page.getLayoutMetrics", "{}", move |result| {
+    let metrics = result.ok().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok());
+    let number = |group: &str, key: &str| metrics.as_ref().and_then(|metrics| metrics.get(group)?.get(key)?.as_f64());
+    let (Some(width), Some(height)) = (number("cssLayoutViewport", "clientWidth"), number("cssContentSize", "height")) else {
+      let _ = reply.send(Err("Не вдалося дізнатися розміри сторінки".into()));
+      return;
+    };
+    let scroll = (number("cssLayoutViewport", "pageX").unwrap_or(0.0), number("cssLayoutViewport", "pageY").unwrap_or(0.0));
+    let size = serde_json::json!({
+      "width": width.round(),
+      "height": height.min(SCREENSHOT_MAX_HEIGHT).round(),
+      "deviceScaleFactor": 0,
+      "mobile": false,
+    });
+    let (tall, failed) = (page.clone(), reply.clone());
+    let started = devtools(&page, "Emulation.setDeviceMetricsOverride", &size.to_string(), move |result| {
+      if let Err(error) = result {
+        let _ = reply.send(Err(error.to_string()));
+        return;
+      }
+      let (restore, failed) = (tall.clone(), reply.clone());
+      let shot = devtools(&tall, "Page.captureScreenshot", r#"{"format":"png"}"#, move |result| {
+        restore_page(&restore, scroll);
+        let _ = reply.send(decode_screenshot(result));
+      });
+      if let Err(error) = shot {
+        restore_page(&tall, scroll);
+        let _ = failed.send(Err(error.to_string()));
+      }
+    });
+    if let Err(error) = started {
+      let _ = failed.send(Err(error.to_string()));
+    }
+  })
+}
+
+/// Сторінка знову звичайного розміру й там, де її гортали до знімка.
+fn restore_page(core: &ICoreWebView2, (x, y): (f64, f64)) {
+  let page = core.clone();
+  let _ = devtools(core, "Emulation.clearDeviceMetricsOverride", "{}", move |_| {
+    let script = serde_json::json!({ "expression": format!("window.scrollTo({x}, {y})") });
+    let _ = devtools(&page, "Runtime.evaluate", &script.to_string(), |_| {});
+  });
+}
+
+fn decode_screenshot(result: windows_core::Result<String>) -> Result<Vec<u8>, String> {
+  let json = result.map_err(|error| error.to_string())?;
+  let response = serde_json::from_str::<serde_json::Value>(&json).map_err(|error| error.to_string())?;
+  let data = response.get("data").and_then(serde_json::Value::as_str).ok_or("Порожній знімок")?;
+  base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data).map_err(|error| error.to_string())
+}
+
 fn devtools(core: &ICoreWebView2, method: &str, params: &str, then: impl FnOnce(windows_core::Result<String>) + 'static) -> windows_core::Result<()> {
   let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, json| {
     then(result.map(|()| json));

@@ -29,7 +29,11 @@ import { BookmarkEditor } from './bookmark-editor/bookmark-editor';
 import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
 import { DownloadsStore } from './data/downloads';
+import { PasswordsStore } from './data/passwords';
 import { DownloadPrompt } from './download-prompt/download-prompt';
+import { Screenshot } from './screenshot/screenshot';
+import { Translator } from './translator/translator';
+import { PasswordPrompt } from './password-prompt/password-prompt';
 import { DownloadsMenu } from './downloads-menu/downloads-menu';
 import { ExtensionsMenu } from './extensions-menu/extensions-menu';
 import { FaviconStore } from './data/favicons';
@@ -56,13 +60,15 @@ import { DownloadsPage } from './pages/downloads-page/downloads-page';
 import { ExtensionsPage } from './pages/extensions-page/extensions-page';
 import { HelpPage } from './pages/help-page/help-page';
 import { HistoryPage } from './pages/history-page/history-page';
+import { NotesPage } from './pages/notes-page/notes-page';
+import { PasswordsPage } from './pages/passwords-page/passwords-page';
 import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
 import { ProfileMenu } from './profile-menu/profile-menu';
 import { ReloadMenu } from './reload-menu/reload-menu';
 import { SiteIcon } from './site-icon/site-icon';
 import { SitePermissions } from './site-permissions/site-permissions';
-import { ToolsMenu } from './tools-menu/tools-menu';
+import { ToolAction, ToolsMenu } from './tools-menu/tools-menu';
 
 /** Стан вкладки із сайтом. */
 interface Site {
@@ -113,13 +119,18 @@ interface BrowserTab {
     HistoryPage,
     MiddleClick,
     NewTab,
+    NotesPage,
+    PasswordPrompt,
+    PasswordsPage,
     ProfileMenu,
     ReloadMenu,
+    Screenshot,
     SettingsPage,
     SiteIcon,
     SitePermissions,
     TitlebarContent,
     ToolsMenu,
+    Translator,
     UiIcon,
     UiInput,
   ],
@@ -136,6 +147,7 @@ export class Browser {
   private readonly pageViews = inject(PageViews);
   private readonly history = inject(HistoryStore);
   private readonly downloads = inject(DownloadsStore);
+  private readonly passwords = inject(PasswordsStore);
   private readonly favicons = inject(FaviconStore);
   private readonly autoplay = inject(AutoplayStore);
   private readonly injector = inject(Injector);
@@ -183,6 +195,15 @@ export class Browser {
   private readonly findBar = viewChild(FindBar);
   private readonly omnibox = viewChild.required<UiInput>('omnibox');
   private readonly reloadMenu = viewChild.required(ReloadMenu);
+  private readonly translator = viewChild.required(Translator);
+  private readonly screenshot = viewChild.required(Screenshot);
+  private readonly toolsButton = viewChild.required<ElementRef<HTMLElement>>('toolsButton');
+
+  /** Адреса сайту в активній вкладці (порожня — у вкладці не сайт): для перекладача. */
+  protected readonly activeSiteUrl = computed(() => {
+    const tab = this.activeTab();
+    return tab.page === 'web' ? (tab.site?.url ?? '') : '';
+  });
   /** Утримання кнопки «Оновити»: за RELOAD_HOLD_MS відкривається меню, а відпущена кнопка вже не оновлює сторінку. */
   private reloadHold?: ReturnType<typeof setTimeout>;
   private reloadHeld = false;
@@ -190,10 +211,16 @@ export class Browser {
   private reloadMenuPage: string | null = null;
 
   /**
-   * Відкрите меню чи панель (popover). Нативний webview сайту малюється поверх HTML інтерфейсу
-   * й закрив би їх, тож поки щось відкрито, сторінка тимчасово ховається.
+   * Відкрите модальне вікно (підтвердження, «Зберегти файл?»). Нативний webview сайту малюється поверх HTML
+   * інтерфейсу й закрив би його разом із затемненням, тож поки вікно відкрите, сторінка тимчасово ховається.
+   * Меню й панелі (popover) сайт не ховають: у ньому вирізається отвір під панель (updateClip).
    */
   private readonly overlayOpen = signal(false);
+  /** Сайт, у якому зараз вирізано отвори під панелі. */
+  private clippedPage: string | null = null;
+  private clipFrame = 0;
+  /** Панель змінила розмір — отвір під неї теж. */
+  private readonly clipObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.scheduleClip());
 
   /** Webview сайту, який зараз має бути видно. */
   /** Webview сайту в активній вкладці: для нього панель дозволів сайту. */
@@ -272,6 +299,8 @@ export class Browser {
           this.ignore(this.pageViews.setVisible(label, true));
         }
         this.shownPage = label;
+        // Інша сторінка — отвори під відкриті панелі тепер у ній.
+        this.scheduleClip();
       });
     });
 
@@ -295,10 +324,11 @@ export class Browser {
       }
     });
 
-    // Popover-и не спливають подій toggle, тож ловимо їх на фазі перехоплення.
-    // beforetoggle приходить ще до першого кадру з панеллю: ховаємо її, поки сайт не знято (setPageCovering).
+    // Popover-и й вікна не спливають подій toggle, тож ловимо їх на фазі перехоплення.
+    // beforetoggle приходить ще до першого кадру з модальним вікном: ховаємо його, поки сайт не знято (setPageCovering).
     const onBeforeToggle = (event: Event) => {
       if (
+        event.target instanceof HTMLDialogElement &&
         (event as ToggleEvent).newState === 'open' &&
         !this.overlayOpen() &&
         this.activeTab().page === 'web' &&
@@ -307,12 +337,38 @@ export class Browser {
         this.setPageCovering(true);
       }
     };
-    const onToggle = () => void this.onOverlayToggle();
+    const onToggle = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && !(target instanceof HTMLDialogElement)) {
+        if ((event as ToggleEvent).newState === 'open') {
+          this.clipObserver?.observe(target);
+        } else {
+          this.clipObserver?.unobserve(target);
+        }
+        this.scheduleClip();
+      }
+      void this.onOverlayToggle();
+    };
+    // Клік по сайту — фокус іде в його webview, і HTML інтерфейсу кліку не бачить. Тоді відкриті меню закриваються
+    // самі, як і від кліку повз них в інтерфейсі.
+    const onBlur = () => {
+      if (this.visiblePage()) {
+        for (const popover of document.querySelectorAll<HTMLElement>(':popover-open')) {
+          if (popover.getAttribute('popover') !== 'manual') {
+            popover.hidePopover();
+          }
+        }
+      }
+    };
     document.addEventListener('beforetoggle', onBeforeToggle, true);
     document.addEventListener('toggle', onToggle, true);
+    window.addEventListener('blur', onBlur);
     destroyRef.onDestroy(() => {
       document.removeEventListener('beforetoggle', onBeforeToggle, true);
       document.removeEventListener('toggle', onToggle, true);
+      window.removeEventListener('blur', onBlur);
+      this.clipObserver?.disconnect();
+      cancelAnimationFrame(this.clipFrame);
       this.setPageCovering(false);
     });
 
@@ -330,6 +386,8 @@ export class Browser {
           if (label) {
             this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
           }
+          // Панелі прив'язані до кнопок вікна: інший розмір — і отвори під ними деінде.
+          this.scheduleClip();
         });
         observer.observe(this.viewport().nativeElement);
         destroyRef.onDestroy(() => observer.disconnect());
@@ -347,6 +405,8 @@ export class Browser {
         this.pageViews.on('page://download-prompt', (event) => this.downloads.ask(event)),
         this.pageViews.on('page://adblock', (event) => this.onPageAdBlock(event)),
         this.pageViews.on('page://shortcut', (event) => this.onPageShortcut(event)),
+        this.pageViews.on('page://password-prompt', (event) => this.passwords.ask(event)),
+        this.pageViews.on('page://passwords-manage', () => this.openPage('passwords')),
       ];
       destroyRef.onDestroy(() => {
         for (const listener of listeners) {
@@ -622,6 +682,17 @@ export class Browser {
     }
   }
 
+  /** Інструмент із панелі «Інструменти», що не є сторінкою. */
+  protected runTool(action: ToolAction): void {
+    if (action === 'translate') {
+      this.translator().show(this.toolsButton().nativeElement);
+      return;
+    }
+    const tab = this.activeTab();
+    const site = tab.page === 'web' && tab.site && this.pageViews.available ? tab.site : null;
+    void this.screenshot().start(site && { label: this.pageLabel(tab), bounds: this.pageBounds(), url: site.url });
+  }
+
   /** Клік коліщатком: нова вкладка у фоні, як у звичайних браузерах. */
   protected openLinkInNewTab(url: string): void {
     const page = internalPageFor(url);
@@ -706,6 +777,9 @@ export class Browser {
         break;
       case 'Shift+BracketRight':
         this.togglePictureInPicture();
+        break;
+      case 'Shift+KeyS':
+        this.runTool('screenshot');
         break;
       case 'Tab':
         this.switchTab(1);
@@ -807,7 +881,12 @@ export class Browser {
 
   /** Гаряча клавіша з сайту — лише з того, що зараз показаний. */
   private onPageShortcut({ label, shortcut }: PageShortcutEvent): void {
-    if (label === this.visiblePage()) {
+    if (label !== this.visiblePage()) {
+      return;
+    }
+    if (shortcut === 'screenshot') {
+      this.runTool('screenshot');
+    } else {
       this.switchTab(shortcut === 'next-tab' ? 1 : -1);
     }
   }
@@ -839,12 +918,11 @@ export class Browser {
   }
 
   /**
-   * Відкрилася чи закрилася панель (popover). Перед тим як сховати сайт під панеллю, знімаємо його
+   * Відкрилося чи закрилося модальне вікно. Перед тим як сховати сайт під ним, знімаємо його
    * й кладемо знімок на те саме місце; після закриття знімок зникає, щойно webview знову на місці.
    */
   private async onOverlayToggle(): Promise<void> {
-    // Панелі (popover) і модальні вікна (вікно підтвердження, «Зберегти файл?») однаково ховають сайт.
-    const open = !!document.querySelector(':popover-open, dialog:modal');
+    const open = !!document.querySelector('dialog:modal');
     const change = ++this.overlayChange;
 
     if (!open) {
@@ -889,8 +967,43 @@ export class Browser {
     this.setPageCovering(false);
   }
 
+  /** Отвори оновлюються раз на кадр: панель, що з'являється, змінюється кілька разів поспіль. */
+  private scheduleClip(): void {
+    cancelAnimationFrame(this.clipFrame);
+    this.clipFrame = requestAnimationFrame(() => this.updateClip());
+  }
+
   /**
-   * Поки сайт знімається, відкрита панель невидима (клас page-covering на <html>, styles.scss): інакше її
+   * Меню й панелі над сайтом: сайт не ховається (відео грає далі), а в його webview вирізаються отвори точно під
+   * відкриті панелі — крізь них і видно панель. Розміри — без анімації появи (offset*), тобто такі, як після неї.
+   */
+  private updateClip(): void {
+    const label = this.visiblePage();
+    if (this.clippedPage && this.clippedPage !== label) {
+      this.ignore(this.pageViews.setClip(this.clippedPage, []));
+      this.clippedPage = null;
+    }
+    if (!label) {
+      return;
+    }
+    const bounds = this.pageBounds();
+    const holes = [...document.querySelectorAll<HTMLElement>(':popover-open')]
+      .map((popover) => ({
+        x: popover.offsetLeft - bounds.x,
+        y: popover.offsetTop - bounds.y,
+        width: popover.offsetWidth,
+        height: popover.offsetHeight,
+        radius: parseFloat(getComputedStyle(popover).borderTopLeftRadius) || 0,
+      }))
+      .filter((hole) => hole.x < bounds.width && hole.y < bounds.height && hole.x + hole.width > 0 && hole.y + hole.height > 0);
+    if (holes.length || this.clippedPage === label) {
+      this.ignore(this.pageViews.setClip(label, holes));
+      this.clippedPage = holes.length ? label : null;
+    }
+  }
+
+  /**
+   * Поки сайт знімається, модальне вікно невидиме (клас page-covering на <html>, styles.scss): інакше його
    * частину над сайтом на мить закривав би його webview. Клас ставиться одразу, а не через effect —
    * той спрацьовує вже після кадру, і панель встигала б показатися, зникнути й показатися знову.
    */

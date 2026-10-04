@@ -52,6 +52,8 @@
 </ng-template>
 
 <app-download-prompt />
+<app-screenshot />
+<app-password-prompt />
 
 <div class="chrome" (dblclick)="onChromeDoubleClick($event)">
   <div class="toolbar">
@@ -147,15 +149,17 @@
         type="button"
         aria-label="Інструменти"
         title="Інструменти"
+        #toolsButton
         popovertarget="tools-menu">
         <app-icon icon="apps" />
       </button>
-      <app-tools-menu (openPage)="openPage($event)" />
+      <app-tools-menu (openPage)="openPage($event)" (runAction)="runTool($event)" />
+      <app-translator [pageUrl]="activeSiteUrl()" (navigate)="openLink($event)" (openInNewTab)="openLinkInNewTab($event)" />
       <button class="profile" type="button" aria-label="Профіль" title="Профіль" popovertarget="profile-menu">
         <span class="profile__avatar"><app-icon icon="user" /></span>
         <app-icon class="profile__chevron" icon="chevron-down" />
       </button>
-      <app-profile-menu />
+      <app-profile-menu (openPage)="openPage($event)" />
       <button
         #extensionsButton
         class="toolbar__button"
@@ -221,6 +225,12 @@
       }
       @case ('bookmarks') {
         <app-bookmarks-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
+      }
+      @case ('passwords') {
+        <app-passwords-page />
+      }
+      @case ('notes') {
+        <app-notes-page />
       }
       @case ('extensions') {
         <app-extensions-page />

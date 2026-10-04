@@ -170,7 +170,9 @@ describe('Browser', () => {
       element.querySelector(selector)?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       await fixture.whenStable();
     };
-    expect(element.querySelector('app-browser [data-tauri-drag-region], .tab-list[data-tauri-drag-region]')).toBeNull();
+    // data-tauri-drag-region="false" (список вибору) — навпаки, «не перетягувати».
+    const dragRegion = '[data-tauri-drag-region]:not([data-tauri-drag-region="false"])';
+    expect(element.querySelector(`app-browser ${dragRegion}, .tab-list${dragRegion}`)).toBeNull();
 
     await doubleClick('.toolbar');
     await doubleClick('.bookmarks__empty');

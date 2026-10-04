@@ -1,0 +1,166 @@
+@use '../../../../assets/styles/mixins' as *;
+@use '../../browser-ui' as *;
+
+// Ширше за інші сторінки: поряд список і редактор.
+.page.notes {
+  width: min(100%, 72rem);
+}
+
+.notes {
+  &__button-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  &__layout {
+    display: grid;
+    grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+
+    @media (width <= 46rem) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  &__list {
+    gap: 0.125rem;
+  }
+
+  &__item {
+    display: grid;
+    gap: 0.125rem;
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    font: inherit;
+    color: var(--browser-text);
+    text-align: start;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: 0.75rem;
+    transition: background-color $motion;
+
+    @include focus-ring(0.125rem);
+
+    &:hover {
+      background: var(--browser-hover);
+    }
+
+    &--current {
+      background: var(--browser-pressed);
+
+      &:hover {
+        background: var(--browser-pressed);
+      }
+    }
+  }
+
+  &__item-head {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    min-width: 0;
+  }
+
+  &__item-title,
+  &__item-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__item-title {
+    flex: 1 1 auto;
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  &__item-pin {
+    flex: 0 0 auto;
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--browser-accent);
+  }
+
+  &__item-preview {
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+
+  &__item-time {
+    font-size: 0.75rem;
+    color: var(--browser-muted);
+  }
+
+  &__editor {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 1rem 1.5rem 1.25rem;
+    background: var(--browser-popover);
+    border: 0.0625rem solid var(--browser-chrome-border);
+    border-radius: 1rem;
+    box-shadow: var(--browser-chrome-shadow);
+  }
+
+  &__toolbar {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+  }
+
+  &__status {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+    white-space: nowrap;
+  }
+
+  &__action {
+    @include icon-button(2.25rem, 1.125rem);
+
+    &--on {
+      color: var(--browser-accent);
+    }
+  }
+
+  &__title,
+  &__text {
+    width: 100%;
+    padding: 0;
+    font-family: inherit;
+    color: var(--browser-text);
+    outline: none;
+    background: transparent;
+    border: 0;
+
+    &::placeholder {
+      color: var(--browser-placeholder);
+    }
+  }
+
+  &__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  // Поле росте разом із текстом — прокручується вся сторінка, а не саме поле.
+  &__text {
+    min-height: 20rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    resize: none;
+    field-sizing: content;
+  }
+
+  &__footer {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--browser-muted);
+    text-align: end;
+  }
+}

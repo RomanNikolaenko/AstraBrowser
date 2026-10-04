@@ -18,7 +18,8 @@
               type="button"
               role="menuitem"
               draggable="true"
-              [title]="child.url"
+              [appTooltip]="child.title"
+              [tooltipDetail]="child.url"
               (dragstart)="drag.start($event, child)"
               [attr.popovertarget]="root()"
               popovertargetaction="hide"
@@ -38,6 +39,7 @@
               role="menuitem"
               aria-haspopup="menu"
               draggable="true"
+              [appTooltip]="child.title"
               [attr.popovertarget]="folderMenuId(child)"
               (dragstart)="drag.start($event, child)"
               (contextmenu)="showMenu($event, child, index)">

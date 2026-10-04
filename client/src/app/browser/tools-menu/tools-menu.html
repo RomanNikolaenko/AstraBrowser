@@ -3,7 +3,13 @@
   <ul class="tools-menu__grid">
     @for (tool of tools; track tool.label) {
       <li>
-        <button class="tools-menu__tile" type="button" popovertarget="tools-menu" popovertargetaction="hide" (click)="run(tool)">
+        <button
+          class="tools-menu__tile"
+          type="button"
+          popovertarget="tools-menu"
+          popovertargetaction="hide"
+          [title]="tool.shortcut ? tool.label + ' (' + tool.shortcut + ')' : tool.label"
+          (click)="run(tool)">
           <app-icon class="tools-menu__icon" [icon]="tool.icon" />
           <span>{{ tool.label }}</span>
         </button>

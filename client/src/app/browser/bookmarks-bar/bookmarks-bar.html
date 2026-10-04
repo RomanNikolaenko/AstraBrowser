@@ -24,12 +24,13 @@
                 class="bookmark"
                 type="button"
                 draggable="true"
-                [title]="item.url"
+                [appTooltip]="item.title"
+                [tooltipDetail]="item.url"
                 (dragstart)="drag.start($event, item)"
                 (click)="open(item)"
                 (appMiddleClick)="openInNewTab(item)">
                 <app-site-icon class="bookmark__favicon" [url]="item.url" [size]="16" />
-                <span>{{ item.title }}</span>
+                <span class="bookmark__label">{{ item.title }}</span>
               </button>
             }
             @case ('folder') {
@@ -38,10 +39,11 @@
                 type="button"
                 draggable="true"
                 aria-haspopup="menu"
+                [appTooltip]="item.title"
                 [attr.popovertarget]="folderMenuId(item)"
                 (dragstart)="drag.start($event, item)">
                 <app-icon class="bookmark__favicon" [icon]="folderIcon(item)" [style.color]="folderColor(item)" />
-                <span>{{ item.title }}</span>
+                <span class="bookmark__label">{{ item.title }}</span>
               </button>
               <app-bookmark-folder-menu [folder]="item" />
             }

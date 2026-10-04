@@ -76,8 +76,11 @@ export class Popover {
       return;
     }
     const name = `--${this.popoverId()}`;
-    if (getComputedStyle(anchor).getPropertyValue('anchor-name') !== name) {
-      anchor.style.setProperty('anchor-name', name);
+    // Додаємо своє ім'я до наявних, а не замінюємо: одна кнопка буває якорем кількох панелей (меню «Інструменти»
+    // й перекладач), і панель, що саме згасає, інакше втратила б якір і стрибнула б у кут вікна.
+    const names = anchorNames(anchor);
+    if (!names.includes(name)) {
+      anchor.style.setProperty('anchor-name', [...names, name].join(', '));
     }
     if (this.caret()) {
       this.panel().nativeElement.style.setProperty('--popover-anchor-width', `${anchor.getBoundingClientRect().width}px`);
@@ -110,9 +113,16 @@ export class Popover {
     }
     const name = `--${this.popoverId()}`;
     return (
-      [invoker, ...invoker.querySelectorAll<HTMLElement>('*')].find(
-        (element) => getComputedStyle(element).getPropertyValue('anchor-name') === name
-      ) ?? invoker
+      [invoker, ...invoker.querySelectorAll<HTMLElement>('*')].find((element) => anchorNames(element).includes(name)) ?? invoker
     );
   }
+}
+
+/** Імена якоря елемента (anchor-name: --a, --b); none — жодного. */
+function anchorNames(element: Element): string[] {
+  return getComputedStyle(element)
+    .getPropertyValue('anchor-name')
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name && name !== 'none');
 }

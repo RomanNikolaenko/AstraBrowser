@@ -13,10 +13,39 @@
   background-color: #ff9632;
 }
 
-// Поки сайт під панеллю знімається (Browser, pageCovering), відкрита панель невидима — інакше її частину
-// на мить закривав би webview сайту. Знявши клас, панель з'являється своєю звичайною анімацією.
-.page-covering [popover]:popover-open {
+// Поки сайт під модальним вікном знімається (Browser, pageCovering), вікно невидиме — інакше його частину
+// на мить закривав би webview сайту. Знявши клас, вікно з'являється своєю звичайною анімацією.
+.page-covering dialog:modal {
   opacity: 0 !important;
+}
+
+// Підказка з повним текстом (shared/tooltip): поверх усього, у стилі панелей браузера.
+.app-tooltip {
+  position: fixed;
+  inset: auto;
+  max-width: min(32rem, calc(100vw - 0.75rem));
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--browser-text);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  background: var(--browser-popover);
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 0.625rem;
+  box-shadow: var(--browser-popover-shadow);
+
+  &:popover-open {
+    display: grid;
+    gap: 0.125rem;
+  }
+}
+
+.app-tooltip__detail {
+  font-size: 0.75rem;
+  color: var(--browser-muted);
 }
 
 // Друкується лише вміст сторінки: без заголовка вікна, вкладок, панелі інструментів і пошуку.

@@ -1,0 +1,61 @@
+<app-popover class="translator" popoverId="translator" caret (opened)="onOpened()">
+  <h2 class="translator__title">Перекладач</h2>
+
+  <div class="translator__language">
+    <label class="translator__label" for="translator-language">Перекладати на</label>
+    <app-select
+      class="translator__select"
+      selectId="translator-language"
+      selectName="translator-language"
+      [options]="languages"
+      [value]="language()"
+      (valueChange)="setLanguage($event)" />
+  </div>
+
+  <section class="translator__section" aria-labelledby="translator-page">
+    <h3 class="translator__heading" id="translator-page">Сторінка</h3>
+    @if (site(); as site) {
+      @if (translated()) {
+        <p class="translator__note">Сторінку {{ site }} перекладено через Google Перекладач.</p>
+        <div class="translator__actions">
+          <button class="translator__button" type="button" (click)="showOriginal()">Показати оригінал</button>
+          <button class="translator__button translator__button--primary" type="button" (click)="translatePage()">
+            Перекласти знову
+          </button>
+        </div>
+      } @else {
+        <p class="translator__note">{{ site }}</p>
+        <div class="translator__actions">
+          <button class="translator__button translator__button--primary" type="button" (click)="translatePage()">
+            <app-icon class="translator__button-icon" icon="translate" />
+            Перекласти сторінку
+          </button>
+        </div>
+      }
+    } @else {
+      <p class="translator__note">Відкрийте сайт у вкладці, щоб перекласти його сторінку.</p>
+    }
+  </section>
+
+  <section class="translator__section" aria-labelledby="translator-text">
+    <h3 class="translator__heading" id="translator-text">Текст</h3>
+    <textarea
+      #textInput
+      class="translator__text"
+      id="translator-text-input"
+      name="translator-text"
+      rows="4"
+      placeholder="Вставте чи введіть текст"
+      aria-labelledby="translator-text"
+      [value]="text()"
+      (input)="text.set($any($event.target).value)"
+      (keydown.control.enter)="translateText()"></textarea>
+    <div class="translator__actions">
+      <button class="translator__button" type="button" [disabled]="!text().trim()" (click)="translateText()">
+        Перекласти текст
+      </button>
+    </div>
+  </section>
+
+  <p class="translator__credit">Переклад виконує Google Перекладач — сторінка відкривається через його сайт.</p>
+</app-popover>
