@@ -13,6 +13,7 @@ describe('SignIn', () => {
   const auth = {
     available: true,
     user: signal(null),
+    deletedEmail: signal<string | null>(null),
     signIn: vi.fn<(email: string, password: string, remember: boolean) => Promise<void>>(),
     verify: vi.fn<(email: string, code: string) => Promise<void>>(),
     resend: vi.fn<(email: string) => Promise<void>>(),
@@ -45,6 +46,7 @@ describe('SignIn', () => {
     auth.signIn.mockReset().mockResolvedValue(undefined);
     auth.verify.mockReset().mockResolvedValue(undefined);
     auth.resend.mockReset().mockResolvedValue(undefined);
+    auth.deletedEmail.set(null);
     await TestBed.configureTestingModule({
       imports: [SignIn],
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting(), { provide: AuthStore, useValue: auth }],
@@ -58,6 +60,16 @@ describe('SignIn', () => {
 
   it('should not show errors before the user interacts', () => {
     expect(errors()).toEqual([]);
+    expect(element.querySelector('.auth__alert')).toBeNull();
+  });
+
+  it('should say that the account was just deleted', async () => {
+    auth.deletedEmail.set('user@example.com');
+    await fixture.whenStable();
+
+    expect(element.querySelector('.auth__alert')?.textContent?.trim()).toBe(
+      'Обліковий запис user@example.com видалено разом з його даними.'
+    );
   });
 
   it('should show errors and stay on the page when submitted empty', async () => {

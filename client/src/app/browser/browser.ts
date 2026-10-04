@@ -30,6 +30,7 @@ import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
 import { DownloadsStore } from './data/downloads';
 import { PasswordsStore } from './data/passwords';
+import { BlockedTracker, TrackingStore } from './data/tracking';
 import { DownloadPrompt } from './download-prompt/download-prompt';
 import { Screenshot } from './screenshot/screenshot';
 import { isTranslated } from './translator/translate-urls';
@@ -47,6 +48,7 @@ import { FindBar } from './find-bar/find-bar';
 import { NewTab } from './new-tab/new-tab';
 import {
   PageAdBlockEvent,
+  PageTrackersEvent,
   PageAudioEvent,
   PageBounds,
   PageDownloadEvent,
@@ -75,6 +77,7 @@ import { ProfileMenu } from './profile-menu/profile-menu';
 import { ReloadMenu } from './reload-menu/reload-menu';
 import { SiteIcon } from './site-icon/site-icon';
 import { SitePermissions } from './site-permissions/site-permissions';
+import { TrackingPanel } from './tracking-panel/tracking-panel';
 import { ToolAction, ToolsMenu } from './tools-menu/tools-menu';
 
 /** Стан вкладки із сайтом. */
@@ -96,6 +99,8 @@ interface Site {
   readonly muted: boolean;
   /** Скільки запитів блокувальник реклами відсік на поточній сторінці. */
   readonly blocked: number;
+  /** Елементи стеження, які захист від стеження заблокував на поточній сторінці. */
+  readonly trackers: readonly BlockedTracker[];
 }
 
 /** Закрита вкладка, яку можна відкрити знову (Ctrl+Shift+T): що в ній було і де вона стояла. */
@@ -148,6 +153,7 @@ interface BrowserTab {
     SettingsPage,
     SiteIcon,
     SitePermissions,
+    TrackingPanel,
     TitlebarContent,
     ToolsMenu,
     Translator,
@@ -173,6 +179,7 @@ export class Browser {
   private readonly passwords = inject(PasswordsStore);
   private readonly favicons = inject(FaviconStore);
   private readonly autoplay = inject(AutoplayStore);
+  private readonly tracking = inject(TrackingStore);
   private readonly injector = inject(Injector);
 
   protected readonly settings = inject(SettingsStore);
@@ -257,6 +264,8 @@ export class Browser {
     const tab = this.activeTab();
     return tab.page === 'web' && this.pageViews.available ? this.pageLabel(tab) : null;
   });
+  /** Сайт вкладки захищено від стеження — щит в адресному рядку. */
+  protected readonly siteProtected = computed(() => this.tracking.protects(this.tabUrl(this.activeTab())));
 
   private readonly visiblePage = computed(() => {
     const tab = this.activeTab();
@@ -411,6 +420,11 @@ export class Browser {
         const rules = this.autoplay.rules();
         untracked(() => this.ignore(this.pageViews.setAudioRules(rules)));
       });
+      // Захист від стеження (рівень, GPC, винятки) — для запитів і сторінок цього вікна.
+      effect(() => {
+        const rules = this.tracking.rules();
+        untracked(() => this.ignore(this.pageViews.setTrackingRules(rules)));
+      });
 
       // Webview сайту лежить поверх області вмісту, тож іде за її розміром.
       afterNextRender(() => {
@@ -437,6 +451,7 @@ export class Browser {
         this.pageViews.on('page://download', (event) => this.onPageDownload(event)),
         this.pageViews.on('page://download-prompt', (event) => this.downloads.ask(event)),
         this.pageViews.on('page://adblock', (event) => this.onPageAdBlock(event)),
+        this.pageViews.on('page://trackers', (event) => this.onPageTrackers(event)),
         this.pageViews.on('page://shortcut', (event) => this.onPageShortcut(event)),
         this.pageViews.on('page://password-prompt', (event) => this.passwords.ask(event)),
         this.pageViews.on('page://passwords-manage', () => this.openPage('passwords')),
@@ -907,6 +922,7 @@ export class Browser {
       playing: false,
       muted: false,
       blocked: 0,
+      trackers: [],
     };
     this.replaceTab({ id: tab.id, page: 'web', site, back: back && tab.page !== 'web' ? tab.page : undefined });
     const autoplay = this.autoplay.rules();
@@ -966,6 +982,21 @@ export class Browser {
     if (entry && entry.url === tab.site.url && title) {
       this.history.rename(entry.id, title);
     }
+  }
+
+  private onPageTrackers({ label, trackers }: PageTrackersEvent): void {
+    const tab = this.tabByLabel(label);
+    if (tab?.site && (tab.site.trackers.length || trackers.length)) {
+      this.updateSite(tab.id, (site) => ({ ...site, trackers }));
+    }
+  }
+
+  /** «Налаштування приватності» з панелі захисту: сторінка налаштувань — одразу на розділі «Конфіденційність». */
+  protected openPrivacySettings(): void {
+    this.openPage('settings');
+    afterNextRender(() => document.getElementById('settings-privacy')?.scrollIntoView({ block: 'start' }), {
+      injector: this.injector,
+    });
   }
 
   private onPageAdBlock({ label, blocked }: PageAdBlockEvent): void {

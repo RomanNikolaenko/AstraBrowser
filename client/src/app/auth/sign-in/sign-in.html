@@ -11,6 +11,8 @@
 
     @if (error(); as message) {
       <p class="auth__alert auth__alert--error" role="alert"><app-icon icon="alert" />{{ message }}</p>
+    } @else if (deletedEmail(); as email) {
+      <p class="auth__alert" role="status"><app-icon icon="check" />Обліковий запис {{ email }} видалено разом з його даними.</p>
     }
 
     <form class="auth__fields" id="sign-in-form" novalidate (submit)="submit($event)">

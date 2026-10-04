@@ -104,15 +104,26 @@
       enterKeyHint="go"
       (keydown)="onOmniboxKeydown($event)">
       @if (activeSitePage()) {
-        <button
-          class="omnibox__site"
-          data-input-start
-          type="button"
-          popovertarget="site-permissions"
-          aria-label="Дозволи сайту"
-          title="Дозволи сайту">
-          <app-icon icon="sliders" />
-        </button>
+        <span class="omnibox__start" data-input-start>
+          <button
+            class="omnibox__shield"
+            type="button"
+            popovertarget="tracking-panel"
+            [class.omnibox__shield--active]="siteProtected() && !!activeTab().site?.trackers?.length"
+            [class.omnibox__shield--off]="!siteProtected()"
+            aria-label="Захист від стеження"
+            title="Захист від стеження">
+            <app-icon [icon]="siteProtected() ? 'shield-check' : 'shield-off'" />
+          </button>
+          <button
+            class="omnibox__site"
+            type="button"
+            popovertarget="site-permissions"
+            aria-label="Дозволи сайту"
+            title="Дозволи сайту">
+            <app-icon icon="sliders" />
+          </button>
+        </span>
       } @else {
         <img class="omnibox__logo" data-input-start src="/logo.webp" alt="" width="24" height="24" />
       }
@@ -157,6 +168,11 @@
     <app-bookmark-editor [pageTitle]="tabTitle(activeTab())" [pageUrl]="tabUrl(activeTab())" />
     @if (activeSitePage(); as page) {
       <app-site-permissions [page]="page" [pageUrl]="tabUrl(activeTab())" />
+      <app-tracking-panel
+        [page]="page"
+        [pageUrl]="tabUrl(activeTab())"
+        [trackers]="activeTab().site?.trackers ?? []"
+        (openSettings)="openPrivacySettings()" />
     }
 
     <div class="toolbar__group">

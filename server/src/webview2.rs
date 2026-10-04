@@ -9,7 +9,7 @@
 
 use std::{
   cell::{Cell, RefCell},
-  collections::HashMap,
+  collections::{BTreeSet, HashMap},
   path::{Path, PathBuf},
   rc::Rc,
   sync::{
@@ -40,7 +40,10 @@ use windows::Win32::{
 };
 use windows_core::{w, IUnknown, Interface, BOOL, HSTRING, PWSTR};
 
-use crate::adblock::{AdBlock, Verdict};
+use crate::{
+  adblock::{AdBlock, Verdict},
+  tracking::{self, Category, Tracking},
+};
 
 /// Відповідь, яку команда чекає з головного потоку.
 pub type Reply<T> = Sender<Result<T, String>>;
@@ -296,6 +299,24 @@ pub fn replace_document_script(
   })
 }
 
+/// Рівень вбудованого захисту від стеження WebView2 (як в Edge: куки й сховища трекерів) для профілю сторінки.
+pub fn set_tracking_prevention(webview: &Webview, level: tracking::Level) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let set = || -> windows_core::Result<()> {
+      let profile: ICoreWebView2Profile3 = unsafe { core(&platform)?.cast::<ICoreWebView2_13>()?.Profile()?.cast()? };
+      let level = match level {
+        tracking::Level::Off => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_NONE,
+        tracking::Level::Standard => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_BALANCED,
+        tracking::Level::Strict => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_STRICT,
+      };
+      unsafe { profile.SetPreferredTrackingPreventionLevel(level) }
+    };
+    if let Err(error) = set() {
+      eprintln!("tracking: не вдалося задати рівень захисту WebView2: {error}");
+    }
+  })
+}
+
 /// Знімок того, що зараз показує сторінка (JPEG). Поки відкрита панель інтерфейсу, сам webview
 /// доводиться ховати (він малюється поверх HTML), і на його місці показується цей знімок.
 pub fn capture(webview: &Webview, reply: Reply<Vec<u8>>) -> tauri::Result<()> {
@@ -379,6 +400,8 @@ pub enum ReloadMode {
   SiteData,
   /// Cookies сайту (вийде з облікового запису) — і звичайне оновлення.
   Cookies,
+  /// Усе разом: сховища сайту й cookies («Стерти файли cookie та дані сайту» в захисті від стеження).
+  All,
 }
 
 /// Виконує `mode` для поточного сайту вкладки (`url`, `origin`) і перезавантажує сторінку.
@@ -403,6 +426,23 @@ pub fn reload_with(webview: &Webview, mode: ReloadMode, url: String, origin: Str
         }
       }
       ReloadMode::Cookies => delete_cookies_and_reload(core, &url, reply),
+      ReloadMode::All => {
+        let (page, failed) = (core.clone(), reply.clone());
+        let started = devtools(&core, "Runtime.evaluate", r#"{"expression":"sessionStorage.clear()"}"#, move |_| {
+          let params = serde_json::json!({ "origin": origin, "storageTypes": "cache_storage,local_storage,indexeddb,service_workers,file_systems,websql" });
+          let (cookies_page, failed) = (page.clone(), reply.clone());
+          let started = devtools(&page, "Storage.clearDataForOrigin", &params.to_string(), move |result| match result {
+            Ok(_) => delete_cookies_and_reload(cookies_page, &url, reply),
+            Err(error) => finish(&reply, Err(error)),
+          });
+          if let Err(error) = started {
+            finish(&failed, Err(error));
+          }
+        });
+        if let Err(error) = started {
+          finish(&failed, Err(error));
+        }
+      }
     }
   })
 }
@@ -842,9 +882,18 @@ pub fn set_autoplay(webview: &Webview, origin: String, autoplay: Autoplay, reply
 ///
 /// Перший перехід на `url` Tauri починає сам, ще до цих обробників, тож перша сторінка готується тут одразу:
 /// її мережевий запит приходить пізніше, ніж стає фільтр, а документ створюється вже з нашим скриптом.
-pub fn block_ads(webview: &Webview, app: AppHandle, url: String, report: impl Fn(u32) + Send + 'static) -> tauri::Result<()> {
+/// Що заблоковано на сторінці — для інтерфейсу.
+pub enum Blocked {
+  /// Скільки реклами заблокував блокувальник.
+  Ads(u32),
+  /// Елементи стеження (категорія й хост), які заблокував захист від стеження (tracking.rs).
+  Trackers(Vec<(Category, String)>),
+}
+
+/// Блокувальник реклами й захист від стеження для сторінки вікна `ui`: обидва перевіряють запити в одному обробнику.
+pub fn block_ads(webview: &Webview, app: AppHandle, ui: String, url: String, report: impl Fn(Blocked) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
-    let watch = core(&platform).and_then(|core| watch_requests(&core, platform.environment(), app, &url, report));
+    let watch = core(&platform).and_then(|core| watch_requests(&core, platform.environment(), app, ui, &url, report));
     if let Err(error) = watch {
       eprintln!("adblock: не вдалося під'єднатися до сторінки: {error}");
     }
@@ -858,6 +907,8 @@ struct AdPage {
   url: String,
   host: String,
   blocked: u32,
+  /// Заблоковані елементи стеження: категорія й хост.
+  trackers: BTreeSet<(Category, String)>,
   /// id скрипта сторінки й «покоління»: id, що прийшов уже після наступного переходу, теж прибирається.
   script: Option<String>,
   generation: u64,
@@ -867,8 +918,9 @@ fn watch_requests(
   core: &ICoreWebView2,
   environment: ICoreWebView2Environment,
   app: AppHandle,
+  ui: String,
   first_url: &str,
-  report: impl Fn(u32) + 'static,
+  report: impl Fn(Blocked) + 'static,
 ) -> windows_core::Result<()> {
   // Усі запити, зокрема з iframe й воркерів (без ICoreWebView2_22 — лише ті, що бачить старий фільтр).
   match core.cast::<ICoreWebView2_22>() {
@@ -885,19 +937,19 @@ fn watch_requests(
   let page = Rc::new(RefCell::new(AdPage::default()));
   let report = Rc::new(report);
   start_page(core, &page, &app, first_url, false, &*report)?;
-  let (on_request_page, on_request_report, on_request_app) = (page.clone(), report.clone(), app.clone());
+  let (on_request_page, on_request_report, on_request_app, on_request_ui) = (page.clone(), report.clone(), app.clone(), ui.clone());
   let mut token = 0;
   unsafe {
     core.add_WebResourceRequested(
       &WebResourceRequestedEventHandler::create(Box::new(move |_, args| match args {
-        Some(args) => on_request(&args, &environment, &on_request_app, &on_request_page, &*on_request_report),
+        Some(args) => on_request(&args, &environment, &on_request_app, &on_request_ui, &on_request_page, &*on_request_report),
         None => Ok(()),
       })),
       &mut token,
     )?;
     core.add_NavigationStarting(
       &NavigationStartingEventHandler::create(Box::new(move |sender, args| match (sender, args) {
-        (Some(core), Some(args)) => on_navigation_starting(&core, &args, &app, &page, &*report),
+        (Some(core), Some(args)) => on_navigation_starting(&core, &args, &app, &ui, &page, &*report),
         _ => Ok(()),
       })),
       &mut token,
@@ -910,48 +962,93 @@ fn on_request(
   args: &ICoreWebView2WebResourceRequestedEventArgs,
   environment: &ICoreWebView2Environment,
   app: &AppHandle,
+  ui: &str,
   page: &RefCell<AdPage>,
-  report: &dyn Fn(u32),
+  report: &dyn Fn(Blocked),
 ) -> windows_core::Result<()> {
-  let adblock = app.state::<AdBlock>();
-  let (verdict, page_origin) = {
-    let page = page.borrow();
-    if !adblock.active_on(&page.host) {
-      return Ok(());
-    }
-    let request = unsafe { args.Request()? };
-    let (mut uri, mut method, mut context) = (PWSTR::null(), PWSTR::null(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default());
+  let request = unsafe { args.Request()? };
+  let (mut uri, mut method, mut context) = (PWSTR::null(), PWSTR::null(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default());
+  unsafe {
+    request.Uri(&mut uri)?;
+    request.Method(&mut method)?;
+    args.ResourceContext(&mut context)?;
+  }
+  let (uri, method) = (take_pwstr(uri), take_pwstr(method));
+  let rules = app.state::<Tracking>().rules(ui);
+  // Global Privacy Control — кожному запитові до сайтів, і самій сторінці теж.
+  if rules.gpc && (uri.starts_with("https:") || uri.starts_with("http:")) {
+    let headers = unsafe { request.Headers()? };
     unsafe {
-      request.Uri(&mut uri)?;
-      request.Method(&mut method)?;
-      args.ResourceContext(&mut context)?;
+      headers.SetHeader(w!("Sec-GPC"), w!("1"))?;
+      headers.SetHeader(w!("DNT"), w!("1"))?;
     }
-    let uri = take_pwstr(uri);
-    let Some(kind) = request_type(context, &uri, &page.url) else {
-      return Ok(());
-    };
-    let origin = Url::parse(&page.url).map(|url| url.origin().ascii_serialization()).unwrap_or_default();
-    (adblock.check(&uri, &page.url, kind, &take_pwstr(method)), origin)
+  }
+  let (page_url, page_host) = {
+    let page = page.borrow();
+    (page.url.clone(), page.host.clone())
   };
+  let Some(kind) = request_type(context, &uri, &page_url) else {
+    return Ok(());
+  };
+  let adblock = app.state::<AdBlock>();
 
-  let response = match verdict {
-    Verdict::Allow => return Ok(()),
-    // Без CORS-заголовків: для fetch і XHR з іншого сайту це мережева помилка, як в інших блокувальників.
-    Verdict::Block => unsafe { environment.CreateWebResourceResponse(None, 403, w!("Blocked"), w!(""))? },
-    Verdict::Replace { mime, body } => {
-      let stream = unsafe { SHCreateMemStream(Some(&body)) }.ok_or_else(|| windows_core::Error::from(E_OUTOFMEMORY))?;
-      let headers = HSTRING::from(replacement_headers(args, &mime, &page_origin));
-      unsafe { environment.CreateWebResourceResponse(&stream, 200, w!("OK"), &headers)? }
+  // Захист від стеження — раніше за блокувальник: заблоковане ним лічиться як елемент стеження, а не реклама.
+  if rules.protects(&page_host) {
+    if let Some(category) = app.state::<Tracking>().check(&rules, &uri, &page_url, kind, &method) {
+      // Підміна з блокувальника (порожній analytics.js тощо) безпечніша за відмову: скрипти сайту не падають.
+      let verdict = match adblock.check(&uri, &page_url, kind, &method) {
+        replace @ Verdict::Replace { .. } => replace,
+        _ => Verdict::Block,
+      };
+      respond(args, environment, &page_url, verdict)?;
+      let host = Url::parse(&uri).ok().and_then(|url| url.host_str().map(str::to_owned)).unwrap_or_default();
+      let trackers = {
+        let mut page = page.borrow_mut();
+        page.trackers.insert((category, host)).then(|| page.trackers.iter().cloned().collect())
+      };
+      if let Some(trackers) = trackers {
+        report(Blocked::Trackers(trackers));
+      }
+      return Ok(());
     }
-  };
-  unsafe { args.SetResponse(&response)? };
+  }
+
+  if !adblock.active_on(&page_host) {
+    return Ok(());
+  }
+  let verdict = adblock.check(&uri, &page_url, kind, &method);
+  if matches!(verdict, Verdict::Allow) {
+    return Ok(());
+  }
+  respond(args, environment, &page_url, verdict)?;
   let blocked = {
     let mut page = page.borrow_mut();
     page.blocked += 1;
     page.blocked
   };
-  report(blocked);
+  report(Blocked::Ads(blocked));
   Ok(())
+}
+
+/// Відповідь замість сервера на заблокований (`Block`) чи підмінений (`Replace`) запит.
+fn respond(
+  args: &ICoreWebView2WebResourceRequestedEventArgs,
+  environment: &ICoreWebView2Environment,
+  page_url: &str,
+  verdict: Verdict,
+) -> windows_core::Result<()> {
+  let response = match verdict {
+    Verdict::Allow => return Ok(()),
+    // Без CORS-заголовків: для fetch і XHR з іншого сайту це мережева помилка, як в інших блокувальників.
+    Verdict::Block => unsafe { environment.CreateWebResourceResponse(None, 403, w!("Blocked"), w!(""))? },
+    Verdict::Replace { mime, body } => {
+      let page_origin = Url::parse(page_url).map(|url| url.origin().ascii_serialization()).unwrap_or_default();
+      let stream = unsafe { SHCreateMemStream(Some(&body)) }.ok_or_else(|| windows_core::Error::from(E_OUTOFMEMORY))?;
+      let headers = HSTRING::from(replacement_headers(args, &mime, &page_origin));
+      unsafe { environment.CreateWebResourceResponse(&stream, 200, w!("OK"), &headers)? }
+    }
+  };
+  unsafe { args.SetResponse(&response) }
 }
 
 /// Заголовки підмінної відповіді. Дозвіл CORS — саме для джерела запиту й разом із cookies:
@@ -1003,12 +1100,14 @@ fn without_fragment(uri: &str) -> Option<String> {
 }
 
 /// Новий документ вкладки: лічильник з нуля (якщо це не переадресація) і скрипт сторінки для нової адреси.
+/// Адресу з мітками стеження (fbclid, gclid…) захист від стеження відкриває вже без них.
 fn on_navigation_starting(
   core: &ICoreWebView2,
   args: &ICoreWebView2NavigationStartingEventArgs,
   app: &AppHandle,
+  ui: &str,
   page: &Rc<RefCell<AdPage>>,
-  report: &dyn Fn(u32),
+  report: &dyn Fn(Blocked),
 ) -> windows_core::Result<()> {
   let (mut uri, mut cancel, mut redirected) = (PWSTR::null(), BOOL::default(), BOOL::default());
   unsafe {
@@ -1019,6 +1118,18 @@ fn on_navigation_starting(
   let uri = take_pwstr(uri);
   // Перехід, який скасував інший обробник (не-вебова адреса тощо), сторінку не змінює.
   if cancel.as_bool() {
+    return Ok(());
+  }
+  let rules = app.state::<Tracking>().rules(ui);
+  let clean = Url::parse(&uri)
+    .ok()
+    .filter(|url| matches!(url.scheme(), "http" | "https") && rules.protects(url.host_str().unwrap_or_default()))
+    .and_then(|url| tracking::without_tracking_params(&url));
+  if let Some(clean) = clean {
+    unsafe {
+      args.SetCancel(true)?;
+      core.Navigate(&HSTRING::from(clean.as_str()))?;
+    }
     return Ok(());
   }
   start_page(core, page, app, &uri, redirected.as_bool(), report)
@@ -1032,7 +1143,7 @@ fn start_page(
   app: &AppHandle,
   uri: &str,
   redirected: bool,
-  report: &dyn Fn(u32),
+  report: &dyn Fn(Blocked),
 ) -> windows_core::Result<()> {
   {
     let mut page = page.borrow_mut();
@@ -1040,10 +1151,12 @@ fn start_page(
     page.host = Url::parse(uri).ok().and_then(|url| url.host_str().map(str::to_owned)).unwrap_or_default();
     if !redirected {
       page.blocked = 0;
+      page.trackers.clear();
     }
   }
   if !redirected {
-    report(0);
+    report(Blocked::Ads(0));
+    report(Blocked::Trackers(Vec::new()));
   }
   replace_page_script(core, page, app.state::<AdBlock>().page_script(uri))
 }

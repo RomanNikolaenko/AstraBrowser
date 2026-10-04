@@ -1,11 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { PASSWORD_MIN_LENGTH } from '../../../auth/auth-forms';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Cooldown, PASSWORD_MIN_LENGTH, codeFormat, normalizeCode } from '../../../auth/auth-forms';
 import { AuthStore, authErrorMessage } from '../../../shared/auth/auth';
-import { FormField, matches, minLength, required, validateFields } from '../../../shared/form-field/form-field';
+import { BrowserWindows } from '../../../shared/browser-windows/browser-windows';
+import { FormField, emailFormat, matches, minLength, required, validateFields } from '../../../shared/form-field/form-field';
 import { resizeImage } from '../../../shared/images/resize-image';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../../shared/ui-input/ui-input';
 import { Avatar } from '../../avatar/avatar';
+import { clearSiteData } from '../../clear-data/clear-data-dialog';
 import { BookmarksStore } from '../../data/bookmarks';
 import { bookmarksToHtml, countImported, parseBookmarksHtml } from '../../data/bookmarks-html';
 import { HistoryStore } from '../../data/history';
@@ -17,6 +19,11 @@ import { SyncService } from '../../sync/sync';
 
 /** Розмір фото профілю: досить для великого аватара й не забагато для localStorage. */
 const PHOTO_SIZE = 256;
+
+/** Видалення облікового запису чистить у WebView2 все — за весь час. */
+const ALL_SITE_DATA = { siteData: true, cache: true, history: true, autofill: true, settings: true };
+
+type Message = { readonly text: string; readonly error: boolean } | null;
 
 const dateFormat = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit' });
@@ -36,8 +43,8 @@ function exportFileName(time = new Date()): string {
 
 /**
  * Сторінка «Керування профілем» (astra://profile): ім'я й аватар (фото чи колір з ініціалами), обліковий запис
- * (пошта, вихід, зміна пароля),
- * імпорт закладок з інших браузерів і експорт своїх, і скільки даних зберігає цей браузер.
+ * (вихід, зміна пошти й пароля, видалення), імпорт закладок з інших браузерів і експорт своїх, і скільки даних
+ * зберігає цей браузер.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -53,6 +60,7 @@ export class ProfilePage {
   private readonly notes = inject(NotesStore);
   private readonly passwords = inject(PasswordsStore);
   private readonly pageViews = inject(PageViews);
+  private readonly windows = inject(BrowserWindows);
 
   protected readonly colors = AVATAR_COLORS;
   protected readonly photoError = signal<string | null>(null);
@@ -105,6 +113,32 @@ export class ProfilePage {
     required('Повторіть пароль'),
     matches(() => this.newPassword.value(), 'Паролі не збігаються'),
   ]);
+
+  /** Зміна пошти: спершу нова адреса, потім коди з листів. */
+  protected readonly emailStep = signal<'closed' | 'email' | 'code'>('closed');
+  protected readonly emailBusy = signal(false);
+  protected readonly emailMessage = signal<Message>(null);
+  /** На яку адресу прийшов код, якого чекаємо; `partial` — перший із двох кодів уже прийнято. */
+  protected readonly emailWaiting = signal({ address: '', partial: false });
+  protected readonly emailCooldown = new Cooldown();
+  protected readonly newEmail = new FormField([
+    required('Введіть нову пошту'),
+    emailFormat('Некоректна адреса електронної пошти'),
+    (value) =>
+      value.trim().toLowerCase() === this.auth.user()?.email.toLowerCase() ? 'Це вже пошта вашого облікового запису' : null,
+  ]);
+  protected readonly emailCode = new FormField([required('Введіть код із листа'), codeFormat]);
+
+  /** Видаляти обліковий запис — лише зі звичайного вікна: приватне й гостьове мають власні дані. */
+  protected readonly canDeleteAccount = !this.windows.isPrivate && !this.windows.isGuest;
+  protected readonly deletingAccount = signal(false);
+  protected readonly deleteBusy = signal(false);
+  protected readonly deleteError = signal<string | null>(null);
+  protected readonly deletePassword = new FormField([required('Введіть пароль облікового запису')]);
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.emailCooldown.stop());
+  }
 
   protected readonly stats = computed(() => [
     { icon: 'star', label: 'Закладки', value: this.bookmarks.entries().length },
@@ -160,6 +194,97 @@ export class ProfilePage {
       this.passwordMessage.set({ text: authErrorMessage(error), error: true });
     } finally {
       this.passwordBusy.set(false);
+    }
+  }
+
+  protected startEmailChange(): void {
+    for (const field of [this.newEmail, this.emailCode]) {
+      field.value.set('');
+      field.touched.set(false);
+    }
+    this.emailMessage.set(null);
+    this.emailStep.set('email');
+  }
+
+  protected cancelEmailChange(): void {
+    this.emailStep.set('closed');
+    this.emailMessage.set(null);
+  }
+
+  /** Лист із кодом на нову пошту — і повторний, з кроку коду. */
+  protected async sendEmailCode(event?: Event): Promise<void> {
+    event?.preventDefault();
+    if (this.emailBusy() || this.emailCooldown.seconds() > 0 || !validateFields([this.newEmail])) {
+      return;
+    }
+    const resend = this.emailStep() === 'code';
+    const email = this.newEmail.value().trim();
+    this.emailBusy.set(true);
+    this.emailMessage.set(null);
+    try {
+      await this.auth.changeEmail(email);
+      // Нові листи — нові коди: Supabase знову чекає всіх.
+      this.emailWaiting.set({ address: email, partial: false });
+      this.emailCode.value.set('');
+      this.emailCode.touched.set(false);
+      this.emailStep.set('code');
+      this.emailCooldown.start();
+      if (resend) {
+        this.emailMessage.set({ text: 'Новий лист надіслано. Перевірте й папку «Спам».', error: false });
+      }
+    } catch (error) {
+      this.emailMessage.set({ text: authErrorMessage(error), error: true });
+    } finally {
+      this.emailBusy.set(false);
+    }
+  }
+
+  protected async confirmEmailCode(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.emailBusy() || !validateFields([this.emailCode])) {
+      return;
+    }
+    const email = this.newEmail.value().trim();
+    this.emailBusy.set(true);
+    this.emailMessage.set(null);
+    try {
+      const waiting = await this.auth.confirmEmailChange(email, normalizeCode(this.emailCode.value()));
+      this.emailCode.value.set('');
+      this.emailCode.touched.set(false);
+      if (waiting) {
+        this.emailWaiting.set({ address: waiting, partial: true });
+      } else {
+        this.emailStep.set('closed');
+        this.emailMessage.set({ text: `Пошту змінено. Тепер входьте з ${email}.`, error: false });
+      }
+    } catch (error) {
+      this.emailMessage.set({ text: authErrorMessage(error), error: true });
+    } finally {
+      this.emailBusy.set(false);
+    }
+  }
+
+  protected startAccountDeletion(): void {
+    this.deletePassword.value.set('');
+    this.deletePassword.touched.set(false);
+    this.deleteError.set(null);
+    this.deletingAccount.set(true);
+  }
+
+  /** Видалення облікового запису: на сервері, а потім — його дані на цьому комп'ютері; далі вікно перезавантажиться. */
+  protected async deleteAccount(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.deleteBusy() || !validateFields([this.deletePassword])) {
+      return;
+    }
+    this.deleteBusy.set(true);
+    this.deleteError.set(null);
+    const visited = this.history.entries().map((entry) => entry.url);
+    try {
+      await this.auth.deleteAccount(this.deletePassword.value(), () => clearSiteData(ALL_SITE_DATA, 0, visited));
+    } catch (error) {
+      this.deleteError.set(authErrorMessage(error));
+      this.deleteBusy.set(false);
     }
   }
 

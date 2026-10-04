@@ -44,6 +44,24 @@ export function formatSize(bytes: number): string {
   return unit === 0 ? `${value} Б` : `${sizeFormat.format(value)} ${units[unit]}`;
 }
 
+/** Що чистить WebView2 — як у server/src/webview2.rs (ClearKinds). */
+export interface SiteDataKinds {
+  readonly siteData: boolean;
+  readonly cache: boolean;
+  readonly history: boolean;
+  readonly autofill: boolean;
+  readonly settings: boolean;
+}
+
+/**
+ * Очищає дані сайтів у WebView2 (server/src/browsing_data.rs), змінені від `since` (мс; 0 — за весь час).
+ * `visited` — адреси з історії: у профілі, спільному з інтерфейсом браузера, localStorage їхніх сайтів чиститься окремо.
+ */
+export function clearSiteData(kinds: SiteDataKinds, since: number, visited: readonly string[]): Promise<void> {
+  const origins = [...new Set(visited.map(originOf))].filter((origin): origin is string => !!origin);
+  return invoke('browsing_data_clear', { kinds, since: since / 1000, origins });
+}
+
 /** Початок проміжку (мс); 0 — увесь час. */
 export function rangeStart(range: ClearRange, now = Date.now()): number {
   const hours = RANGES.find((item) => item.value === range)?.hours ?? 0;
@@ -124,14 +142,10 @@ export class ClearDataDialog {
     const choice = this.choice();
     const since = rangeStart(this.range());
     // Сайти з історії за цей час — їхній localStorage чиститься окремо (спільний з браузером профіль WebView2).
-    const origins = [
-      ...new Set(
-        this.history
-          .entries()
-          .filter((entry) => entry.visitedAt >= since)
-          .map((entry) => originOf(entry.url))
-      ),
-    ].filter((origin): origin is string => !!origin);
+    const visited = this.history
+      .entries()
+      .filter((entry) => entry.visitedAt >= since)
+      .map((entry) => entry.url);
     this.busy.set(true);
     this.error.set(null);
     try {
@@ -143,7 +157,7 @@ export class ClearDataDialog {
           autofill: choice.autofill,
           settings: choice.settings,
         };
-        await invoke('browsing_data_clear', { kinds, since: since / 1000, origins });
+        await clearSiteData(kinds, since, visited);
       }
       if (choice.history) {
         this.history.removeSince(since);

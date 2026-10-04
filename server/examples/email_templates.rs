@@ -222,6 +222,8 @@ enum Sender {
   Supabase(&'static str),
   /// Наш сервер (ще не зроблений): коли саме.
   Server(&'static str),
+  /// Лист не надсилається: чому.
+  Unused(&'static str),
 }
 
 impl Sender {
@@ -229,6 +231,7 @@ impl Sender {
     match self {
       Sender::Supabase(template) => format!("Supabase — шаблон «{template}»"),
       Sender::Server(when) => format!("наш сервер — {when}"),
+      Sender::Unused(why) => format!("не надсилається — {why}"),
     }
   }
 }
@@ -381,8 +384,8 @@ fn emails() -> Vec<Email> {
     Email {
       file: "08-email-change.html",
       sender: Sender::Supabase("Change email address"),
-      subject: "Підтвердіть нову пошту Astra Browser",
-      preheader: "Код, щоб підтвердити нову пошту облікового запису Astra Browser.",
+      subject: "Підтвердіть зміну пошти Astra Browser",
+      preheader: "Код, щоб підтвердити зміну пошти облікового запису Astra Browser.",
       heading: "Зміна пошти",
       body: [
         paragraph("Ви попросили змінити пошту облікового запису Astra Browser:"),
@@ -397,7 +400,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "09-delete-account.html",
-      sender: Sender::Server("коли в браузері попросили видалити обліковий запис"),
+      sender: Sender::Unused("видалення облікового запису підтверджується паролем (supabase/account.sql)"),
       subject: "Підтвердіть видалення облікового запису Astra Browser",
       preheader: "Код, щоб остаточно видалити обліковий запис Astra Browser.",
       heading: "Ви впевнені?",
@@ -428,7 +431,7 @@ fn emails() -> Vec<Email> {
         paragraph("Дякуємо, що були з Astra Browser. Повернутися можна будь-коли — просто зареєструйтеся знову з цією поштою."),
       ]
       .concat(),
-      note: "Видалення підтвердили кодом, надісланим на цю пошту.",
+      note: "Видалення підтвердили паролем облікового запису.",
       variables: &["{{ .Email }}"],
     },
     Email {

@@ -34,6 +34,28 @@
     }
   }
 
+  // Рядок, вміст якого — під назвою, а не праворуч (DNS через HTTPS).
+  &__row--stack {
+    flex-direction: column;
+    align-items: stretch;
+
+    // У колонці flex-basis — це висота: текст не розтягується.
+    .settings__text {
+      flex: none;
+    }
+  }
+
+  // Сайти без захисту від стеження — під рядком рівня захисту, з відступом.
+  &__row--nested {
+    min-height: 3.25rem;
+    padding-left: 2rem;
+  }
+
+  // Пояснення в кілька рядків, а не в один обрізаний.
+  &__hint {
+    white-space: normal;
+  }
+
   &__actions {
     display: flex;
     flex-wrap: wrap;
@@ -50,4 +72,96 @@
 // Перемикач теми: справжні radio, оформлені як сегменти (segmented-control у _browser-ui.scss).
 .segmented {
   @include segmented-control;
+}
+
+// DNS через HTTPS: режими — картками з поясненням, як у Firefox.
+.dns {
+  display: grid;
+  overflow: hidden;
+  border: 0.0625rem solid var(--browser-divider);
+  border-radius: 0.875rem;
+
+  &__mode {
+    display: flex;
+    gap: 0.875rem;
+    align-items: flex-start;
+    padding: 0.875rem 1rem;
+    cursor: pointer;
+    transition: background-color $motion;
+
+    & + & {
+      border-top: 0.0625rem solid var(--browser-divider);
+    }
+
+    &:hover {
+      background: var(--browser-hover);
+    }
+
+    &:has(:checked) {
+      background: color-mix(in srgb, var(--browser-accent) 10%, transparent);
+    }
+  }
+
+  &__radio {
+    flex: 0 0 auto;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin: 0.125rem 0 0;
+    accent-color: var(--browser-accent);
+    cursor: pointer;
+  }
+
+  &__text {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  &__label {
+    font-size: 0.9375rem;
+    color: var(--browser-heading);
+  }
+
+  &__hint {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--browser-muted);
+  }
+
+  &__provider,
+  &__custom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  &__provider-label {
+    font-size: 0.9375rem;
+    color: var(--browser-text);
+  }
+
+  &__custom-input {
+    @include field-colors;
+
+    flex: 1 1 18rem;
+  }
+
+  &__error {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-error);
+  }
+
+  &__notice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.625rem 0.625rem 0.625rem 1rem;
+    font-size: 0.875rem;
+    color: var(--browser-text);
+    background: color-mix(in srgb, var(--browser-accent) 12%, var(--browser-field));
+    border-radius: 0.75rem;
+  }
 }

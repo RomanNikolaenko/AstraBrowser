@@ -51,6 +51,12 @@ pub fn current() -> Option<String> {
   CURRENT.lock().ok()?.clone()
 }
 
+/// Власна тека WebView2 облікового запису (у власника вона не використовується).
+fn own_site_data_dir(app: &AppHandle, user: &str) -> Option<PathBuf> {
+  let local = app.path().app_local_data_dir().ok()?;
+  is_safe_id(user).then(|| local.join("profiles").join(user))
+}
+
 /// Тека WebView2 для сайтів поточного облікового запису: у власника — типова (його давні cookies й входи),
 /// в інших — своя. `None` — типова.
 pub fn site_data_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -58,8 +64,20 @@ pub fn site_data_dir(app: &AppHandle) -> Option<PathBuf> {
   if is_owner(app, &user) {
     return None;
   }
-  let local = app.path().app_local_data_dir().ok()?;
-  is_safe_id(&user).then(|| local.join("profiles").join(user))
+  own_site_data_dir(app, &user)
+}
+
+/// Обліковий запис видалено: прибираємо його теку (паролі сайтів) і власну теку WebView2. Дані сайтів у ній
+/// інтерфейс уже очистив, тож якщо теку ще тримають відкриті сторінки, лишаються хіба порожні файли. Власник
+/// лишається власником: типову теку WebView2 (теж очищену) не отримає інший обліковий запис.
+pub fn forget(app: &AppHandle, user: &str) {
+  if let Some(dir) = dir(app, user) {
+    let _ = fs::remove_dir_all(dir);
+  }
+  let owner = root(app).and_then(|root| fs::read_to_string(root.join(OWNER_FILE)).ok()).is_some_and(|owner| owner.trim() == user);
+  if let Some(dir) = own_site_data_dir(app, user).filter(|_| !owner) {
+    let _ = fs::remove_dir_all(dir);
+  }
 }
 
 #[cfg(test)]

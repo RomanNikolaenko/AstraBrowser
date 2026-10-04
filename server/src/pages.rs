@@ -92,6 +92,22 @@ struct AdBlockEvent {
   blocked: u32,
 }
 
+/// Елемент стеження, заблокований на поточній сторінці вкладки (tracking.rs).
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+struct BlockedTracker {
+  category: crate::tracking::Category,
+  host: String,
+}
+
+/// Усі елементи стеження, заблоковані на поточній сторінці вкладки (порожньо — на новій сторінці).
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+struct TrackersEvent {
+  label: String,
+  trackers: Vec<BlockedTracker>,
+}
+
 #[derive(Clone, Serialize)]
 struct NewTabEvent {
   label: String,
@@ -206,6 +222,14 @@ pub async fn page_open(
   let url = web_url(&url)?;
   let ui = window.label().to_string();
   let app = window.app_handle().clone();
+  // Захист від стеження вікна: мітки стеження (fbclid, gclid…) прибираються з адреси ще до відкриття.
+  #[cfg(windows)]
+  let privacy = app.state::<crate::tracking::Tracking>().rules(&ui);
+  #[cfg(windows)]
+  let url = match url.host_str() {
+    Some(host) if privacy.protects(host) => crate::tracking::without_tracking_params(&url).unwrap_or(url),
+    _ => url,
+  };
   #[cfg(windows)]
   let address = url.to_string();
   // Токен скриптів цієї сторінки (паролі, масштаб коліщатком, переклад виділеного): повідомлення без нього
@@ -251,6 +275,9 @@ pub async fn page_open(
     // перебіг показує інтерфейс (webview2::watch_downloads).
     .on_download(|_, _| true);
   // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу.
+  // Global Privacy Control: navigator.globalPrivacyControl (а заголовок Sec-GPC додає webview2::block_ads).
+  #[cfg(windows)]
+  let builder = if privacy.gpc { builder.initialization_script_for_all_frames(crate::tracking::page_script(true)) } else { builder };
   #[cfg(windows)]
   let builder = builder
     .initialization_script(crate::passwords::page_script(&page_token))
@@ -260,7 +287,11 @@ pub async fn page_open(
   // Cookies, входи й сховище сайтів — свої в кожного облікового запису Astra (profiles.rs).
   #[cfg(windows)]
   let builder = match crate::profiles::site_data_dir(&app) {
-    Some(dir) if !ui.starts_with("private-") && !ui.starts_with(GUEST_PREFIX) => builder.data_directory(dir),
+    Some(dir) if !ui.starts_with("private-") && !ui.starts_with(GUEST_PREFIX) => {
+      // Тека облікового запису, що вперше ввійшов, — з тими самими налаштуваннями DNS, що й решта (dns.rs).
+      app.state::<crate::dns::Dns>().apply_to(&dir);
+      builder.data_directory(dir)
+    }
     _ => builder,
   };
 
@@ -268,16 +299,25 @@ pub async fn page_open(
     .add_child(builder, LogicalPosition::new(bounds.x, bounds.y), LogicalSize::new(bounds.width, bounds.height))
     .map_err(|error| error.to_string())?;
 
-  // Найпершим — блокувальник реклами: перший перехід Tauri вже почав, і фільтр має стати раніше, ніж підуть
-  // запити сторінки. `report` — скільки заблоковано на сторінці, для інтерфейсу.
+  // Найпершим — блокувальник реклами й захист від стеження: перший перехід Tauri вже почав, і фільтр має стати
+  // раніше, ніж підуть запити сторінки. `report` — що заблоковано на сторінці, для інтерфейсу.
   #[cfg(windows)]
-  webview2::block_ads(&webview, app.clone(), address.clone(), {
+  webview2::block_ads(&webview, app.clone(), ui.clone(), address.clone(), {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-    move |blocked| {
-      let _ = app.emit_to(&ui, "page://adblock", AdBlockEvent { label: label.clone(), blocked });
+    move |blocked| match blocked {
+      webview2::Blocked::Ads(blocked) => {
+        let _ = app.emit_to(&ui, "page://adblock", AdBlockEvent { label: label.clone(), blocked });
+      }
+      webview2::Blocked::Trackers(trackers) => {
+        let trackers = trackers.into_iter().map(|(category, host)| BlockedTracker { category, host }).collect();
+        let _ = app.emit_to(&ui, "page://trackers", TrackersEvent { label: label.clone(), trackers });
+      }
     }
   })
   .map_err(|error| error.to_string())?;
+  // Куки й сховища трекерів — вбудований захист WebView2 на рівні, вибраному в налаштуваннях.
+  #[cfg(windows)]
+  webview2::set_tracking_prevention(&webview, privacy.level).map_err(|error| error.to_string())?;
 
   // Автовідтворення — заборонене, доки користувач не дозволить його сайту в «Дозволах сайту».
   #[cfg(windows)]

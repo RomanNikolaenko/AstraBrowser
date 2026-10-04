@@ -11,6 +11,10 @@
 //! Під час входу з пароля облікового запису виводиться ключ синхронізації (secure::derive_key): ним паролі сайтів
 //! шифруються перед відправкою на сервер (passwords.rs). Сам пароль ніде не зберігається, а ключ живе в сеансі.
 //! Зміна облікового запису перемикає дані браузера на його власні (profiles.rs).
+//!
+//! Видалити обліковий запис застосунок сам не може: на це потрібен секретний ключ Supabase, якого в застосунку бути
+//! не повинно. Видаляє функція бази `delete_account` (supabase/account.sql) — лише того, хто її викликав, і лише
+//! якщо він щойно ввів пароль.
 
 use std::{
   fs,
@@ -75,6 +79,16 @@ pub struct AuthState {
   sync_unlocked: bool,
 }
 
+/// Результат коду зі зміни пошти.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailChange {
+  /// Пошту змінено — новий стан облікового запису.
+  state: Option<AuthState>,
+  /// Один код прийнято, а Supabase («Secure email change») чекає ще код із листа на цю адресу.
+  waiting: Option<String>,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SignUpResult {
@@ -107,6 +121,9 @@ pub struct Auth {
   recovery: Mutex<Option<(String, Session)>>,
   /// Ключ синхронізації з реєстрації (пошта, id користувача, ключ) — чекає коду з листа.
   pending_key: Mutex<Option<(String, String, String)>>,
+  /// Обліковий запис (id), який щойно видалили на сервері: поки інтерфейс прибирає його дані на цьому комп'ютері,
+  /// сеанс ще є, але запитів від його імені вже немає. Вихід (auth_sign_out) прибирає й теки облікового запису.
+  deleting: Mutex<Option<String>>,
 }
 
 fn now() -> u64 {
@@ -365,6 +382,9 @@ impl Auth {
   /// без інтернету сеанс лишається як є.
   fn refresh(&self, app: &AppHandle, force: bool) -> Result<Option<Session>, AuthError> {
     let _guard = self.refreshing.lock().map_err(|_| AuthError::new("internal", "Не вдалося оновити сеанс."))?;
+    if self.deleting.lock().map_or(true, |deleting| deleting.is_some()) {
+      return Err(signed_out());
+    }
     let Some(session) = self.current() else {
       return Ok(None);
     };
@@ -645,18 +665,122 @@ pub async fn auth_reload_user(app: AppHandle) -> Result<AuthState, AuthError> {
   .await
 }
 
+/// Нова пошта облікового запису: Supabase надсилає на неї лист із кодом, а з «Secure email change» — ще й на
+/// поточну. Пошта зміниться, коли коди введуть (auth_confirm_email_change). Повторний виклик — нові листи (і коди).
+#[tauri::command]
+pub async fn auth_change_email(app: AppHandle, email: String) -> Result<(), AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let token = auth.access_token(&app)?;
+    let email = clean_email(&email);
+    if auth.current().is_some_and(|session| session.user.email == email) {
+      return Err(AuthError::new("same_email", "Це вже пошта вашого облікового запису."));
+    }
+    match call(Method::Put, "user", Some(&token), &json!({ "email": email })) {
+      Ok(_) => Ok(()),
+      Err(error) if matches!(error.code.as_str(), "email_exists" | "user_already_exists" | "identity_already_exists") => {
+        Err(AuthError::new(&error.code, "Ця пошта вже належить іншому обліковому запису."))
+      }
+      Err(error) => Err(error),
+    }
+  })
+  .await
+}
+
+/// Код із листа про зміну пошти на `email`. Код міг прийти на нову пошту чи (з «Secure email change») на поточну —
+/// пробуємо обидві. Якщо Supabase чекає ще й другий код, `waiting` — адреса, на яку він прийшов.
+#[tauri::command]
+pub async fn auth_confirm_email_change(app: AppHandle, email: String, code: String) -> Result<EmailChange, AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let current = auth.current().ok_or_else(signed_out)?;
+    let new_email = clean_email(&email);
+    let verify = |address: &str| call(Method::Post, "verify", None, &json!({ "type": "email_change", "email": address, "token": code.trim() }));
+    let (reply, other) = match verify(&new_email) {
+      Ok(reply) => (reply, current.user.email.clone()),
+      Err(error) if error.code == "otp_expired" => match verify(&current.user.email) {
+        Ok(reply) => (reply, new_email),
+        Err(_) => return Err(error),
+      },
+      Err(error) => return Err(error),
+    };
+    // Прийнято лише один із двох кодів: відповідь без сеансу.
+    let Some(mut session) = session_of(&reply, current.remember) else {
+      return Ok(EmailChange { state: None, waiting: Some(other) });
+    };
+    if session.user.id != current.user.id {
+      return Err(signed_out());
+    }
+    // Ключ синхронізації — з пароля й id користувача, не з пошти: лишається той самий.
+    session.sync_key = current.sync_key;
+    session.sync_key_at = current.sync_key_at;
+    let user = current.user.id;
+    let state = auth.replace(&app, Some(session), |now| now.is_some_and(|now| now.user.id == user));
+    Ok(EmailChange { state: Some(state), waiting: None })
+  })
+  .await
+}
+
+/// Видаляє обліковий запис назавжди — разом з усіма його синхронізованими даними на сервері. Пароль — підтвердження:
+/// з ним щойно входимо, а функція бази видаляє лише того, хто ввів пароль кілька хвилин тому (supabase/account.sql).
+/// Сеанс лишається, поки інтерфейс не прибере дані облікового запису на цьому комп'ютері й не вийде (auth_sign_out),
+/// але запитів від імені видаленого облікового запису вже немає.
+#[tauri::command]
+pub async fn auth_delete_account(app: AppHandle, password: String) -> Result<(), AuthError> {
+  blocking(move || {
+    let auth = app.state::<Auth>();
+    let current = auth.current().ok_or_else(signed_out)?;
+    let reply = call(Method::Post, "token?grant_type=password", None, &json!({ "email": current.user.email, "password": password }))
+      .map_err(|error| if error.code == "invalid_credentials" { AuthError::new(&error.code, "Неправильний пароль.") } else { error })?;
+    let checked = session_or_error(&reply, false)?;
+    if checked.user.id != current.user.id {
+      return Err(signed_out());
+    }
+    let url = format!("{SUPABASE_URL}/rest/v1/rpc/delete_account");
+    let (status, body) = request(Method::Post, &url, Some(&checked.access_token), &json!({}))?;
+    if !(200..300).contains(&status) {
+      // Обліковий запис лишився, а сеанс із перевірки пароля — зайвий.
+      let _ = call(Method::Post, "logout?scope=local", Some(&checked.access_token), &json!({}));
+      return Err(delete_error(status, &body));
+    }
+    if let Ok(mut deleting) = auth.deleting.lock() {
+      *deleting = Some(current.user.id);
+    }
+    Ok(())
+  })
+  .await
+}
+
+/// Помилка функції бази `delete_account` (PostgREST): `{"code": "28000", "message": "reauthentication_needed"}`.
+fn delete_error(status: u16, body: &Value) -> AuthError {
+  match (text(body, "code").unwrap_or_default(), text(body, "message").unwrap_or_default()) {
+    // Функції ще немає (SQL з інструкції не виконали) чи її не дозволено викликати.
+    ("PGRST202" | "42883" | "42501", _) => {
+      AuthError::new("delete_not_configured", "Видалення облікового запису ще не налаштовано на сервері (supabase/account.sql).")
+    }
+    (_, "reauthentication_needed") => AuthError::new("reauthentication_needed", "Не вдалося підтвердити пароль. Спробуйте ще раз."),
+    ("PGRST301" | "PGRST303", _) => AuthError::new("session_expired", "Сеанс завершився. Увійдіть знову."),
+    _ if status >= 500 => AuthError::new("server", "Сервер облікових записів зараз недоступний. Спробуйте пізніше."),
+    (code, _) => AuthError::new(if code.is_empty() { "server" } else { code }, "Не вдалося видалити обліковий запис. Спробуйте ще раз."),
+  }
+}
+
 fn unexpected() -> AuthError {
   AuthError::new("server", "Сервер облікових записів відповів неочікувано. Спробуйте ще раз.")
 }
 
-/// Вихід: сеанс забувається одразу, а Supabase повідомляємо, як вийде (без інтернету — ні).
+/// Вихід: сеанс забувається одразу, а Supabase повідомляємо, як вийде (без інтернету — ні). Після видалення
+/// облікового запису повідомляти нема кому — натомість прибираємо його теки на цьому комп'ютері.
 #[tauri::command]
 pub async fn auth_sign_out(app: AppHandle) -> Result<(), AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
     let session = auth.current();
+    let deleted = auth.deleting.lock().ok().and_then(|mut deleting| deleting.take());
     auth.set(&app, None);
-    if let Some(session) = session {
+    if let Some(user) = deleted {
+      profiles::forget(&app, &user);
+    } else if let Some(session) = session {
       let _ = call(Method::Post, "logout?scope=local", Some(&session.access_token), &json!({}));
     }
     Ok(())
@@ -690,6 +814,15 @@ mod tests {
     assert_eq!(rest_error(404, &json!({ "code": "PGRST205", "message": "Could not find the table" })).code, "sync_not_configured");
     assert_eq!(rest_error(401, &json!({ "code": "PGRST303" })).code, "session_expired");
     assert_eq!(rest_error(502, &Value::Null).code, "server");
+  }
+
+  #[test]
+  fn explains_account_deletion_errors() {
+    let missing = delete_error(404, &json!({ "code": "PGRST202", "message": "Could not find the function public.delete_account" }));
+    assert_eq!(missing.code, "delete_not_configured");
+    let stale = delete_error(403, &json!({ "code": "28000", "message": "reauthentication_needed" }));
+    assert_eq!(stale.code, "reauthentication_needed");
+    assert_eq!(delete_error(503, &Value::Null).code, "server");
   }
 
   #[test]

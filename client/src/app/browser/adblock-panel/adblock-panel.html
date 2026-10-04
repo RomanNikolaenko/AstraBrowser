@@ -29,15 +29,16 @@
     }
 
     @if (host()) {
-      <label class="adblock-panel__row" for="adblock-panel-site">
-        <span class="adblock-panel__label">Блокувати рекламу на цьому сайті</span>
+      <div class="adblock-panel__row">
+        <span class="adblock-panel__label" id="adblock-panel-site-name">Блокувати рекламу на цьому сайті</span>
         <app-switch
           inputId="adblock-panel-site"
           inputName="adblock-site"
+          ariaLabelledby="adblock-panel-site-name"
           [checked]="!adblock.isSiteDisabled(host())"
           [disabled]="!status.enabled"
           (checkedChange)="setSiteEnabled($event)" />
-      </label>
+      </div>
     }
   }
 

@@ -32,6 +32,27 @@ export const HISTORY_RETENTION: readonly { readonly days: number; readonly label
   { days: 0, label: 'Завжди' },
 ];
 
+/** Захист від стеження (server/src/tracking.rs): рівень. */
+export type TrackingProtection = 'standard' | 'strict' | 'off';
+
+export const TRACKING_PROTECTION: readonly {
+  readonly value: TrackingProtection;
+  readonly label: string;
+  readonly hint: string;
+}[] = [
+  {
+    value: 'standard',
+    label: 'Стандартний',
+    hint: 'Блокує відомі елементи стеження, криптомайнери й куки стеження. Сайти працюють як звичайно.',
+  },
+  {
+    value: 'strict',
+    label: 'Суворий',
+    hint: 'Ще й елементи стеження соцмереж і більше куків стеження. Деякі сайти можуть працювати неправильно.',
+  },
+  { value: 'off', label: 'Вимкнено', hint: 'Сайти й рекламні мережі можуть стежити за вами з сайту на сайт.' },
+];
+
 export const SEARCH_ENGINES: Readonly<Record<SearchEngine, { readonly label: string; readonly url: string }>> = {
   google: { label: 'Google', url: 'https://www.google.com/search?q=' },
   duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
@@ -57,6 +78,10 @@ export class SettingsStore {
   readonly newTabImage = storedSignal('astra.settings.new-tab-image', '');
   /** Скільки днів зберігати історію (HISTORY_RETENTION); давніші записи прибираються самі. */
   readonly historyDays = storedSignal('astra.settings.history-days', 90);
+  /** Рівень захисту від стеження (TRACKING_PROTECTION). */
+  readonly trackingProtection = storedSignal<TrackingProtection>('astra.settings.tracking-protection', 'standard');
+  /** Global Privacy Control: просити сайти не продавати й не поширювати ваші дані. */
+  readonly globalPrivacyControl = storedSignal('astra.settings.gpc', true);
 
   /** Налаштування, що належать обліковому запису й синхронізуються: id → сигнал. */
   private readonly synced: Readonly<Record<string, WritableSignal<unknown>>> = {
@@ -67,6 +92,8 @@ export class SettingsStore {
     newTabBackground: this.newTabBackground as WritableSignal<unknown>,
     newTabImage: this.newTabImage as WritableSignal<unknown>,
     historyDays: this.historyDays as WritableSignal<unknown>,
+    trackingProtection: this.trackingProtection as WritableSignal<unknown>,
+    globalPrivacyControl: this.globalPrivacyControl as WritableSignal<unknown>,
   };
   /** Ключі localStorage цих налаштувань — щоб синхронізація знала, коли вони змінилися. */
   readonly keys: readonly string[] = [
@@ -77,6 +104,8 @@ export class SettingsStore {
     'astra.settings.new-tab-background',
     'astra.settings.new-tab-image',
     'astra.settings.history-days',
+    'astra.settings.tracking-protection',
+    'astra.settings.gpc',
   ];
   /** Усі налаштування облікового запису: id → значення. */
   readonly values = computed(() => Object.fromEntries(Object.entries(this.synced).map(([id, value]) => [id, value()])));

@@ -42,6 +42,18 @@ export function adoptLegacyData(id: string): void {
   }
 }
 
+/** Прибирає всі дані облікового запису `id` (обліковий запис видалено). */
+export function removeAccountData(id: string): void {
+  try {
+    const prefix = `astra.${id}.`;
+    for (const key of Object.keys(localStorage).filter((key) => key.startsWith(prefix))) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Сховище недоступне — прибирати нічого.
+  }
+}
+
 /** Сигнали цього вікна за ключами — щоб синхронізація оновлювала їх, а не лише localStorage. */
 const signals = new Map<string, WritableSignal<unknown>>();
 /** Хто стежить за змінами збережених значень (своїми й з інших вікон). */
@@ -93,8 +105,9 @@ export function storedSignal<T>(key: string, fallback: T): WritableSignal<T> {
   });
 
   // Подія storage приходить лише в інші вікна; запис того самого значення її не викликає, тож циклу немає.
+  // Ключ прибрали (видалили обліковий запис) — значення не скидаємо: інакше це вікно записало б його наново.
   const onStorage = (event: StorageEvent) => {
-    if (event.key === key) {
+    if (event.key === key && event.newValue !== null) {
       state.set(read());
     }
   };

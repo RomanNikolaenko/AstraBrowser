@@ -4,6 +4,7 @@ import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
 import { PasswordPromptRequest } from '../data/passwords';
+import type { BlockedTracker, TrackingRules } from '../data/tracking';
 
 export interface PageBounds {
   readonly x: number;
@@ -83,7 +84,7 @@ export interface PageNavigationEvent {
 }
 
 /** Особливе оновлення з меню кнопки «Оновити» (server/src/webview2.rs, ReloadMode). */
-export type ReloadMode = 'hard' | 'cache' | 'site-data' | 'cookies';
+export type ReloadMode = 'hard' | 'cache' | 'site-data' | 'cookies' | 'all';
 
 /** Сторінка ввійшла в повноекранний режим (відео тощо) чи вийшла з нього. */
 export interface PageFullscreenEvent {
@@ -95,6 +96,12 @@ export interface PageFullscreenEvent {
 export interface PageAdBlockEvent {
   readonly label: string;
   readonly blocked: number;
+}
+
+/** Елементи стеження, заблоковані на поточній сторінці вкладки (server/src/tracking.rs); порожньо — нова сторінка. */
+export interface PageTrackersEvent {
+  readonly label: string;
+  readonly trackers: readonly BlockedTracker[];
 }
 
 /** Гаряча клавіша браузера, натиснута, поки фокус у сайті (server/src/webview2.rs, watch_shortcuts). */
@@ -127,6 +134,7 @@ interface PageEvents {
   'page://download': PageDownloadEvent;
   'page://download-prompt': PageDownloadPromptEvent;
   'page://adblock': PageAdBlockEvent;
+  'page://trackers': PageTrackersEvent;
   'page://shortcut': PageShortcutEvent;
   'page://password-prompt': PagePasswordPromptEvent;
   'page://passwords-manage': PagePasswordsManageEvent;
@@ -254,6 +262,11 @@ export class PageViews {
   /** Правила автовідтворення — для всіх сайтів вікна: відкритим сторінкам одразу, а відео, що вже на них, — після перезавантаження. */
   setAudioRules(rules: AutoplayRules): Promise<void> {
     return invoke('page_set_audio_rules', { rules });
+  }
+
+  /** Правила захисту від стеження для всіх сайтів вікна: запитам — одразу, а куки й GPC — і сторінкам, що вже відкриті. */
+  setTrackingRules(rules: TrackingRules): Promise<void> {
+    return invoke('tracking_set_rules', { rules });
   }
 
   /** Збережений для сайту дозвіл на автовідтворення (у приватному вікні — лише до його закриття). */

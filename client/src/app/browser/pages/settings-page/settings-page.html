@@ -27,17 +27,19 @@
       </div>
     </fieldset>
 
-    <label class="settings__row" for="settings-bookmarks-bar">
+    <div class="settings__row">
       <span class="settings__text">
-        <span class="page__name">Панель закладок</span>
-        <span class="page__meta">Показувати закладки під адресним рядком</span>
+        <span class="page__name" id="settings-bookmarks-bar-name">Панель закладок</span>
+        <span class="page__meta" id="settings-bookmarks-bar-hint">Показувати закладки під адресним рядком</span>
       </span>
       <app-switch
         inputId="settings-bookmarks-bar"
         inputName="bookmarks-bar"
+        ariaLabelledby="settings-bookmarks-bar-name"
+        ariaDescribedby="settings-bookmarks-bar-hint"
         [checked]="settings.showBookmarksBar()"
         (checkedChange)="settings.showBookmarksBar.set($event)" />
-    </label>
+    </div>
   </div>
 
   <h2 class="page__group">Пошук</h2>
@@ -80,22 +82,133 @@
           <button class="page__button" type="button" (click)="chooseFolder()">Змінити…</button>
         </div>
       </div>
-      <label class="settings__row" for="settings-ask-download">
+      <div class="settings__row">
         <span class="settings__text">
-          <span class="page__name">Питати, куди зберегти файл</span>
-          <span class="page__meta">Перед кожним завантаженням показувати теку й давати вибрати іншу</span>
+          <span class="page__name" id="settings-ask-download-name">Питати, куди зберегти файл</span>
+          <span class="page__meta" id="settings-ask-download-hint">
+            Перед кожним завантаженням показувати теку й давати вибрати іншу
+          </span>
         </span>
         <app-switch
           inputId="settings-ask-download"
           inputName="ask-download"
+          ariaLabelledby="settings-ask-download-name"
+          ariaDescribedby="settings-ask-download-hint"
           [checked]="downloads.ask"
           (checkedChange)="setAsk($event)" />
-      </label>
+      </div>
     </div>
   }
 
-  <h2 class="page__group">Конфіденційність</h2>
+  <h2 class="page__group" id="settings-privacy">Конфіденційність</h2>
   <div class="page__list settings">
+    <fieldset class="settings__row settings__fieldset">
+      <legend class="settings__text settings__text--wide">
+        <span class="page__name">Захист від стеження</span>
+        <span class="page__meta settings__hint">{{ trackingHint() }}</span>
+      </legend>
+      <div class="segmented">
+        @for (level of trackingLevels; track level.value) {
+          <label class="segmented__option">
+            <input
+              class="segmented__input"
+              type="radio"
+              name="tracking-protection"
+              [value]="level.value"
+              [checked]="settings.trackingProtection() === level.value"
+              (change)="settings.trackingProtection.set(level.value)" />
+            <span>{{ level.label }}</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+    @for (site of tracking.exceptions(); track site) {
+      <div class="settings__row settings__row--nested">
+        <span class="settings__text">
+          <span class="page__name">{{ site }}</span>
+          <span class="page__meta">Захист від стеження для цього сайту вимкнено</span>
+        </span>
+        <button class="page__button" type="button" (click)="tracking.removeException(site)">Увімкнути</button>
+      </div>
+    }
+    <div class="settings__row">
+      <span class="settings__text settings__text--wide">
+        <span class="page__name" id="settings-gpc-name">Просити сайти не продавати й не поширювати мої дані</span>
+        <span class="page__meta settings__hint" id="settings-gpc-hint">
+          Сигнал Global Privacy Control. Частина сайтів за законом зобов’язана його виконувати.
+        </span>
+      </span>
+      <app-switch
+        inputId="settings-gpc"
+        inputName="gpc"
+        ariaLabelledby="settings-gpc-name"
+        ariaDescribedby="settings-gpc-hint"
+        [checked]="settings.globalPrivacyControl()"
+        (checkedChange)="settings.globalPrivacyControl.set($event)" />
+    </div>
+    @if (dns.state(); as state) {
+      <div class="settings__row settings__row--stack">
+        <span class="settings__text settings__text--wide">
+          <span class="page__name" id="settings-dns-name">DNS через HTTPS</span>
+          <span class="page__meta settings__hint">
+            Шифрує запити про назви сайтів, тож інтернет-провайдеру й іншим у вашій мережі складніше дізнатися, які сайти ви
+            відкриваєте.
+          </span>
+        </span>
+        <div class="dns" role="radiogroup" aria-labelledby="settings-dns-name">
+          @for (mode of dnsModes; track mode.value) {
+            <label class="dns__mode">
+              <input
+                class="dns__radio"
+                type="radio"
+                name="dns-mode"
+                [value]="mode.value"
+                [checked]="state.settings.mode === mode.value"
+                (change)="setDnsMode(mode.value)" />
+              <span class="dns__text">
+                <span class="dns__label">{{ mode.label }}</span>
+                <span class="dns__hint">{{ mode.hint }}</span>
+              </span>
+            </label>
+          }
+        </div>
+        @if (state.settings.mode === 'increased' || state.settings.mode === 'max') {
+          <div class="dns__provider">
+            <label class="dns__provider-label" for="settings-dns-provider">Постачальник</label>
+            <app-select
+              class="settings__select"
+              selectId="settings-dns-provider"
+              selectName="dns-provider"
+              [options]="dnsProviders"
+              [value]="dnsProvider()"
+              (valueChange)="setDnsProvider($event)" />
+          </div>
+          @if (dnsProvider() === 'custom') {
+            <form class="dns__custom" novalidate (submit)="saveDnsCustom($event)">
+              <app-input
+                class="dns__custom-input"
+                inputId="settings-dns-custom"
+                inputName="dns-custom"
+                type="url"
+                ariaLabel="Адреса постачальника DNS через HTTPS"
+                placeholder="https://dns.example.com/dns-query"
+                autocomplete="off"
+                [(value)]="dnsCustom" />
+              <button class="page__button" type="submit">Зберегти</button>
+            </form>
+          }
+        }
+        @if (dnsError(); as message) {
+          <p class="dns__error" role="alert">{{ message }}</p>
+        }
+        @if (state.restartNeeded) {
+          <div class="dns__notice" role="status">
+            <span>Нові налаштування DNS запрацюють після перезапуску браузера. Відкриті вкладки при цьому закриються.</span>
+            <button class="page__button" type="button" (click)="restartBrowser()">Перезапустити</button>
+          </div>
+        }
+      </div>
+    }
     <div class="settings__row">
       <span class="settings__text">
         <span class="page__name">Очистити дані перегляду</span>

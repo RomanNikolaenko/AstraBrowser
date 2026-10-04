@@ -7,12 +7,15 @@ mod auth;
 #[cfg(windows)]
 mod browsing_data;
 #[cfg(windows)]
+mod dns;
+#[cfg(windows)]
 mod downloads;
 mod favicons;
 #[cfg(windows)]
 mod fullscreen;
 mod pages;
 mod screenshots;
+mod tracking;
 #[cfg(windows)]
 mod passwords;
 #[cfg(windows)]
@@ -29,12 +32,20 @@ mod webview2;
 mod window_drag;
 
 fn main() {
-	tauri::Builder::default()
+	let context = tauri::generate_context!();
+	let builder = tauri::Builder::default();
+	// DNS через HTTPS — у налаштування WebView2 ще до першого вікна: браузер читає їх лише під час запуску (dns.rs).
+	#[cfg(windows)]
+	let builder = builder.manage(dns::prepare(&context.config().identifier));
+	builder
 		.manage(audio::RulesScripts::default())
 		.manage(adblock::AdBlock::default())
+		.manage(tracking::Tracking::default())
+		.manage(tracking::PageScripts::default())
 		.plugin(tauri_plugin_dialog::init())
 		.setup(|app| {
 			adblock::start(app.handle());
+			tracking::start(app.handle());
 			#[cfg(windows)]
 			{
 				tauri::Manager::manage(app, downloads::Downloads::default());
@@ -99,6 +110,12 @@ fn main() {
 			#[cfg(windows)]
 			auth::auth_set_password,
 			#[cfg(windows)]
+			auth::auth_change_email,
+			#[cfg(windows)]
+			auth::auth_confirm_email_change,
+			#[cfg(windows)]
+			auth::auth_delete_account,
+			#[cfg(windows)]
 			auth::auth_sign_out,
 			#[cfg(windows)]
 			auth::auth_unlock_sync,
@@ -155,12 +172,29 @@ fn main() {
 			#[cfg(windows)]
 			pages::page_set_audio_rules,
 			#[cfg(windows)]
+			tracking::tracking_set_rules,
+			#[cfg(windows)]
+			dns::dns_settings,
+			#[cfg(windows)]
+			dns::dns_set,
+			#[cfg(windows)]
+			dns::dns_restart,
+			#[cfg(windows)]
 			pages::page_set_muted,
 			#[cfg(windows)]
 			pages::page_autoplay,
 			#[cfg(windows)]
 			pages::page_set_autoplay,
 		])
-		.run(tauri::generate_context!())
-		.expect("error while running Tauri application");
+		.build(context)
+		.expect("error while building Tauri application")
+		.run(|_app, _event| {
+			// Перезапуск браузера для нових налаштувань DNS закриває всі вікна — але не застосунок (dns.rs).
+			#[cfg(windows)]
+			if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &_event {
+				if tauri::Manager::state::<dns::Dns>(_app).is_restarting() {
+					api.prevent_exit();
+				}
+			}
+		});
 }

@@ -5,7 +5,10 @@ import { ChangeDetectionStrategy, Component, booleanAttribute, input, output } f
  *
  * Керований ззовні: стан — лише з `[checked]`, а клік повідомляє `(checkedChange)` новим значенням. Поки
  * батьківський компонент його не прийняв (скажімо, команда Rust ще виконується чи не вдалася), перемикач лишається
- * як був — і не показує того, чого немає. Підпис — <label for="inputId"> поряд чи `ariaLabel`.
+ * як був — і не показує того, чого немає.
+ *
+ * Перемикається лише кліком по самому перемикачу, а не по всьому рядку налаштування: тож рядок — не <label>, а
+ * підпис і пояснення — текст поряд, пов'язаний через `ariaLabelledby` і `ariaDescribedby` (або просто `ariaLabel`).
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -19,6 +22,8 @@ import { ChangeDetectionStrategy, Component, booleanAttribute, input, output } f
       [attr.id]="inputId() || null"
       [attr.name]="inputName() || null"
       [attr.aria-label]="ariaLabel() || null"
+      [attr.aria-labelledby]="ariaLabelledby() || null"
+      [attr.aria-describedby]="ariaDescribedby() || null"
       [checked]="checked()"
       [disabled]="disabled()"
       (change)="toggle($event)" />
@@ -30,6 +35,10 @@ export class UiSwitch {
   readonly inputId = input<string>();
   readonly inputName = input<string>();
   readonly ariaLabel = input<string>();
+  /** id тексту, що називає перемикач (назва рядка налаштування). */
+  readonly ariaLabelledby = input<string>();
+  /** id тексту, що пояснює перемикач. */
+  readonly ariaDescribedby = input<string>();
 
   readonly checkedChange = output<boolean>();
 

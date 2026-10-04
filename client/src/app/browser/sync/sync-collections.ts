@@ -246,6 +246,7 @@ export function syncCollections(settings: SettingsStore, passwords: PasswordsCol
       blockAudio: accountKey('astra.autoplay.block-audio'),
       allowAutoplay: accountKey('astra.autoplay.allow'),
       translateLanguage: accountKey('astra.translate.language'),
+      trackingExceptions: accountKey('astra.tracking.exceptions'),
     }),
     settingsCollection(settings),
     passwords,

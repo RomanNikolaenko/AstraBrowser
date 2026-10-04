@@ -2,7 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { SettingsStore } from '../../../shared/settings/settings';
+import { DnsSettings, DnsStore } from '../../data/dns';
 import { DownloadSettings, DownloadSettingsStore } from '../../data/download-settings';
+import { TrackingStore } from '../../data/tracking';
 import { SettingsPage } from './settings-page';
 
 /** Налаштування завантажень без Rust: виклики записуються й одразу змінюють стан. */
@@ -37,17 +39,41 @@ class FakeDownloadSettings extends DownloadSettingsStore {
   }
 }
 
+/** DNS через HTTPS без Rust: `applied` — з чим «запущено» браузер; null — поза застосунком. */
+class FakeDns extends DnsStore {
+  readonly calls: unknown[][] = [];
+  applied: DnsSettings | null = null;
+
+  override load(): Promise<void> {
+    this.state.set(this.applied && { settings: this.applied, restartNeeded: false });
+    return Promise.resolve();
+  }
+
+  override save(settings: DnsSettings): Promise<void> {
+    this.calls.push(['save', settings]);
+    this.state.set({ settings, restartNeeded: JSON.stringify(settings) !== JSON.stringify(this.applied) });
+    return Promise.resolve();
+  }
+
+  override restart(): Promise<void> {
+    this.calls.push(['restart']);
+    return Promise.resolve();
+  }
+}
+
 describe('SettingsPage', () => {
-  const setup = async (downloads: DownloadSettings | null = null) => {
+  const setup = async (downloads: DownloadSettings | null = null, dns: DnsSettings | null = null) => {
     await TestBed.configureTestingModule({
       imports: [SettingsPage],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: DownloadSettingsStore, useClass: FakeDownloadSettings },
+        { provide: DnsStore, useClass: FakeDns },
       ],
     }).compileComponents();
     (TestBed.inject(DownloadSettingsStore) as FakeDownloadSettings).set(downloads);
+    (TestBed.inject(DnsStore) as FakeDns).applied = dns;
 
     const fixture = TestBed.createComponent(SettingsPage);
     await fixture.whenStable();
@@ -108,6 +134,68 @@ describe('SettingsPage', () => {
   it('should hide the download folder outside the app', async () => {
     const { element } = await setup(null);
     expect(element.querySelector('#settings-ask-download')).toBeNull();
+  });
+
+  it('should choose the tracking protection, the privacy signal and give the protection back to sites', async () => {
+    const { fixture, element, click } = await setup();
+    const settings = TestBed.inject(SettingsStore);
+    const tracking = TestBed.inject(TrackingStore);
+    const hint = () => element.querySelector('#settings-privacy + .page__list .settings__hint')?.textContent?.trim();
+
+    expect(hint()).toContain('Сайти працюють як звичайно');
+    await click(element.querySelector<HTMLInputElement>('input[name="tracking-protection"][value="strict"]'));
+    expect(settings.trackingProtection()).toBe('strict');
+    expect(hint()).toContain('Деякі сайти можуть працювати неправильно');
+
+    await click(element.querySelector<HTMLInputElement>('#settings-gpc'));
+    expect(settings.globalPrivacyControl()).toBe(false);
+
+    tracking.setProtected('https://www.twitch.tv/', false);
+    await fixture.whenStable();
+    const exception = element.querySelector('.settings__row--nested');
+    expect(exception?.querySelector('.page__name')?.textContent?.trim()).toBe('twitch.tv');
+    await click(exception?.querySelector('button'));
+    expect(tracking.exceptions()).toEqual([]);
+    expect(element.querySelector('.settings__row--nested')).toBeNull();
+  });
+
+  it('should hide DNS over HTTPS outside the app', async () => {
+    const { element } = await setup();
+    expect(element.querySelector('.dns')).toBeNull();
+  });
+
+  it('should choose how DNS over HTTPS works and ask to restart the browser for it', async () => {
+    const { element, click } = await setup(null, { mode: 'default', provider: 'cloudflare', custom: '' });
+    const dns = TestBed.inject(DnsStore) as FakeDns;
+    const mode = (value: string) => element.querySelector<HTMLInputElement>(`input[name="dns-mode"][value="${value}"]`);
+    const notice = () => element.querySelector('.dns__notice');
+
+    expect(mode('default')?.checked).toBe(true);
+    expect(element.querySelector('#settings-dns-provider')).toBeNull();
+    expect(notice()).toBeNull();
+
+    await click(mode('max'));
+    expect(dns.calls.at(-1)).toEqual(['save', { mode: 'max', provider: 'cloudflare', custom: '' }]);
+    expect(element.querySelector('#settings-dns-provider')?.textContent?.trim()).toBe('Cloudflare');
+    expect(notice()?.textContent).toContain('після перезапуску браузера');
+
+    // Власний постачальник — лише коли збережуть його адресу.
+    await click(element.querySelector<HTMLElement>('#settings-dns-provider'));
+    const options = [...element.querySelectorAll<HTMLElement>('[role="option"]')];
+    await click(options.find((option) => option.textContent?.includes('Власний')));
+    expect(dns.calls).toHaveLength(1);
+    const custom = element.querySelector<HTMLInputElement>('#settings-dns-custom') as HTMLInputElement;
+    custom.value = ' https://doh.example.net/dns-query ';
+    custom.dispatchEvent(new Event('input'));
+    await click(element.querySelector<HTMLButtonElement>('.dns__custom button'));
+    expect(dns.calls.at(-1)).toEqual(['save', { mode: 'max', provider: 'custom', custom: 'https://doh.example.net/dns-query' }]);
+
+    await click(element.querySelector<HTMLButtonElement>('.dns__notice button'));
+    expect(dns.calls.at(-1)).toEqual(['restart']);
+
+    await click(mode('off'));
+    expect(dns.calls.at(-1)).toEqual(['save', { mode: 'off', provider: 'custom', custom: 'https://doh.example.net/dns-query' }]);
+    expect(element.querySelector('#settings-dns-provider')).toBeNull();
   });
 
   it('should toggle the bookmarks bar', async () => {

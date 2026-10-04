@@ -11,8 +11,8 @@
 | [05-new-sign-in.html](05-new-sign-in.html) | наш сервер — після кожного входу з нового пристрою чи місця | Новий вхід в Astra Browser | `{{ .Email }}`, `{{ .Date }}`, `{{ .Device }}`, `{{ .Location }}`, `{{ .Ip }}` |
 | [06-sign-in-code.html](06-sign-in-code.html) | Supabase — шаблон «Magic link or OTP» | Ваш код входу в Astra Browser | `{{ .Token }}` |
 | [07-new-device.html](07-new-device.html) | наш сервер — коли новий пристрій уперше синхронізується | Новий пристрій синхронізується з Astra Browser | `{{ .Email }}`, `{{ .Device }}`, `{{ .Date }}` |
-| [08-email-change.html](08-email-change.html) | Supabase — шаблон «Change email address» | Підтвердіть нову пошту Astra Browser | `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Token }}` |
-| [09-delete-account.html](09-delete-account.html) | наш сервер — коли в браузері попросили видалити обліковий запис | Підтвердіть видалення облікового запису Astra Browser | `{{ .Email }}`, `{{ .Token }}` |
+| [08-email-change.html](08-email-change.html) | Supabase — шаблон «Change email address» | Підтвердіть зміну пошти Astra Browser | `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Token }}` |
+| [09-delete-account.html](09-delete-account.html) | не надсилається — видалення облікового запису підтверджується паролем (supabase/account.sql) | Підтвердіть видалення облікового запису Astra Browser | `{{ .Email }}`, `{{ .Token }}` |
 | [10-account-deleted.html](10-account-deleted.html) | наш сервер — одразу після видалення облікового запису | Обліковий запис Astra Browser видалено | `{{ .Email }}` |
 | [11-reauthentication.html](11-reauthentication.html) | Supabase — шаблон «Reauthentication» | Підтвердіть дію в Astra Browser | `{{ .Token }}` |
 

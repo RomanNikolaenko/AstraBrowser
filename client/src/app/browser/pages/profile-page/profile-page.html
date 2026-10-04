@@ -74,6 +74,87 @@
       </span>
       <button class="page__button" type="button" (click)="signOut()">Вийти</button>
     </div>
+    @if (auth.user(); as user) {
+      <div class="profile__row">
+        <span class="page__text profile__text">
+          <span class="page__name">Пошта</span>
+          <span class="page__meta">Для входу й листів від Astra Browser</span>
+        </span>
+        @if (emailStep() === 'closed') {
+          <button class="page__button" type="button" (click)="startEmailChange()">Змінити пошту…</button>
+        }
+      </div>
+      @if (emailStep() === 'email') {
+        <form class="profile__password" novalidate (submit)="sendEmailCode($event)">
+          <p class="profile__hint">Ми надішлемо на нову пошту лист із кодом. Пошта зміниться, щойно ви його введете.</p>
+          <app-input
+            class="profile__field"
+            inputId="profile-new-email"
+            inputName="new-email"
+            type="email"
+            ariaLabel="Нова пошта"
+            placeholder="Нова пошта"
+            autocomplete="email"
+            [(value)]="newEmail.value"
+            [(touched)]="newEmail.touched"
+            [error]="newEmail.visibleError()" />
+          <div class="profile__password-actions">
+            <button class="page__button" type="submit" [disabled]="emailBusy() || emailCooldown.seconds() > 0">
+              @if (emailBusy()) {
+                Надсилаємо…
+              } @else if (emailCooldown.seconds() > 0) {
+                Надіслати код за {{ emailCooldown.seconds() }} с
+              } @else {
+                Надіслати код
+              }
+            </button>
+            <button class="page__button" type="button" (click)="cancelEmailChange()">Скасувати</button>
+          </div>
+        </form>
+      } @else if (emailStep() === 'code') {
+        <form class="profile__password" novalidate (submit)="confirmEmailCode($event)">
+          <p class="profile__hint">
+            @if (emailWaiting().partial) {
+              Перший код прийнято. Тепер введіть код із листа на {{ emailWaiting().address }}.
+            } @else {
+              Введіть код із листа, який ми надіслали на {{ emailWaiting().address }}. Якщо лист прийде й на {{ user.email }},
+              знадобиться і його код.
+            }
+          </p>
+          <app-input
+            class="profile__field"
+            icon="key"
+            inputId="profile-email-code"
+            inputName="code"
+            ariaLabel="Код із листа"
+            placeholder="Код із листа"
+            autocomplete="one-time-code"
+            [(value)]="emailCode.value"
+            [(touched)]="emailCode.touched"
+            [error]="emailCode.visibleError()" />
+          <div class="profile__password-actions">
+            <button class="page__button" type="submit" [disabled]="emailBusy()">
+              {{ emailBusy() ? 'Перевіряємо…' : 'Підтвердити' }}
+            </button>
+            <button
+              class="page__button"
+              type="button"
+              [disabled]="emailBusy() || emailCooldown.seconds() > 0"
+              (click)="sendEmailCode()">
+              @if (emailCooldown.seconds() > 0) {
+                Надіслати ще раз за {{ emailCooldown.seconds() }} с
+              } @else {
+                Надіслати ще раз
+              }
+            </button>
+            <button class="page__button" type="button" (click)="cancelEmailChange()">Скасувати</button>
+          </div>
+        </form>
+      }
+      @if (emailMessage(); as message) {
+        <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+      }
+    }
     <div class="profile__row">
       <span class="page__text profile__text">
         <span class="page__name">Пароль</span>
@@ -117,6 +198,50 @@
     }
     @if (passwordMessage(); as message) {
       <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+    }
+    @if (auth.user(); as user) {
+      @if (canDeleteAccount) {
+        <div class="profile__row">
+          <span class="page__text profile__text">
+            <span class="page__name">Видалити обліковий запис</span>
+            <span class="page__meta">Назавжди — разом з усіма синхронізованими даними</span>
+          </span>
+          @if (!deletingAccount()) {
+            <button class="page__button page__button--danger" type="button" (click)="startAccountDeletion()">Видалити…</button>
+          }
+        </div>
+        @if (deletingAccount()) {
+          <form class="profile__password" novalidate (submit)="deleteAccount($event)">
+            <p class="profile__hint">
+              Обліковий запис {{ user.email }} буде видалено назавжди. З сервера зникнуть усі синхронізовані дані — закладки,
+              нотатки, історія, налаштування й паролі сайтів, — а з цього комп’ютера — дані цього облікового запису, cookies і
+              входи на сайтах. <strong class="profile__warning">Скасувати це неможливо.</strong>
+            </p>
+            <app-input
+              class="profile__field"
+              inputId="profile-delete-password"
+              inputName="account-password"
+              type="password"
+              ariaLabel="Пароль облікового запису"
+              placeholder="Пароль облікового запису"
+              autocomplete="current-password"
+              [(value)]="deletePassword.value"
+              [(touched)]="deletePassword.touched"
+              [error]="deletePassword.visibleError()" />
+            <div class="profile__password-actions">
+              <button class="page__button page__button--danger" type="submit" [disabled]="deleteBusy()">
+                {{ deleteBusy() ? 'Видаляємо…' : 'Видалити назавжди' }}
+              </button>
+              <button class="page__button" type="button" [disabled]="deleteBusy()" (click)="deletingAccount.set(false)">
+                Скасувати
+              </button>
+            </div>
+          </form>
+          @if (deleteError(); as message) {
+            <p class="profile__message profile__error" role="alert">{{ message }}</p>
+          }
+        }
+      }
     }
   </div>
 

@@ -1,0 +1,218 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.tracking-panel {
+  --popover-width: 25rem;
+  --popover-padding: 0.75rem;
+
+  &__header {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0.25rem 0.75rem;
+  }
+
+  &__host {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+    white-space: nowrap;
+  }
+
+  &__connection {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.375rem;
+    align-items: center;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+
+    &--insecure {
+      color: var(--color-error);
+    }
+  }
+
+  &__connection-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  // Картка стану — акцентна, як «Firefox на сторожі»; без захисту — нейтральна.
+  &__card {
+    padding: 1rem;
+    color: var(--browser-text);
+    background: color-mix(in srgb, var(--browser-accent) 14%, var(--browser-field));
+    border: 0.0625rem solid color-mix(in srgb, var(--browser-accent) 30%, transparent);
+    border-radius: 1rem;
+
+    &--off {
+      background: var(--browser-field);
+      border-color: var(--browser-divider);
+    }
+  }
+
+  &__status {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  &__status-text {
+    min-width: 0;
+  }
+
+  &__title,
+  &__count {
+    margin: 0 0 0.375rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__text {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--browser-muted);
+  }
+
+  &__shield {
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    color: var(--browser-accent);
+
+    .tracking-panel__card--off & {
+      color: var(--browser-icon);
+    }
+  }
+
+  &__found {
+    padding-top: 0.875rem;
+    margin-top: 0.875rem;
+    border-top: 0.0625rem solid color-mix(in srgb, var(--browser-accent) 25%, transparent);
+  }
+
+  &__more {
+    @include pill-button(2.25rem);
+
+    margin-top: 0.75rem;
+  }
+
+  &__groups {
+    display: grid;
+    gap: 0.5rem;
+    max-height: 16rem;
+    padding: 0;
+    margin: 0.5rem 0 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  &__group {
+    padding: 0.75rem;
+    background: var(--browser-field);
+    border-radius: 0.75rem;
+  }
+
+  &__group-head {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--browser-heading);
+  }
+
+  &__group-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--browser-icon-accent);
+  }
+
+  &__group-label {
+    flex: 1 1 auto;
+  }
+
+  &__group-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--browser-muted);
+  }
+
+  &__group-hint {
+    margin: 0.25rem 0 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--browser-muted);
+  }
+
+  &__hosts {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  &__host-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 0.8125rem;
+    color: var(--browser-text);
+    white-space: nowrap;
+  }
+
+  &__row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 0.25rem;
+  }
+
+  &__row-text {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  &__row-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--browser-heading);
+  }
+
+  &__row-hint {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--browser-muted);
+  }
+
+  &__actions {
+    display: grid;
+    padding-top: 0.375rem;
+    border-top: 0.0625rem solid var(--browser-divider);
+  }
+
+  &__action {
+    @include popover-item;
+
+    gap: 0.625rem;
+    font-size: 0.875rem;
+  }
+
+  &__action-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--browser-icon);
+  }
+}

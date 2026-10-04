@@ -4,7 +4,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { BrowserWindows } from '../browser-windows/browser-windows';
 import { SettingsStore } from '../settings/settings';
-import { adoptLegacyData, setStorageAccount } from '../storage/stored-signal';
+import { adoptLegacyData, removeAccountData, setStorageAccount } from '../storage/stored-signal';
 
 /** Користувач облікового запису Astra Browser. */
 export interface AuthUser {
@@ -12,6 +12,14 @@ export interface AuthUser {
   readonly email: string;
   /** Ім'я з облікового запису; порожнє, якщо не вказали. */
   readonly name: string;
+}
+
+/** Відповідь на код зі зміни пошти (server/src/auth.rs, EmailChange). */
+interface EmailChange {
+  /** Пошту змінено. */
+  readonly state: AuthState | null;
+  /** Supabase чекає ще код із листа на цю адресу. */
+  readonly waiting: string | null;
 }
 
 interface AuthState {
@@ -44,6 +52,13 @@ export const RELOAD_PAGE = new InjectionToken<(url: string) => void>('RELOAD_PAG
   factory: () => (url) => window.location.assign(url),
 });
 
+/**
+ * Обліковий запис, який щойно видалили в цьому вікні: його дані в localStorage прибираються вже після
+ * перезавантаження на сторінку входу — тоді сховищ облікового запису немає й ніщо не запише їх наново.
+ * sessionStorage переживає перезавантаження вікна.
+ */
+const DELETED_ACCOUNT = 'astra.deleted-account';
+
 /** Сторінки для тих, хто не ввійшов: з них після входу — у браузер. */
 const SIGNED_OUT_PAGES = ['/sign-in', '/sign-up', '/forgot-password'];
 
@@ -74,6 +89,8 @@ export class AuthStore {
   readonly owner = signal(false);
   /** Є ключ для синхронізації паролів сайтів; інакше треба ще раз ввести пароль облікового запису. */
   readonly syncUnlocked = signal(false);
+  /** Пошта облікового запису, який щойно видалили в цьому вікні, — для повідомлення на сторінці входу. */
+  readonly deletedEmail = signal<string | null>(null);
   /** Виконується, щойно відомо, чи хтось увійшов. */
   readonly ready: Promise<void>;
 
@@ -83,6 +100,7 @@ export class AuthStore {
   private readonly reload = inject(RELOAD_PAGE);
 
   constructor() {
+    this.forgetDeletedAccount();
     this.ready = this.available ? this.load() : Promise.resolve();
   }
 
@@ -125,6 +143,47 @@ export class AuthStore {
     this.apply(await invoke<AuthState>('auth_state'));
   }
 
+  /** Лист із кодом на нову пошту (а з «Secure email change» у Supabase — і на поточну). Повторно — нові коди. */
+  changeEmail(email: string): Promise<void> {
+    return invoke('auth_change_email', { email });
+  }
+
+  /**
+   * Код із листа про зміну пошти на `email`. Повертає адресу, з листа на яку ще потрібен код (Supabase чекає
+   * коди з обох листів), або `null` — пошту змінено.
+   */
+  async confirmEmailChange(email: string, code: string): Promise<string | null> {
+    const result = await invoke<EmailChange>('auth_confirm_email_change', { email, code });
+    if (result.state) {
+      this.apply(result.state);
+    }
+    return result.waiting;
+  }
+
+  /**
+   * Видаляє обліковий запис назавжди (пароль — підтвердження) разом з його даними: на сервері — усі синхронізовані,
+   * на цьому комп'ютері — дані сайтів (`clearSiteData`), паролі сайтів і решту даних браузера цього облікового
+   * запису. Після цього вікно перезавантажується на сторінку входу.
+   */
+  async deleteAccount(password: string, clearSiteData: () => Promise<void>): Promise<void> {
+    const user = this.user();
+    await invoke('auth_delete_account', { password });
+    try {
+      await clearSiteData();
+    } catch {
+      // Обліковий запис уже видалено — решту даних прибираємо однаково.
+    }
+    if (user) {
+      try {
+        sessionStorage.setItem(DELETED_ACCOUNT, JSON.stringify({ id: user.id, email: user.email }));
+      } catch {
+        removeAccountData(user.id);
+      }
+    }
+    await invoke('auth_sign_out');
+    this.apply({ user: null });
+  }
+
   /** Пароль облікового запису ще раз — щоб синхронізувати паролі сайтів. */
   async unlockSync(password: string): Promise<void> {
     this.apply(await invoke<AuthState>('auth_unlock_sync', { password }));
@@ -147,6 +206,21 @@ export class AuthStore {
     }
     await invoke('auth_sign_out');
     this.apply({ user: null });
+  }
+
+  /** Після видалення облікового запису вікно перезавантажилось — прибираємо його дані (deleteAccount). */
+  private forgetDeletedAccount(): void {
+    try {
+      const deleted = sessionStorage.getItem(DELETED_ACCOUNT);
+      if (deleted) {
+        sessionStorage.removeItem(DELETED_ACCOUNT);
+        const { id, email } = JSON.parse(deleted) as { readonly id: string; readonly email: string };
+        removeAccountData(id);
+        this.deletedEmail.set(email);
+      }
+    } catch {
+      // Сховище недоступне чи запис зіпсований — прибирати нічого.
+    }
   }
 
   private async load(): Promise<void> {

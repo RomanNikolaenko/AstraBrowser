@@ -83,6 +83,10 @@
     color: var(--browser-muted);
   }
 
+  &__warning {
+    color: var(--color-error);
+  }
+
   &__sync-title {
     display: flex;
     gap: 0.5rem;

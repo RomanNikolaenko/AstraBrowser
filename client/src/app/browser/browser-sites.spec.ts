@@ -41,6 +41,9 @@ class FakePageViews {
   setAudioRules(rules: AutoplayRules) {
     return this.record('audio-rules', rules);
   }
+  setTrackingRules(rules: unknown) {
+    return this.record('tracking-rules', rules);
+  }
   navigate(label: string, url: string) {
     return this.record('navigate', label, url);
   }
@@ -249,6 +252,32 @@ describe('Browser with sites', () => {
     expect(element.querySelector('.tab__spinner')).toBeTruthy();
     expect(element.querySelector('app-new-tab')).toBeNull();
     expect(omnibox().value).toBe('https://angular.dev/');
+  });
+
+  it('should show what the tracking protection blocked on the site and send it the rules of the window', async () => {
+    expect(pages.called('tracking-rules')).toEqual([[{ level: 'standard', gpc: true, exceptions: [] }]]);
+    await typeInOmnibox('twitch.tv');
+    const shield = () => button('Захист від стеження');
+    expect(shield().classList).not.toContain('omnibox__shield--active');
+
+    pages.emit('page://trackers', { label: label(1), trackers: [{ category: 'tracking', host: 'www.google-analytics.com' }] });
+    await stable();
+    expect(shield().classList).toContain('omnibox__shield--active');
+    expect(element.querySelector('.tracking-panel__count')?.textContent?.trim()).toBe(
+      '1 елемент стеження заблоковано на цьому сайті'
+    );
+
+    // Захист для сайту вимкнули — правила вікна з винятком, щит перекреслений.
+    element.querySelector<HTMLInputElement>('#tracking-panel-site')?.click();
+    await stable();
+    expect(pages.called('tracking-rules').at(-1)).toEqual([{ level: 'standard', gpc: true, exceptions: ['twitch.tv'] }]);
+    expect(pages.called('reload')).toEqual([[label(1)]]);
+    expect(shield().classList).toContain('omnibox__shield--off');
+
+    // Нова сторінка — лічильник з нуля.
+    pages.emit('page://trackers', { label: label(1), trackers: [] });
+    await stable();
+    expect(element.querySelector('.tracking-panel__count')).toBeNull();
   });
 
   it('should reopen the last closed tab in its place with Ctrl+Shift+T, also from a site', async () => {

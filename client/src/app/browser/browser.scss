@@ -215,6 +215,14 @@
     --input-padding-start: 0.25rem;
   }
 
+  // На сайті на початку рядка — щит захисту від стеження й кнопка дозволів.
+  &__start {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  &__shield,
   &__site,
   &__pip,
   &__translate,
@@ -230,14 +238,21 @@
 
   // Зірочка зафарбована й акцентна, коли сторінка вже в закладках; значок перекладу — коли сторінка в перекладі.
   &__action,
-  &__translate {
+  &__translate,
+  &__shield {
     &--active {
       color: var(--browser-accent);
     }
   }
 
+  // Сайт без захисту від стеження — перекреслений щит, приглушений.
+  &__shield--off {
+    color: var(--browser-icon-disabled);
+  }
+
   &:has(+ * .is-open) .omnibox__action,
   &:has(~ app-site-permissions .is-open) .omnibox__site,
+  &:has(~ app-tracking-panel .is-open) .omnibox__shield,
   &:has(~ .toolbar__group app-translator .is-open) .omnibox__translate {
     background: var(--browser-pressed);
   }

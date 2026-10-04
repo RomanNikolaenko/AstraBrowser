@@ -232,7 +232,7 @@ fn is_disabled(sites: &BTreeSet<String>, host: &str) -> bool {
 }
 
 /// Чи стосується виняток для сайту `site` хоста `host` — самого сайту чи його піддомену.
-fn covers(site: &str, host: &str) -> bool {
+pub(crate) fn covers(site: &str, host: &str) -> bool {
   let host = host.strip_prefix("www.").unwrap_or(host);
   host == site || host.strip_suffix(site).is_some_and(|rest| rest.ends_with('.'))
 }
@@ -394,7 +394,7 @@ fn download(url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Завантажує кілька адрес паралельно (по вісім); результати — в тому ж порядку.
-fn download_all(urls: &[String]) -> Vec<Result<Vec<u8>, String>> {
+pub(crate) fn download_all(urls: &[String]) -> Vec<Result<Vec<u8>, String>> {
   urls
     .chunks(8)
     .flat_map(|chunk| {

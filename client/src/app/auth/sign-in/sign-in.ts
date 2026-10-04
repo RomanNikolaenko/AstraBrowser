@@ -24,6 +24,9 @@ export class SignIn {
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
 
+  /** Обліковий запис щойно видалили — сторінка входу каже про це. */
+  protected readonly deletedEmail = this.auth.deletedEmail;
+
   protected readonly passwordVisible = signal(false);
   protected readonly remember = signal(true);
   protected readonly busy = signal(false);

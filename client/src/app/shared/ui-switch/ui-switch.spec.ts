@@ -5,10 +5,15 @@ import { UiSwitch } from './ui-switch';
 @Component({
   imports: [UiSwitch],
   template: `
-    <label for="test-switch">Панель закладок</label>
+    <div class="row">
+      <span id="test-switch-name">Панель закладок</span>
+      <span id="test-switch-hint">Показувати закладки під адресним рядком</span>
+    </div>
     <app-switch
       inputId="test-switch"
       inputName="test"
+      ariaLabelledby="test-switch-name"
+      ariaDescribedby="test-switch-hint"
       [checked]="on()"
       [disabled]="locked()"
       (checkedChange)="asked.push($event)" />
@@ -36,13 +41,23 @@ describe('UiSwitch', () => {
     expect(control.getAttribute('role')).toBe('switch');
     expect(control.id).toBe('test-switch');
     expect(control.name).toBe('test');
-    expect(control.labels?.[0]?.textContent).toBe('Панель закладок');
+    expect(control.getAttribute('aria-labelledby')).toBe('test-switch-name');
+    expect(control.getAttribute('aria-describedby')).toBe('test-switch-hint');
+  });
+
+  it('should change only when the switch itself is clicked, not the text of its row', async () => {
+    const { host, element } = await setup();
+
+    element.querySelector<HTMLElement>('#test-switch-name')?.click();
+    element.querySelector<HTMLElement>('.row')?.click();
+
+    expect(host.asked).toEqual([]);
   });
 
   it('should ask to change and show only the state it was given', async () => {
-    const { fixture, host, element, control } = await setup();
+    const { fixture, host, control } = await setup();
 
-    element.querySelector('label')?.click();
+    control.click();
     expect(host.asked).toEqual([true]);
     // Поки стан не прийняли, перемикач не бреше.
     expect(control.checked).toBe(false);

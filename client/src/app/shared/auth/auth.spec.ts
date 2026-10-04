@@ -34,6 +34,7 @@ describe('AuthStore', () => {
     owner = false;
     reload = vi.fn<(url: string) => void>();
     localStorage.clear();
+    sessionStorage.clear();
     mockIPC(
       (command, args) => {
         calls.push({ command, args });
@@ -42,6 +43,15 @@ describe('AuthStore', () => {
             return { user: saved, owner, syncUnlocked: !!saved };
           case 'auth_sign_in':
             return { user: USER, owner, syncUnlocked: true };
+          case 'auth_confirm_email_change':
+            return (args as { code: string }).code === '111111'
+              ? { state: null, waiting: USER.email }
+              : { state: { user: { ...USER, email: 'new@example.com' }, owner, syncUnlocked: true }, waiting: null };
+          case 'auth_delete_account':
+            if ((args as { password: string }).password !== 'secret') {
+              throw { code: 'invalid_credentials', message: 'Неправильний пароль.' };
+            }
+            return null;
           default:
             return null;
         }
@@ -123,6 +133,52 @@ describe('AuthStore', () => {
     expect(localStorage.getItem('astra.notes')).toBeNull();
     // Налаштування — ті, що були в цього облікового запису.
     expect(TestBed.inject(SettingsStore).theme()).toBe('dark');
+  });
+
+  it('should change the email after the codes from both letters', async () => {
+    saved = USER;
+    const auth = TestBed.inject(AuthStore);
+    await auth.ready;
+
+    await auth.changeEmail('new@example.com');
+    expect(calls).toContainEqual({ command: 'auth_change_email', args: { email: 'new@example.com' } });
+
+    // Перший код прийнято — Supabase чекає ще код із листа на поточну пошту.
+    expect(await auth.confirmEmailChange('new@example.com', '111111')).toBe(USER.email);
+    expect(auth.user()?.email).toBe(USER.email);
+
+    expect(await auth.confirmEmailChange('new@example.com', '222222')).toBeNull();
+    expect(auth.user()?.email).toBe('new@example.com');
+  });
+
+  it('should delete the account, clear its site data and forget its local data after the reload', async () => {
+    saved = USER;
+    const auth = TestBed.inject(AuthStore);
+    await auth.ready;
+    localStorage.setItem(`astra.${USER.id}.notes`, '["нотатка"]');
+    localStorage.setItem('astra.settings.theme', '"dark"');
+    const clearSiteData = vi.fn(() => Promise.resolve());
+
+    // Неправильний пароль — нічого не видалено й не очищено.
+    await expect(auth.deleteAccount('wrong', clearSiteData)).rejects.toEqual({
+      code: 'invalid_credentials',
+      message: 'Неправильний пароль.',
+    });
+    expect(clearSiteData).not.toHaveBeenCalled();
+    expect(calls.map((call) => call.command)).not.toContain('auth_sign_out');
+
+    await auth.deleteAccount('secret', clearSiteData);
+    expect(clearSiteData).toHaveBeenCalledTimes(1);
+    expect(calls.map((call) => call.command).slice(-2)).toEqual(['auth_delete_account', 'auth_sign_out']);
+    expect(auth.user()).toBeNull();
+    expect(reload).toHaveBeenCalledWith('/sign-in');
+
+    // Після перезавантаження вікна: дані облікового запису прибрано, налаштування пристрою лишились.
+    const reloaded = TestBed.runInInjectionContext(() => new AuthStore());
+    expect(reloaded.deletedEmail()).toBe(USER.email);
+    expect(localStorage.getItem(`astra.${USER.id}.notes`)).toBeNull();
+    expect(localStorage.getItem('astra.settings.theme')).toBe('"dark"');
+    expect(TestBed.runInInjectionContext(() => new AuthStore()).deletedEmail()).toBeNull();
   });
 
   it('should explain errors from the app and hide unexpected ones', () => {

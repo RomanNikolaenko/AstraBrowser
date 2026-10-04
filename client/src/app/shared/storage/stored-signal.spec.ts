@@ -1,5 +1,13 @@
 import { TestBed } from '@angular/core/testing';
-import { accountKey, accountSignal, adoptLegacyData, onStoredChange, setStorageAccount, storedSignal } from './stored-signal';
+import {
+  accountKey,
+  accountSignal,
+  adoptLegacyData,
+  onStoredChange,
+  removeAccountData,
+  setStorageAccount,
+  storedSignal,
+} from './stored-signal';
 
 describe('storedSignal', () => {
   const create = <T>(key: string, fallback: T) => TestBed.runInInjectionContext(() => storedSignal(key, fallback));
@@ -32,9 +40,17 @@ describe('storedSignal', () => {
     const state = create('test.items', ['a']);
 
     localStorage.setItem('test.items', JSON.stringify(['from another window']));
-    window.dispatchEvent(new StorageEvent('storage', { key: 'test.items' }));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'test.items', newValue: '["from another window"]' }));
 
     expect(state()).toEqual(['from another window']);
+    TestBed.tick();
+
+    // Ключ прибрали в іншому вікні — це вікно його не відновлює.
+    localStorage.removeItem('test.items');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'test.items', newValue: null }));
+    TestBed.tick();
+    expect(state()).toEqual(['from another window']);
+    expect(localStorage.getItem('test.items')).toBeNull();
   });
   describe('accounts', () => {
     const ID = '1f0c2a7e-55b1-4c3e-9d1a-7d1f1f2b3c4d';
@@ -65,6 +81,18 @@ describe('storedSignal', () => {
       expect(localStorage.getItem(`astra.${ID}.profile.account`)).toBeNull();
       expect(localStorage.getItem('astra.settings.theme')).toBe('"dark"');
       expect(localStorage.getItem(`astra.${ID}.notes`)).toBe('["already scoped"]');
+    });
+
+    it('should remove all the data of a deleted account and nothing else', () => {
+      const other = '2a1d3b8f-66c2-4d4f-8e2b-8e2f2a3c4d5e';
+      localStorage.setItem(`astra.${ID}.notes`, '["mine"]');
+      localStorage.setItem(`astra.${ID}.sync.base`, '{}');
+      localStorage.setItem(`astra.${other}.notes`, '["theirs"]');
+      localStorage.setItem('astra.settings.theme', '"dark"');
+
+      removeAccountData(ID);
+
+      expect(Object.keys(localStorage).sort()).toEqual([`astra.${other}.notes`, 'astra.settings.theme']);
     });
   });
 
