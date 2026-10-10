@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { BrowserWindows } from '../shared/browser-windows/browser-windows';
 import { Titlebar } from '../shared/titlebar/titlebar';
@@ -10,6 +11,7 @@ import { BookmarksStore } from './data/bookmarks';
 import { DownloadSettingsStore } from './data/download-settings';
 import { DownloadsStore } from './data/downloads';
 import { HistoryStore } from './data/history';
+import { SettingsStore } from '../shared/settings/settings';
 import { AdBlockStatus, AdBlockStore, adBlockSite } from './data/adblock';
 import { AutoplayStore } from './data/autoplay';
 import { AutoplayPermission, AutoplayRules, PageOpenOptions, PageViews } from './page-views/page-views';
@@ -40,6 +42,36 @@ class FakePageViews {
   }
   setAudioRules(rules: AutoplayRules) {
     return this.record('audio-rules', rules);
+  }
+  suggestions: string[] = [];
+  searchSuggestions(engine: string, query: string) {
+    this.calls.push(['suggest', engine, query]);
+    return Promise.resolve(this.suggestions);
+  }
+  openExternal(url: string) {
+    return this.record('external', url);
+  }
+  setBackground(label: string, background: boolean) {
+    return this.record('set-background', label, background);
+  }
+  asleep = true;
+  suspend(label: string) {
+    this.calls.push(['suspend', label]);
+    return Promise.resolve(this.asleep);
+  }
+  answerPermission(id: number, state: string, remember: boolean) {
+    return this.record('permission-answer', id, state, remember);
+  }
+  savedPermissions: Record<string, string> = {};
+  permissions() {
+    return Promise.resolve(this.savedPermissions);
+  }
+  setPermission(label: string, kind: string, state: string) {
+    return this.record('set-permission', label, kind, state);
+  }
+  apps: Record<string, string> = { mailto: 'Вибрати програми', tel: 'Вибрати програми', tg: 'Telegram Desktop' };
+  externalApp(url: string) {
+    return Promise.resolve(this.apps[url.split(':')[0]] ?? null);
   }
   setTrackingRules(rules: unknown) {
     return this.record('tracking-rules', rules);
@@ -180,7 +212,10 @@ class FakeWindows {
   fullscreen = false;
   readonly fullscreenCalls: boolean[] = [];
 
-  open(): void {}
+  readonly opened: unknown[] = [];
+  open(options: unknown = {}): void {
+    this.opened.push(options);
+  }
 
   isFullscreen(): Promise<boolean> {
     return Promise.resolve(this.fullscreen);
@@ -255,7 +290,7 @@ describe('Browser with sites', () => {
   });
 
   it('should show what the tracking protection blocked on the site and send it the rules of the window', async () => {
-    expect(pages.called('tracking-rules')).toEqual([[{ level: 'standard', gpc: true, exceptions: [] }]]);
+    expect(pages.called('tracking-rules')).toEqual([[{ level: 'standard', gpc: true, exceptions: [], smartScreen: true }]]);
     await typeInOmnibox('twitch.tv');
     const shield = () => button('Захист від стеження');
     expect(shield().classList).not.toContain('omnibox__shield--active');
@@ -270,7 +305,9 @@ describe('Browser with sites', () => {
     // Захист для сайту вимкнули — правила вікна з винятком, щит перекреслений.
     element.querySelector<HTMLInputElement>('#tracking-panel-site')?.click();
     await stable();
-    expect(pages.called('tracking-rules').at(-1)).toEqual([{ level: 'standard', gpc: true, exceptions: ['twitch.tv'] }]);
+    expect(pages.called('tracking-rules').at(-1)).toEqual([
+      { level: 'standard', gpc: true, exceptions: ['twitch.tv'], smartScreen: true },
+    ]);
     expect(pages.called('reload')).toEqual([[label(1)]]);
     expect(shield().classList).toContain('omnibox__shield--off');
 
@@ -278,6 +315,471 @@ describe('Browser with sites', () => {
     pages.emit('page://trackers', { label: label(1), trackers: [] });
     await stable();
     expect(element.querySelector('.tracking-panel__count')).toBeNull();
+  });
+
+  describe('omnibox suggestions', () => {
+    const typeOnly = async (text: string, inputType = 'insertText') => {
+      omnibox().focus();
+      omnibox().value = text;
+      omnibox().dispatchEvent(new InputEvent('input', { bubbles: true, inputType }));
+      await stable();
+    };
+    const key = async (name: string) => {
+      omnibox().dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+      await stable();
+    };
+    const items = () =>
+      [...element.querySelectorAll('.omnibox-suggestions__item')].map((item) =>
+        item.querySelector('.omnibox-suggestions__title')?.textContent?.trim()
+      );
+
+    beforeEach(() => {
+      const history = TestBed.inject(HistoryStore);
+      history.record('https://github.com/angular/angular', 'Angular на GitHub');
+      history.record('https://github.com/', 'GitHub');
+    });
+
+    it('should complete a known site inline and open it with Enter', async () => {
+      await typeOnly('git');
+      expect(items()).toEqual(['git', 'GitHub', 'Angular на GitHub']);
+      expect(omnibox().value).toBe('github.com');
+      expect(omnibox().getAttribute('aria-expanded')).toBe('true');
+
+      await key('Enter');
+      expect(pages.called('open')).toEqual([[label(1), 'https://github.com/']]);
+      expect(items()).toEqual([]);
+    });
+
+    it('should not complete while deleting and search what was typed', async () => {
+      await typeOnly('git', 'deleteContentBackward');
+      expect(omnibox().value).toBe('git');
+      await key('Enter');
+      expect(pages.called('open')).toEqual([[label(1), 'https://www.google.com/search?q=git']]);
+    });
+
+    it('should walk the suggestions with the arrows and add the search engine ones', async () => {
+      pages.suggestions = ['angular signals', 'angular'];
+      await typeOnly('angular');
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await stable();
+      expect(pages.called('suggest')).toEqual([['google', 'angular']]);
+      expect(items()).toEqual(['angular', 'Angular на GitHub', 'angular signals']);
+
+      await key('ArrowDown');
+      expect(omnibox().value).toBe('angular');
+      await key('ArrowDown');
+      expect(omnibox().value).toBe('github.com/angular/angular');
+      expect(omnibox().getAttribute('aria-activedescendant')).toBe('omnibox-suggestions-1');
+      await key('ArrowUp');
+      await key('ArrowUp');
+      expect(omnibox().value).toBe('angular');
+
+      // Перший Esc закриває підказки, другий повертає адресу вкладки.
+      await key('Escape');
+      expect(items()).toEqual([]);
+      expect(omnibox().value).toBe('angular');
+      await key('Escape');
+      expect(omnibox().value).toBe('');
+
+      await typeOnly('angular');
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await stable();
+      [...element.querySelectorAll<HTMLElement>('.omnibox-suggestions__item')].at(-1)?.click();
+      await stable();
+      expect(pages.called('open')).toEqual([[label(1), 'https://www.google.com/search?q=angular%20signals']]);
+    });
+
+    it('should switch to an open tab instead of opening the site again', async () => {
+      await typeInOmnibox('github.com');
+      await load(1, 'https://github.com/');
+      button('Нова вкладка').click();
+      await stable();
+
+      await typeOnly('github', 'insertFromPaste');
+      const tab = [...element.querySelectorAll<HTMLElement>('.omnibox-suggestions__item')].find((item) =>
+        item.textContent?.includes('Перейти на вкладку')
+      );
+      tab?.click();
+      await stable();
+      expect(titles()).toEqual(['github.com', 'Нова вкладка']);
+      expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('github.com');
+      expect(pages.called('open')).toEqual([[label(1), 'https://github.com/']]);
+    });
+  });
+
+  it('should restore the tabs of the last time and load a site only when its tab is opened', async () => {
+    fixture.destroy();
+    pages.calls.length = 0;
+    localStorage.setItem(
+      'astra.session.web',
+      JSON.stringify({
+        tabs: [
+          { page: 'web', url: 'https://angular.dev/', title: 'Angular' },
+          { page: 'web', url: 'https://github.com/', title: 'GitHub' },
+          { page: 'history' },
+          { page: 'web', url: 'file:///C:/secret.txt', title: 'Не сайт' },
+        ],
+        active: 1,
+      })
+    );
+    fixture = TestBed.createComponent(Host);
+    element = fixture.nativeElement as HTMLElement;
+    await stable();
+
+    expect(titles()).toEqual(['Angular', 'GitHub', 'Історія']);
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('GitHub');
+    expect(pages.called('open')).toEqual([[label(3), 'https://github.com/']]);
+
+    [...element.querySelectorAll<HTMLElement>('.tab__select')].find((tab) => tab.textContent?.includes('Angular'))?.click();
+    await stable();
+    expect(pages.called('open')).toEqual([
+      [label(3), 'https://github.com/'],
+      [label(2), 'https://angular.dev/'],
+    ]);
+
+    // Кожна зміна вкладок зберігається для наступного запуску.
+    const saved = JSON.parse(localStorage.getItem('astra.session.web') ?? 'null');
+    expect(saved).toEqual({
+      tabs: [
+        { page: 'web', url: 'https://angular.dev/', title: 'Angular' },
+        { page: 'web', url: 'https://github.com/', title: 'GitHub' },
+        { page: 'history' },
+      ],
+      active: 0,
+    });
+  });
+
+  it('should start with a new tab when the settings say so', async () => {
+    fixture.destroy();
+    localStorage.setItem('astra.settings.startup', JSON.stringify('new-tab'));
+    localStorage.setItem('astra.session.web', JSON.stringify({ tabs: [{ page: 'history' }], active: 0 }));
+    TestBed.inject(SettingsStore).startup.set('new-tab');
+    fixture = TestBed.createComponent(Host);
+    element = fixture.nativeElement as HTMLElement;
+    await stable();
+
+    expect(titles()).toEqual(['Нова вкладка']);
+  });
+
+  it('should ask before a site opens an app link and remember the answer for that site', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+    const prompt = () => element.querySelector('.external-prompt__panel');
+    // Спершу Rust каже, чи є програма для посилання, — тоді вже запитання.
+    const external = async (url: string) => {
+      pages.emit('page://external', { label: label(1), url });
+      await new Promise((resolve) => setTimeout(resolve));
+      await stable();
+    };
+    const promptButton = (name: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.external-prompt__button')].find(
+        (node) => node.textContent?.trim() === name
+      );
+
+    await external('mailto:roman@example.com');
+    expect(prompt()?.querySelector('.external-prompt__text')?.textContent).toContain(
+      'example.com хоче відкрити посилання в поштовій програмі'
+    );
+    expect(prompt()?.querySelector('.external-prompt__url')?.textContent?.trim()).toBe('mailto:roman@example.com');
+    promptButton('Скасувати')?.click();
+    await stable();
+    expect(prompt()).toBeNull();
+    expect(pages.called('external')).toEqual([]);
+
+    await external('mailto:roman@example.com');
+    element.querySelector<HTMLInputElement>('.external-prompt__remember input')?.click();
+    promptButton('Відкрити')?.click();
+    await stable();
+    expect(pages.called('external')).toEqual([['mailto:roman@example.com']]);
+    expect(prompt()).toBeNull();
+
+    // Тепер цьому сайту — без запитання, але лише для mailto:.
+    await external('mailto:team@example.com');
+    expect(prompt()).toBeNull();
+    expect(pages.called('external')).toEqual([['mailto:roman@example.com'], ['mailto:team@example.com']]);
+    await external('tel:+380441234567');
+    expect(prompt()?.querySelector('.external-prompt__text')?.textContent).toContain('програмі для дзвінків');
+    promptButton('Скасувати')?.click();
+    await stable();
+
+    // Відома програма — на ім’я, а посилання, якого жодна програма не знає, нічого не робить.
+    await external('tg://resolve?domain=astra');
+    expect(prompt()?.querySelector('.external-prompt__text')?.textContent).toContain('програмі «Telegram Desktop»');
+    promptButton('Скасувати')?.click();
+    await stable();
+    await external('astra-unknown:hello');
+    expect(prompt()).toBeNull();
+  });
+
+  it('should show a crashed page instead of the site and reload it in a new webview', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+    const crashButton = (name: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.crash__button')].find((node) => node.textContent?.trim() === name);
+
+    pages.emit('page://crashed', { label: label(1), failure: 'unresponsive' });
+    await stable();
+    expect(element.querySelector('.crash__title')?.textContent?.trim()).toBe('Сторінка не відповідає');
+    expect(pages.called('visible').at(-1)).toEqual([label(1), false]);
+    crashButton('Чекати')?.click();
+    await stable();
+    expect(element.querySelector('.crash')).toBeNull();
+    expect(pages.called('visible').at(-1)).toEqual([label(1), true]);
+
+    pages.emit('page://crashed', { label: label(1), failure: 'exited' });
+    await stable();
+    expect(element.querySelector('.crash__title')?.textContent?.trim()).toBe('Ой! Сторінка аварійно завершила роботу');
+    expect(element.querySelector('.tab__select--crashed')).toBeTruthy();
+    crashButton('Перезавантажити')?.click();
+    await stable();
+    expect(pages.called('close')).toContainEqual([label(1)]);
+    expect(pages.called('open').at(-1)).toEqual([`${label(1)}-2`, 'https://example.com/']);
+    expect(element.querySelector('.crash')).toBeNull();
+  });
+
+  it('should ask for a site permission under the address bar and answer it', async () => {
+    await typeInOmnibox('meet.example.com');
+    const prompt = () => element.querySelector('.permission-prompt');
+    const answer = (name: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.permission-prompt__button')]
+        .find((node) => node.textContent?.trim() === name)
+        ?.click();
+
+    pages.emit('page://permission', {
+      label: label(1),
+      id: 7,
+      kind: 'camera',
+      origin: 'https://meet.example.com',
+      userInitiated: true,
+    });
+    pages.emit('page://permission', {
+      label: label(1),
+      id: 8,
+      kind: 'microphone',
+      origin: 'https://meet.example.com',
+      userInitiated: true,
+    });
+    await stable();
+    expect(prompt()?.querySelector('.permission-prompt__title')?.textContent?.trim()).toBe('meet.example.com хоче:');
+    expect(prompt()?.querySelector('.permission-prompt__ask')?.textContent?.trim()).toBe('Використовувати камеру');
+
+    answer('Дозволити цього разу');
+    await stable();
+    expect(pages.called('permission-answer')).toEqual([[7, 'allow', false]]);
+    expect(prompt()?.querySelector('.permission-prompt__ask')?.textContent?.trim()).toBe('Використовувати мікрофон');
+
+    // Вкладку закрили, не відповівши, — сторінка не чекатиме вічно.
+    button('Закрити вкладку «meet.example.com»').click();
+    await stable();
+    expect(pages.called('permission-answer')).toEqual([
+      [7, 'allow', false],
+      [8, 'deny', false],
+    ]);
+    expect(prompt()?.querySelector('.permission-prompt__ask')).toBeNull();
+  });
+
+  it('should block popups opened without a click, open them on request and allow them for the site', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+
+    pages.emit('page://new-tab', { label: label(1), url: 'https://ads.example.net/', userInitiated: false });
+    await stable();
+    expect(titles()).toEqual(['example.com']);
+    expect(button('Спливне вікно заблоковано')).toBeTruthy();
+    expect(element.querySelector('.popup-blocked__url')?.textContent?.trim()).toBe('https://ads.example.net/');
+
+    element.querySelector<HTMLButtonElement>('.popup-blocked__item')?.click();
+    await stable();
+    expect(titles()).toEqual(['example.com', 'ads.example.net']);
+    expect(pages.called('open').at(-1)).toEqual([label(2), 'https://ads.example.net/']);
+
+    // З кліком — новою вкладкою одразу; дозволено сайтові — і без кліку.
+    pages.emit('page://new-tab', { label: label(1), url: 'https://example.com/help', userInitiated: true });
+    await stable();
+    expect(titles()).toHaveLength(3);
+    [...element.querySelectorAll<HTMLElement>('.tab__select')].find((tab) => tab.textContent?.includes('example.com'))?.click();
+    await stable();
+    pages.emit('page://new-tab', { label: label(1), url: 'https://ads.example.net/2', userInitiated: false });
+    await stable();
+    element.querySelector<HTMLInputElement>('.popup-blocked__allow input')?.click();
+    await stable();
+    pages.emit('page://new-tab', { label: label(1), url: 'https://ads.example.net/3', userInitiated: false });
+    await stable();
+    expect(titles()).toHaveLength(4);
+  });
+
+  it('should run browser actions from the context menu of a site', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+    const context = async (action: string, extra: object) => {
+      pages.emit('page://context', { label: label(1), action, ...extra });
+      await stable();
+    };
+
+    await context('open-link-tab', { url: 'https://example.com/news' });
+    expect(pages.called('background')).toContainEqual([label(2)]);
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('example.com');
+
+    await context('search', { text: 'рецепт борщу' });
+    expect(pages.called('open').at(-1)).toEqual([
+      label(3),
+      'https://www.google.com/search?q=%D1%80%D0%B5%D1%86%D0%B5%D0%BF%D1%82%20%D0%B1%D0%BE%D1%80%D1%89%D1%83',
+    ]);
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('google.com');
+
+    await context('open-link-private', { url: 'https://example.com/secret' });
+    expect(windows.opened.at(-1)).toEqual({ url: 'https://example.com/secret', private: true });
+
+    await context('translate-text', { text: 'hello' });
+    expect(pages.called('open').at(-1)?.[1]).toBe('https://translate.google.com/?sl=auto&tl=uk&text=hello&op=translate');
+  });
+
+  it('should put background tabs to sleep after a while and wake them up when opened', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+    button('Нова вкладка').click();
+    await stable();
+    await typeInOmnibox('github.com');
+    const browser = fixture.debugElement.query(By.directive(Browser)).componentInstance as unknown as {
+      sleepInactiveTabs(now: number): void;
+    };
+    expect(pages.called('set-background')).toContainEqual([label(1), true]);
+
+    browser.sleepInactiveTabs(Date.now() + 5 * 60_000);
+    await stable();
+    expect(pages.called('suspend')).toEqual([]);
+    browser.sleepInactiveTabs(Date.now() + 31 * 60_000);
+    await new Promise((resolve) => setTimeout(resolve));
+    await stable();
+    expect(pages.called('suspend')).toEqual([[label(1)]]);
+    expect(element.querySelector('.tab__select--sleeping')?.textContent?.trim()).toBe('example.com');
+
+    [...element.querySelectorAll<HTMLElement>('.tab__select')].find((tab) => tab.textContent?.includes('example.com'))?.click();
+    await stable();
+    expect(element.querySelector('.tab__select--sleeping')).toBeNull();
+    expect(pages.called('set-background').at(-1)).toEqual([label(1), false]);
+  });
+
+  describe('tabs', () => {
+    const tabItem = (title: string) =>
+      [...element.querySelectorAll<HTMLElement>('.tab')].find(
+        (tab) => tab.querySelector('.tab__title')?.textContent?.trim() === title
+      ) as HTMLElement;
+    const menu = async (title: string, item: string) => {
+      tabItem(title).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 20 }));
+      await stable();
+      [...element.querySelectorAll<HTMLButtonElement>('.tab-menu__item')]
+        .find((node) => node.textContent?.trim().startsWith(item))
+        ?.click();
+      await stable();
+    };
+    /** DataTransfer без браузера: лише те, що використовує смуга вкладок. */
+    const transfer = (data: Record<string, string> = {}) => {
+      const store = { ...data };
+      return {
+        effectAllowed: 'all',
+        dropEffect: 'none',
+        get types() {
+          return Object.keys(store);
+        },
+        setData: (type: string, value: string) => (store[type] = value),
+        getData: (type: string) => store[type] ?? '',
+      };
+    };
+    const drag = (target: Element, type: string, dataTransfer: object, clientX = 0, init: MouseEventInit = {}) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, ...init });
+      Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+      target.dispatchEvent(event);
+    };
+    const openThree = async () => {
+      for (const site of ['a.example', 'b.example', 'c.example']) {
+        if (site !== 'a.example') {
+          button('Нова вкладка').click();
+          await stable();
+        }
+        await typeInOmnibox(site);
+      }
+    };
+
+    it('should pin a tab to the left without a close button and keep it pinned in the saved session', async () => {
+      await openThree();
+      await menu('c.example', 'Закріпити');
+      expect(titles()).toEqual(['c.example', 'a.example', 'b.example']);
+      expect(tabItem('c.example').classList).toContain('tab--pinned');
+      expect(tabItem('c.example').querySelector('.tab__close')).toBeNull();
+      const saved = JSON.parse(localStorage.getItem('astra.session.web') ?? 'null');
+      expect(saved.tabs[0]).toEqual({ page: 'web', url: 'https://c.example/', title: '', pinned: true });
+
+      await menu('c.example', 'Відкріпити');
+      expect(titles()).toEqual(['c.example', 'a.example', 'b.example']);
+      expect(tabItem('c.example').classList).not.toContain('tab--pinned');
+    });
+
+    it('should duplicate a tab and close other tabs or tabs to the right, but not pinned ones', async () => {
+      await openThree();
+      await menu('a.example', 'Дублювати');
+      expect(titles()).toEqual(['a.example', 'a.example', 'b.example', 'c.example']);
+      expect(pages.called('open').at(-1)?.[1]).toBe('https://a.example/');
+
+      await menu('b.example', 'Закрити вкладки праворуч');
+      expect(titles()).toEqual(['a.example', 'a.example', 'b.example']);
+
+      await menu('b.example', 'Закріпити');
+      await menu('b.example', 'Закрити інші вкладки');
+      expect(titles()).toEqual(['b.example']);
+    });
+
+    it('should move a tab to a new window from its menu', async () => {
+      await openThree();
+      await menu('b.example', 'Перемістити в нове вікно');
+      expect(windows.opened.at(-1)).toEqual({ url: 'https://b.example/', private: false });
+      expect(titles()).toEqual(['a.example', 'c.example']);
+      // Перенесену вкладку не відновлюють як закриту.
+      expect(button('Відновити закриту вкладку')?.disabled ?? true).toBe(true);
+    });
+
+    it('should reorder tabs by dragging them along the tab strip', async () => {
+      await openThree();
+      const strip = element.querySelector('.tab-list') as HTMLElement;
+      const rects = [0, 100, 200].map((left) => ({ left, width: 100, right: left + 100, top: 0, bottom: 44, height: 44 }));
+      [...element.querySelectorAll<HTMLElement>('.tab')].forEach((tab, index) => {
+        tab.getBoundingClientRect = () => rects[index] as DOMRect;
+      });
+
+      const data = transfer();
+      drag(tabItem('c.example'), 'dragstart', data);
+      drag(strip, 'dragover', data, 40);
+      await stable();
+      expect(tabItem('a.example').classList).toContain('tab--drop-before');
+      drag(strip, 'drop', data, 40);
+      drag(tabItem('c.example'), 'dragend', data);
+      await stable();
+      expect(titles()).toEqual(['c.example', 'a.example', 'b.example']);
+      expect(element.querySelector('.tab--drop-before')).toBeNull();
+    });
+
+    it('should take a tab dropped from another window and give away one dropped there', async () => {
+      await openThree();
+      const strip = element.querySelector('.tab-list') as HTMLElement;
+
+      const incoming = transfer({
+        'application/x-astra-tab': JSON.stringify({ page: 'web', url: 'https://d.example/', title: 'D' }),
+      });
+      drag(strip, 'dragover', incoming, 10_000);
+      drag(strip, 'drop', incoming, 10_000);
+      await stable();
+      expect(titles()).toEqual(['a.example', 'b.example', 'c.example', 'D']);
+      expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('D');
+      expect(pages.called('open').at(-1)?.[1]).toBe('https://d.example/');
+
+      // Інше вікно прийняло вкладку (dropEffect «move») — тут вона закривається.
+      const outgoing = transfer();
+      drag(tabItem('a.example'), 'dragstart', outgoing);
+      outgoing.dropEffect = 'move';
+      drag(tabItem('a.example'), 'dragend', outgoing);
+      await stable();
+      expect(titles()).toEqual(['b.example', 'c.example', 'D']);
+    });
   });
 
   it('should reopen the last closed tab in its place with Ctrl+Shift+T, also from a site', async () => {
@@ -692,7 +1194,7 @@ describe('Browser with sites', () => {
 
   describe('site permissions', () => {
     const panel = () => element.querySelector('.site-permissions .popover') as HTMLElement;
-    const autoplay = () => panel().querySelector('[role="combobox"]') as HTMLButtonElement;
+    const autoplay = () => panel().querySelector('#site-permissions-autoplay') as HTMLButtonElement;
     // jsdom не має Popover API: відкриття — це подія toggle з newState, як її шле браузер.
     const open = async (popover: Element | null) => {
       popover?.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
@@ -701,8 +1203,9 @@ describe('Browser with sites', () => {
     };
     const openPanel = () => open(panel());
     const choose = async (label: string) => {
-      await open(panel().querySelector('[role="listbox"]'));
-      [...panel().querySelectorAll<HTMLElement>('[role="option"]')]
+      const list = panel().querySelector(`#${autoplay().getAttribute('aria-controls')}`);
+      await open(list);
+      [...(list?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])]
         .find((option) => option.textContent?.trim() === label)
         ?.click();
       await stable();
@@ -745,7 +1248,8 @@ describe('Browser with sites', () => {
       expect(panel().querySelector('.site-permissions__title')?.textContent?.trim()).toBe('Дозволи для www.twitch.tv');
       // Сайту, для якого ще нічого не вибрано, автовідтворення заборонене.
       expect(autoplay().textContent?.trim()).toBe('Блокувати аудіо та відео');
-      expect(autoplay().labels?.[0]?.textContent?.trim()).toBe('Автовідтворення');
+      const name = autoplay().getAttribute('aria-labelledby') ?? '';
+      expect(panel().querySelector(`#${name}`)?.textContent?.trim()).toBe('Автовідтворення');
       expect(panel().querySelector('.site-permissions__notice')).toBeNull();
 
       await choose('Дозволити аудіо та відео');

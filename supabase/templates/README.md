@@ -5,12 +5,12 @@
 | Файл | Хто надсилає | Тема (Subject) | Змінні |
 |---|---|---|---|
 | [01-confirm-signup.html](01-confirm-signup.html) | Supabase — шаблон «Confirm sign up» | Код підтвердження Astra Browser | `{{ .Token }}` |
-| [02-welcome.html](02-welcome.html) | наш сервер — одразу після того, як пошту підтвердили кодом | Ласкаво просимо до Astra Browser | `{{ .Name }}` |
+| [02-welcome.html](02-welcome.html) | наш сервер — одразу після того, як пошту підтвердили кодом, чи після першого входу через Google | Ласкаво просимо до Astra Browser | `{{ .Name }}` |
 | [03-reset-password.html](03-reset-password.html) | Supabase — шаблон «Reset password» | Відновлення пароля Astra Browser | `{{ .Email }}`, `{{ .Token }}` |
 | [04-password-changed.html](04-password-changed.html) | Supabase — шаблон «Password changed (Security notifications)» | Пароль Astra Browser змінено | `{{ .Email }}` |
-| [05-new-sign-in.html](05-new-sign-in.html) | наш сервер — після кожного входу з нового пристрою чи місця | Новий вхід в Astra Browser | `{{ .Email }}`, `{{ .Date }}`, `{{ .Device }}`, `{{ .Location }}`, `{{ .Ip }}` |
+| [05-new-sign-in.html](05-new-sign-in.html) | наш сервер — після входу з незнайомого місця (IP) на вже знайомому комп’ютері | Новий вхід в Astra Browser | `{{ .Email }}`, `{{ .Date }}`, `{{ .Device }}`, `{{ .Location }}`, `{{ .Ip }}` |
 | [06-sign-in-code.html](06-sign-in-code.html) | Supabase — шаблон «Magic link or OTP» | Ваш код входу в Astra Browser | `{{ .Token }}` |
-| [07-new-device.html](07-new-device.html) | наш сервер — коли новий пристрій уперше синхронізується | Новий пристрій синхронізується з Astra Browser | `{{ .Email }}`, `{{ .Device }}`, `{{ .Date }}` |
+| [07-new-device.html](07-new-device.html) | наш сервер — після першого входу на комп’ютері, де цей обліковий запис ще не входив | Новий пристрій синхронізується з Astra Browser | `{{ .Email }}`, `{{ .Device }}`, `{{ .Date }}` |
 | [08-email-change.html](08-email-change.html) | Supabase — шаблон «Change email address» | Підтвердіть зміну пошти Astra Browser | `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Token }}` |
 | [09-delete-account.html](09-delete-account.html) | не надсилається — видалення облікового запису підтверджується паролем (supabase/account.sql) | Підтвердіть видалення облікового запису Astra Browser | `{{ .Email }}`, `{{ .Token }}` |
 | [10-account-deleted.html](10-account-deleted.html) | наш сервер — одразу після видалення облікового запису | Обліковий запис Astra Browser видалено | `{{ .Email }}` |
@@ -19,7 +19,7 @@
 ## Як підключати
 
 - **Supabase**: Authentication → Emails → шаблон із таблиці: тему — у Subject, увесь файл — у Body. «Password changed» спершу ввімкнути в Security notifications.
-- **Наш сервер** (ще не зроблений): підставляє змінні в тому самому вигляді (`{{ .Email }}` тощо), а кожне значення спершу HTML-екранує. `{{ .Name }}` — ім'я з облікового запису; якщо його немає — частина пошти до @.
+- **Наш сервер** — Edge Function [notify](../functions/notify/index.ts), як розгорнути — у її [README](../functions/notify/README.md). Бере ці листи з templates.ts, підставляє змінні в тому самому вигляді (`{{ .Email }}` тощо), а кожне значення спершу HTML-екранує. `{{ .Name }}` — ім'я з облікового запису; якщо його немає — частина пошти до @.
 - «Код діє одну годину» — типовий термін коду в Supabase (Email OTP Expiration = 3600 с). Змінили термін — поправте тексти в генераторі.
 
 ## Логотип

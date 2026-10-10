@@ -3,10 +3,11 @@
     <h2 class="clear-data__title" id="clear-data-title">Очистити дані перегляду і файли cookie</h2>
 
     <div class="clear-data__range">
-      <label class="clear-data__range-label" for="clear-data-range">Коли:</label>
+      <span class="clear-data__range-label" id="clear-data-range-label">Коли:</span>
       <app-select
         class="clear-data__select"
         selectId="clear-data-range"
+        ariaLabelledby="clear-data-range-label"
         selectName="range"
         [options]="ranges"
         [value]="range()"

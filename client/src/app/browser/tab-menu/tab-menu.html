@@ -1,0 +1,71 @@
+<span #anchor class="tab-menu__anchor"></span>
+<app-popover class="tab-menu" popoverId="tab-menu" align="start">
+  <ul class="tab-menu__list" role="menu" aria-label="Вкладка" tabindex="-1" (keydown)="onKeydown($event)">
+    <li role="none">
+      <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('new-tab-right')">
+        Нова вкладка праворуч
+      </button>
+    </li>
+    <li class="tab-menu__separator" role="separator"></li>
+    @if (target().site) {
+      <li role="none">
+        <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('reload')">Перезавантажити</button>
+      </li>
+    }
+    <li role="none">
+      <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('duplicate')">Дублювати</button>
+    </li>
+    <li role="none">
+      <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run(target().pinned ? 'unpin' : 'pin')">
+        {{ target().pinned ? 'Відкріпити' : 'Закріпити' }}
+      </button>
+    </li>
+    @if (target().site) {
+      <li role="none">
+        <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run(target().muted ? 'unmute' : 'mute')">
+          {{ target().muted ? 'Увімкнути звук сайту' : 'Вимкнути звук сайту' }}
+        </button>
+      </li>
+    }
+    <li class="tab-menu__separator" role="separator"></li>
+    <li role="none">
+      <button
+        #item
+        class="tab-menu__item"
+        type="button"
+        role="menuitem"
+        [disabled]="!target().others"
+        (click)="run('new-window')">
+        Перемістити в нове вікно
+      </button>
+    </li>
+    <li class="tab-menu__separator" role="separator"></li>
+    <li role="none">
+      <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('close')">
+        <span>Закрити</span><span class="tab-menu__shortcut">Ctrl+W</span>
+      </button>
+    </li>
+    <li role="none">
+      <button
+        #item
+        class="tab-menu__item"
+        type="button"
+        role="menuitem"
+        [disabled]="!target().others"
+        (click)="run('close-others')">
+        Закрити інші вкладки
+      </button>
+    </li>
+    <li role="none">
+      <button
+        #item
+        class="tab-menu__item"
+        type="button"
+        role="menuitem"
+        [disabled]="!target().right"
+        (click)="run('close-right')">
+        Закрити вкладки праворуч
+      </button>
+    </li>
+  </ul>
+</app-popover>

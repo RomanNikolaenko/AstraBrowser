@@ -17,6 +17,9 @@ describe('SignIn', () => {
     signIn: vi.fn<(email: string, password: string, remember: boolean) => Promise<void>>(),
     verify: vi.fn<(email: string, code: string) => Promise<void>>(),
     resend: vi.fn<(email: string) => Promise<void>>(),
+    sendSignInCode: vi.fn<(email: string) => Promise<void>>(),
+    signInWithCode: vi.fn<(email: string, code: string, remember: boolean) => Promise<void>>(),
+    signInWithGoogle: vi.fn<(remember: boolean) => Promise<void>>(),
   };
 
   const errors = () =>
@@ -37,6 +40,14 @@ describe('SignIn', () => {
     await fixture.whenStable();
   };
 
+  const alternative = async (label: string) => {
+    [...element.querySelectorAll<HTMLButtonElement>('.auth__alternative')]
+      .find((button) => button.textContent?.includes(label))
+      ?.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+  };
+
   const fillForm = () => {
     type('sign-in-email', ' user@example.com ');
     type('sign-in-password', 'secret');
@@ -46,6 +57,9 @@ describe('SignIn', () => {
     auth.signIn.mockReset().mockResolvedValue(undefined);
     auth.verify.mockReset().mockResolvedValue(undefined);
     auth.resend.mockReset().mockResolvedValue(undefined);
+    auth.sendSignInCode.mockReset().mockResolvedValue(undefined);
+    auth.signInWithCode.mockReset().mockResolvedValue(undefined);
+    auth.signInWithGoogle.mockReset().mockResolvedValue(undefined);
     auth.deletedEmail.set(null);
     await TestBed.configureTestingModule({
       imports: [SignIn],
@@ -118,5 +132,49 @@ describe('SignIn', () => {
 
     expect(auth.verify).toHaveBeenCalledWith('user@example.com', '123456');
     expect(navigate).toHaveBeenCalledWith(['/home']);
+  });
+
+  it('should send a sign-in code to the email and sign in with it, without a password', async () => {
+    await alternative('Код на пошту');
+    expect(errors()).toEqual(['Введіть електронну пошту']);
+    expect(auth.sendSignInCode).not.toHaveBeenCalled();
+
+    type('sign-in-email', ' user@example.com ');
+    await alternative('Код на пошту');
+    expect(auth.sendSignInCode).toHaveBeenCalledWith('user@example.com');
+    expect(element.querySelector('.auth__step-title')?.textContent?.trim()).toBe('Вхід за кодом');
+
+    type('sign-in-code', '123 456');
+    await submit();
+    expect(auth.signInWithCode).toHaveBeenCalledWith('user@example.com', '123456', true);
+    expect(navigate).toHaveBeenCalledWith(['/home']);
+  });
+
+  it('should say when there is no account for the code', async () => {
+    auth.sendSignInCode.mockRejectedValue({ code: 'user_not_found', message: 'Облікового запису з такою поштою немає.' });
+    type('sign-in-email', 'nobody@example.com');
+    await alternative('Код на пошту');
+
+    expect(alert()).toBe('Облікового запису з такою поштою немає.');
+    expect(element.querySelector('.auth__step-title')).toBeNull();
+  });
+
+  it('should sign in with Google and stay quiet when its window is closed', async () => {
+    await alternative('Google');
+    expect(auth.signInWithGoogle).toHaveBeenCalledWith(true);
+    expect(navigate).toHaveBeenCalledWith(['/home']);
+
+    navigate.mockClear();
+    auth.signInWithGoogle.mockRejectedValue({ code: 'cancelled', message: 'Вхід через Google скасовано.' });
+    await alternative('Google');
+    expect(alert()).toBeUndefined();
+    expect(navigate).not.toHaveBeenCalled();
+
+    auth.signInWithGoogle.mockRejectedValue({
+      code: 'provider_disabled',
+      message: 'Вхід через Google ще не налаштовано на сервері.',
+    });
+    await alternative('Google');
+    expect(alert()).toBe('Вхід через Google ще не налаштовано на сервері.');
   });
 });

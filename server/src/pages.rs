@@ -12,7 +12,7 @@ use crate::audio;
 #[cfg(windows)]
 use crate::webview2::{self, Autoplay};
 use tauri::{
-  webview::{NewWindowResponse, PageLoadEvent, PageLoadPayload},
+  webview::{PageLoadEvent, PageLoadPayload},
   AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl, Window,
 };
 
@@ -108,10 +108,47 @@ struct TrackersEvent {
   trackers: Vec<BlockedTracker>,
 }
 
+/// Процес сторінки впав чи не відповідає (page_events.rs).
+#[cfg(windows)]
 #[derive(Clone, Serialize)]
+struct CrashedEvent {
+  label: String,
+  failure: crate::page_events::Failure,
+}
+
+/// Сайт просить дозвіл (камера, мікрофон…): інтерфейс питає й відповідає page_permission_answer.
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PermissionEvent {
+  label: String,
+  #[serde(flatten)]
+  request: crate::page_events::PermissionRequest,
+}
+
+/// Дія браузера з контекстного меню сайту.
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+struct ContextEvent {
+  label: String,
+  #[serde(flatten)]
+  action: crate::page_events::ContextAction,
+}
+
+/// Сайт хоче відкрити посилання програмою (mailto:, tel:…): інтерфейс спершу спитає користувача (external.rs).
+#[derive(Clone, Serialize)]
+struct ExternalEvent {
+  label: String,
+  url: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NewTabEvent {
   label: String,
   url: String,
+  /// Після дії користувача (клік); інакше це спливне вікно, і інтерфейс може його заблокувати.
+  user_initiated: bool,
 }
 
 /// Завантаження почалося, іде чи скінчилося (webview2::watch_downloads).
@@ -238,6 +275,7 @@ pub async fn page_open(
   let page_token = crate::passwords::new_token();
 
   let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
+    .additional_browser_args(crate::BROWSER_ARGS)
     // У приватному вікні сторінки теж без збережених cookies, кешу й сховища.
     .incognito(ui.starts_with("private-") || ui.starts_with(GUEST_PREFIX))
     .focused(!background)
@@ -245,8 +283,20 @@ pub async fn page_open(
     // який у Windows його перехоплює.
     .disable_drag_drop_handler()
     .initialization_script_for_all_frames(audio::guard_script(&autoplay))
-    // Сайт не може перейти на file:, tauri: чи інші не-вебові схеми.
-    .on_navigation(|url| is_web(url) || url.as_str() == "about:blank")
+    // Сайт не може перейти на file:, tauri: чи інші не-вебові схеми. Посилання на програму (mailto:, tel:…) —
+    // не перехід: його відкриє програма Windows, якщо дозволить користувач.
+    .on_navigation({
+      let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+      move |url| {
+        if is_web(url) || url.as_str() == "about:blank" {
+          return true;
+        }
+        if crate::external::scheme_of(url).is_some() {
+          let _ = app.emit_to(&ui, "page://external", ExternalEvent { label: label.clone(), url: url.to_string() });
+        }
+        false
+      }
+    })
     .on_page_load({
       let (app, ui) = (app.clone(), ui.clone());
       move |webview, payload| {
@@ -259,16 +309,6 @@ pub async fn page_open(
       let (app, ui) = (app.clone(), ui.clone());
       move |webview, title| {
         let _ = app.emit_to(&ui, "page://title", TitleEvent { label: webview.label().into(), title });
-      }
-    })
-    // Посилання з target="_blank" і window.open відкриваються новою вкладкою, а не окремим вікном.
-    .on_new_window({
-      let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-      move |url, _features| {
-        if is_web(&url) {
-          let _ = app.emit_to(&ui, "page://new-tab", NewTabEvent { label: label.clone(), url: url.to_string() });
-        }
-        NewWindowResponse::Deny
       }
     })
     // Файл зберігається в «Завантаження» Windows, а власне вікно завантажень WebView2 сховане:
@@ -315,9 +355,55 @@ pub async fn page_open(
     }
   })
   .map_err(|error| error.to_string())?;
-  // Куки й сховища трекерів — вбудований захист WebView2 на рівні, вибраному в налаштуваннях.
+  // Куки й сховища трекерів — вбудований захист WebView2 на рівні, вибраному в налаштуваннях; SmartScreen — так само.
   #[cfg(windows)]
   webview2::set_tracking_prevention(&webview, privacy.level).map_err(|error| error.to_string())?;
+  #[cfg(windows)]
+  crate::page_events::set_smart_screen(&webview, privacy.smart_screen).map_err(|error| error.to_string())?;
+
+  // Посилання з target="_blank" і window.open — новою вкладкою, а не окремим вікном; спливні вікна без дії
+  // користувача інтерфейс може заблокувати. Посилання на програми (mailto:…) — після запитання.
+  #[cfg(windows)]
+  crate::page_events::watch_new_windows(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |url, user_initiated| {
+      let Ok(parsed) = Url::parse(&url) else {
+        return;
+      };
+      if is_web(&parsed) {
+        let _ = app.emit_to(&ui, "page://new-tab", NewTabEvent { label: label.clone(), url, user_initiated });
+      } else if crate::external::scheme_of(&parsed).is_some() {
+        let _ = app.emit_to(&ui, "page://external", ExternalEvent { label: label.clone(), url });
+      }
+    }
+  })
+  .map_err(|error| error.to_string())?;
+
+  // Збій сторінки, запити дозволів і контекстне меню — через інтерфейс (page_events.rs).
+  #[cfg(windows)]
+  crate::page_events::watch_process_failed(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |failure| {
+      let _ = app.emit_to(&ui, "page://crashed", CrashedEvent { label: label.clone(), failure });
+    }
+  })
+  .map_err(|error| error.to_string())?;
+  #[cfg(windows)]
+  crate::page_events::watch_permissions(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |request| {
+      let _ = app.emit_to(&ui, "page://permission", PermissionEvent { label: label.clone(), request });
+    }
+  })
+  .map_err(|error| error.to_string())?;
+  #[cfg(windows)]
+  crate::page_events::customize_context_menu(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |action| {
+      let _ = app.emit_to(&ui, "page://context", ContextEvent { label: label.clone(), action });
+    }
+  })
+  .map_err(|error| error.to_string())?;
 
   // Автовідтворення — заборонене, доки користувач не дозволить його сайту в «Дозволах сайту».
   #[cfg(windows)]
@@ -630,6 +716,65 @@ pub async fn page_autoplay(window: Window, label: String) -> Result<Autoplay, St
   let webview = page(&window, &label)?;
   let (reply, receiver) = mpsc::channel();
   webview2::autoplay(&webview, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
+  receive(receiver).await?
+}
+
+/// Присипляє приховану фонову вкладку (page_events.rs); `true` — заснула.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn page_suspend(window: Window, label: String) -> Result<bool, String> {
+  let webview = page(&window, &label)?;
+  let (reply, receiver) = mpsc::channel();
+  crate::page_events::suspend(&webview, reply).map_err(|error| error.to_string())?;
+  receive(receiver).await?
+}
+
+/// Вкладка пішла у фон (менше пам'яті) чи стала активною.
+#[cfg(windows)]
+#[tauri::command]
+pub fn page_set_background(window: Window, label: String, background: bool) -> Result<(), String> {
+  crate::page_events::set_background(&page(&window, &label)?, background).map_err(|error| error.to_string())
+}
+
+/// Відповідь користувача на запит дозволу сайту.
+#[cfg(windows)]
+#[tauri::command]
+pub fn page_permission_answer(
+  app: AppHandle,
+  id: u64,
+  state: crate::page_events::PermissionState,
+  remember: bool,
+) -> Result<(), String> {
+  app
+    .run_on_main_thread(move || crate::page_events::answer_permission(id, state, remember))
+    .map_err(|error| error.to_string())
+}
+
+/// Збережені дозволи сайту вкладки — для панелі дозволів.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn page_permissions(
+  window: Window,
+  label: String,
+) -> Result<std::collections::HashMap<String, crate::page_events::PermissionState>, String> {
+  let webview = page(&window, &label)?;
+  let (reply, receiver) = mpsc::channel();
+  crate::page_events::site_permissions(&webview, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
+  receive(receiver).await?
+}
+
+/// Зберігає дозвіл сайту вкладки (з панелі дозволів).
+#[cfg(windows)]
+#[tauri::command]
+pub async fn page_set_permission(
+  window: Window,
+  label: String,
+  kind: String,
+  state: crate::page_events::PermissionState,
+) -> Result<(), String> {
+  let webview = page(&window, &label)?;
+  let (reply, receiver) = mpsc::channel();
+  crate::page_events::set_site_permission(&webview, page_origin(&webview)?, kind, state, reply).map_err(|error| error.to_string())?;
   receive(receiver).await?
 }
 

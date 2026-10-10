@@ -111,7 +111,7 @@ describe('SettingsPage', () => {
       [...element.querySelectorAll<HTMLButtonElement>('.settings__actions button')].find(
         (node) => node.textContent?.trim() === label
       );
-    const folder = () => element.querySelector('.settings__text--wide .page__meta')?.textContent?.trim();
+    const folder = () => element.querySelector('.settings__text--wide .page__meta[title]')?.textContent?.trim();
 
     expect([...element.querySelectorAll('.page__group')].map((group) => group.textContent?.trim())).toContain('Завантаження');
     expect(folder()).toBe('C:\\Users\\me\\Downloads');

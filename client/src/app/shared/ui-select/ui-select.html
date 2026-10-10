@@ -5,6 +5,8 @@
   aria-haspopup="listbox"
   [attr.id]="selectId() ?? null"
   [attr.aria-label]="ariaLabel() ?? null"
+  [attr.aria-labelledby]="ariaLabelledby() || null"
+  [attr.aria-describedby]="ariaDescribedby() || null"
   [attr.aria-expanded]="open()"
   [attr.aria-controls]="listId"
   [attr.aria-activedescendant]="open() && active() >= 0 ? optionId(active()) : null"

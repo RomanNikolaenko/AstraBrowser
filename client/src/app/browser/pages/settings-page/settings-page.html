@@ -42,6 +42,30 @@
     </div>
   </div>
 
+  <h2 class="page__group">Під час запуску</h2>
+  <div class="page__list settings">
+    <fieldset class="settings__row settings__fieldset">
+      <legend class="settings__text">
+        <span class="page__name">Що відкривати</span>
+        <span class="page__meta">Вкладки й вікна з минулого разу чи одну нову вкладку</span>
+      </legend>
+      <div class="segmented">
+        @for (option of startupOptions; track option.value) {
+          <label class="segmented__option">
+            <input
+              class="segmented__input"
+              type="radio"
+              name="startup"
+              [value]="option.value"
+              [checked]="settings.startup() === option.value"
+              (change)="settings.startup.set(option.value)" />
+            <span>{{ option.label }}</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+  </div>
+
   <h2 class="page__group">Пошук</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">
@@ -64,6 +88,21 @@
         }
       </div>
     </fieldset>
+    <div class="settings__row">
+      <span class="settings__text settings__text--wide">
+        <span class="page__name" id="settings-search-suggestions-name">Підказки пошукової системи</span>
+        <span class="page__meta settings__hint" id="settings-search-suggestions-hint">
+          Те, що ви вводите в адресному рядку, надсилається пошуковій системі, щоб показати можливі запити
+        </span>
+      </span>
+      <app-switch
+        inputId="settings-search-suggestions"
+        inputName="search-suggestions"
+        ariaLabelledby="settings-search-suggestions-name"
+        ariaDescribedby="settings-search-suggestions-hint"
+        [checked]="settings.searchSuggestions()"
+        (checkedChange)="settings.searchSuggestions.set($event)" />
+    </div>
   </div>
 
   @if (downloadSettings.settings(); as downloads) {
@@ -100,6 +139,28 @@
     </div>
   }
 
+  <h2 class="page__group">Продуктивність</h2>
+  <div class="page__list settings">
+    <div class="settings__row">
+      <span class="settings__text settings__text--wide">
+        <span class="page__name" id="settings-sleep-tabs-label">Присипляти неактивні вкладки</span>
+        <span class="page__meta settings__hint" id="settings-sleep-tabs-hint">
+          Фонова вкладка засинає, щоб звільнити пам’ять і процесор, а відкриєте — прокинеться з тим самим вмістом. Вкладки, що
+          грають звук, не засинають.
+        </span>
+      </span>
+      <app-select
+        class="settings__select"
+        selectId="settings-sleep-tabs"
+        ariaLabelledby="settings-sleep-tabs-label"
+        ariaDescribedby="settings-sleep-tabs-hint"
+        selectName="sleep-tabs"
+        [options]="sleepOptions"
+        [value]="'' + settings.sleepTabsAfter()"
+        (valueChange)="setSleepTabs($event)" />
+    </div>
+  </div>
+
   <h2 class="page__group" id="settings-privacy">Конфіденційність</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">
@@ -131,6 +192,22 @@
         <button class="page__button" type="button" (click)="tracking.removeException(site)">Увімкнути</button>
       </div>
     }
+    <div class="settings__row">
+      <span class="settings__text settings__text--wide">
+        <span class="page__name" id="settings-smart-screen-name">Захист від небезпечних сайтів і файлів</span>
+        <span class="page__meta settings__hint" id="settings-smart-screen-hint">
+          Microsoft Defender SmartScreen попереджає про фішинг і шкідливі завантаження. Для перевірки адреси сайтів надсилаються в
+          Microsoft.
+        </span>
+      </span>
+      <app-switch
+        inputId="settings-smart-screen"
+        inputName="smart-screen"
+        ariaLabelledby="settings-smart-screen-name"
+        ariaDescribedby="settings-smart-screen-hint"
+        [checked]="settings.smartScreen()"
+        (checkedChange)="settings.smartScreen.set($event)" />
+    </div>
     <div class="settings__row">
       <span class="settings__text settings__text--wide">
         <span class="page__name" id="settings-gpc-name">Просити сайти не продавати й не поширювати мої дані</span>
@@ -174,10 +251,11 @@
         </div>
         @if (state.settings.mode === 'increased' || state.settings.mode === 'max') {
           <div class="dns__provider">
-            <label class="dns__provider-label" for="settings-dns-provider">Постачальник</label>
+            <span class="dns__provider-label" id="settings-dns-provider-label">Постачальник</span>
             <app-select
               class="settings__select"
               selectId="settings-dns-provider"
+              ariaLabelledby="settings-dns-provider-label"
               selectName="dns-provider"
               [options]="dnsProviders"
               [value]="dnsProvider()"
@@ -203,7 +281,7 @@
         }
         @if (state.restartNeeded) {
           <div class="dns__notice" role="status">
-            <span>Нові налаштування DNS запрацюють після перезапуску браузера. Відкриті вкладки при цьому закриються.</span>
+            <span>Нові налаштування DNS запрацюють після перезапуску браузера. Вкладки відкриються знову.</span>
             <button class="page__button" type="button" (click)="restartBrowser()">Перезапустити</button>
           </div>
         }
@@ -220,12 +298,16 @@
     </div>
     <div class="settings__row">
       <span class="settings__text">
-        <label class="page__name" for="settings-history-days">Зберігати історію</label>
-        <span class="page__meta">Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації</span>
+        <span class="page__name" id="settings-history-days-label">Зберігати історію</span>
+        <span class="page__meta" id="settings-history-days-hint"
+          >Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації</span
+        >
       </span>
       <app-select
         class="settings__select"
         selectId="settings-history-days"
+        ariaLabelledby="settings-history-days-label"
+        ariaDescribedby="settings-history-days-hint"
         selectName="history-days"
         [options]="retention"
         [value]="'' + settings.historyDays()"

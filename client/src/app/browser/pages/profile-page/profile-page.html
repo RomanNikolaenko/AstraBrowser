@@ -27,20 +27,22 @@
       <p class="profile__error" role="alert">{{ photoError() }}</p>
     }
 
-    <label class="profile__row" for="profile-name">
+    <div class="profile__row">
       <span class="page__text">
-        <span class="page__name">Ім'я</span>
-        <span class="page__meta">Видно в меню профілю; ініціали — на аватарі без фото</span>
+        <span class="page__name" id="profile-name-label">Ім'я</span>
+        <span class="page__meta" id="profile-name-hint">Видно в меню профілю; ініціали — на аватарі без фото</span>
       </span>
       <app-input
         class="profile__name"
         inputId="profile-name"
         inputName="profile-name"
+        ariaLabelledby="profile-name-label"
+        ariaDescribedby="profile-name-hint"
         placeholder="Користувач"
         autocomplete="name"
         [value]="profile.name()"
         (valueChange)="profile.rename($event)" />
-    </label>
+    </div>
 
     @if (!profile.photo()) {
       <fieldset class="profile__row profile__fieldset">
@@ -267,7 +269,8 @@
               Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів.
             } @else {
               Щоб синхронізувати паролі сайтів, введіть пароль облікового запису: з нього створюється ключ, яким паролі шифруються
-              ще на цьому комп'ютері.
+              ще на цьому комп'ютері. Входили через Google чи кодом з пошти й пароля не маєте? Задайте його кнопкою «Змінити
+              пароль…» вище.
             }
           </p>
           <app-input

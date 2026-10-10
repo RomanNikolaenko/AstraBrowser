@@ -3,6 +3,8 @@
   description="Увійдіть у свій акаунт або створіть новий, щоб продовжити користування браузером.">
   @if (verifying()) {
     <app-verify-email [email]="email.value().trim()" (back)="backToForm()" (confirmed)="backToForm()" />
+  } @else if (signingInWithCode()) {
+    <app-sign-in-code [email]="email.value().trim()" [remember]="remember()" (back)="backToForm()" />
   } @else {
     <nav class="auth__tabs" aria-label="Авторизація">
       <a class="auth__tab auth__tab--active" [routerLink]="'/sign-in'">Увійти</a>
@@ -67,6 +69,17 @@
     <button class="auth__submit" type="submit" form="sign-in-form" [disabled]="busy()">
       {{ busy() ? 'Входимо…' : 'Увійти' }} <app-icon icon="arrow-right" />
     </button>
+    @if (auth.available) {
+      <p class="auth__divider"><span>або без пароля</span></p>
+      <div class="auth__alternatives">
+        <button class="auth__alternative" type="button" [disabled]="busy()" (click)="sendCode()">
+          <app-icon icon="email" />Код на пошту
+        </button>
+        <button class="auth__alternative" type="button" [disabled]="google()" (click)="signInWithGoogle()">
+          <app-icon icon="google" />{{ google() ? 'Чекаємо на Google…' : 'Google' }}
+        </button>
+      </div>
+    }
     <div class="auth__notice">
       <app-icon icon="lock" /><span
         >Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ

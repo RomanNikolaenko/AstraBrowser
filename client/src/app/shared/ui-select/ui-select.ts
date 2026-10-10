@@ -28,11 +28,18 @@ export class UiSelect<T extends string = string> {
   readonly value = model<T>();
   readonly options = input.required<readonly UiSelectOption<T>[]>();
 
-  /** id кнопки — щоб `<label for>` підписував список. */
+  /** id кнопки-комбобокса. */
   readonly selectId = input<string>();
   /** Ім'я для форми: значення йде прихованим полем. */
   readonly selectName = input<string>();
   readonly ariaLabel = input<string>();
+  /**
+   * id тексту-назви поряд. Не `<label for>`: наведення на такий підпис підсвічує сам контрол, а клік по ньому
+   * ставить на нього фокус — селект відгукується лише на себе.
+   */
+  readonly ariaLabelledby = input<string>();
+  /** id тексту, що пояснює вибір. */
+  readonly ariaDescribedby = input<string>();
   readonly disabled = input(false);
 
   protected readonly listId = `ui-select-${nextId++}`;

@@ -107,11 +107,13 @@ pub struct Rules {
   pub gpc: bool,
   /// Сайти (хост без www.), яким захист вимкнули, — разом з піддоменами.
   pub exceptions: Vec<String>,
+  /// Microsoft Defender SmartScreen: попередження про фішинг і шкідливі завантаження (page_events.rs).
+  pub smart_screen: bool,
 }
 
 impl Default for Rules {
   fn default() -> Self {
-    Self { level: Level::Standard, gpc: true, exceptions: Vec::new() }
+    Self { level: Level::Standard, gpc: true, exceptions: Vec::new(), smart_screen: true }
   }
 }
 
@@ -293,20 +295,24 @@ pub fn start(app: &AppHandle) {
   });
 }
 
-/// Нові правила вікна (рівень, GPC, винятки): запитам — одразу, вбудованому захисту WebView2 й скрипту GPC —
-/// для всіх сторінок вікна.
+/// Нові правила вікна (рівень, GPC, винятки, SmartScreen): запитам — одразу, вбудованому захисту WebView2, SmartScreen
+/// і скрипту GPC — для всіх сторінок вікна.
 #[cfg(windows)]
 #[tauri::command]
 pub fn tracking_set_rules(window: tauri::Window, rules: Rules) -> Result<(), String> {
   let tracking = window.state::<Tracking>();
-  let (level, gpc) = (rules.level, rules.gpc);
+  let (level, gpc, smart_screen) = (rules.level, rules.gpc, rules.smart_screen);
   let previous = tracking.set_rules(window.label(), rules);
   let gpc_changed = previous.as_ref().is_none_or(|previous| previous.gpc != gpc);
   let level_changed = previous.as_ref().is_none_or(|previous| previous.level != level);
+  let smart_screen_changed = previous.as_ref().is_none_or(|previous| previous.smart_screen != smart_screen);
   let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(crate::pages::PAGE_PREFIX));
   for webview in pages {
     if level_changed {
       crate::webview2::set_tracking_prevention(&webview, level).map_err(|error| error.to_string())?;
+    }
+    if smart_screen_changed {
+      crate::page_events::set_smart_screen(&webview, smart_screen).map_err(|error| error.to_string())?;
     }
     if gpc_changed {
       let label = webview.label().to_string();

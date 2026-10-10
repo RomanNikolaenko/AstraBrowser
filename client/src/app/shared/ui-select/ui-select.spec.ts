@@ -10,8 +10,16 @@ type Fruit = 'apple' | 'pear' | 'plum';
   imports: [UiSelect],
   template: `
     <form>
-      <label for="fruit">Фрукт</label>
-      <app-select selectId="fruit" selectName="fruit" [options]="options" [(value)]="value" [disabled]="disabled()" />
+      <span id="fruit-name">Фрукт</span>
+      <span id="fruit-hint">Улюблений</span>
+      <app-select
+        selectId="fruit"
+        selectName="fruit"
+        ariaLabelledby="fruit-name"
+        ariaDescribedby="fruit-hint"
+        [options]="options"
+        [(value)]="value"
+        [disabled]="disabled()" />
     </form>
   `,
 })
@@ -56,12 +64,22 @@ describe('UiSelect', () => {
     const { trigger, list, element } = await setup();
 
     expect(trigger.id).toBe('fruit');
-    expect(trigger.labels?.[0]?.textContent).toBe('Фрукт');
+    expect(trigger.getAttribute('aria-labelledby')).toBe('fruit-name');
+    expect(trigger.getAttribute('aria-describedby')).toBe('fruit-hint');
     expect(trigger.getAttribute('aria-controls')).toBe(list.id);
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(trigger.getAttribute('popovertarget')).toBe(list.id);
     expect(trigger.textContent?.trim()).toBe('Груша');
     expect(element.querySelector<HTMLInputElement>('input[type="hidden"]')?.value).toBe('pear');
+  });
+
+  it('should not react to its name: no label to hover or click', async () => {
+    const { element, trigger } = await setup();
+    element.querySelector<HTMLElement>('#fruit-name')?.click();
+
+    expect(trigger.labels?.length ?? 0).toBe(0);
+    expect(document.activeElement).not.toBe(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('should pick an option with the mouse', async () => {

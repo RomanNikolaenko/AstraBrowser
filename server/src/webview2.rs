@@ -75,12 +75,12 @@ impl Autoplay {
   }
 }
 
-fn core(platform: &PlatformWebview) -> windows_core::Result<ICoreWebView2> {
+pub(crate) fn core(platform: &PlatformWebview) -> windows_core::Result<ICoreWebView2> {
   unsafe { platform.controller().CoreWebView2() }
 }
 
 /// Профіль webview: у приватному вікні — окремий InPrivate, тож і дозволи там не зберігаються.
-fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreWebView2Profile4> {
+pub(crate) fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreWebView2Profile4> {
   unsafe { core(platform)?.cast::<ICoreWebView2_13>()?.Profile()?.cast() }
 }
 

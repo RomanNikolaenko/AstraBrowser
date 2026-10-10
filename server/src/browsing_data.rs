@@ -94,7 +94,7 @@ pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, 
 
   let label = format!("{}cleaner-{}", crate::pages::PAGE_PREFIX, NEXT_CLEANER.fetch_add(1, Ordering::Relaxed));
   let blank = Url::parse("about:blank").map_err(|error| error.to_string())?;
-  let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(blank));
+  let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(blank)).additional_browser_args(crate::BROWSER_ARGS);
   if let Some(dir) = &separate {
     builder = builder.data_directory(dir.clone());
   }

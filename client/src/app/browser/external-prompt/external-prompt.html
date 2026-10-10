@@ -1,0 +1,40 @@
+<dialog #dialog class="external-prompt" aria-labelledby="external-prompt-title" closedby="any" (close)="onClose()">
+  @if (request(); as request) {
+    <div class="external-prompt__panel">
+      <h2 class="external-prompt__title" id="external-prompt-title">Відкрити програму?</h2>
+      <p class="external-prompt__text">
+        @if (site()) {
+          Сайт <strong>{{ site() }}</strong> хоче відкрити посилання в {{ app() }}:
+        } @else {
+          Сторінка хоче відкрити посилання в {{ app() }}:
+        }
+      </p>
+      <div class="external-prompt__link">
+        <app-icon class="external-prompt__icon" icon="apps" />
+        <span class="external-prompt__url" [title]="request.url">{{ target() }}</span>
+      </div>
+
+      @if (site()) {
+        <label class="external-prompt__remember">
+          <input type="checkbox" name="remember" [checked]="remember()" (change)="setRemember($event)" />
+          Завжди дозволяти {{ site() }} відкривати посилання «{{ request.scheme }}:»
+        </label>
+      }
+      @if (error(); as message) {
+        <p class="external-prompt__error" role="alert">{{ message }}</p>
+      }
+
+      <div class="external-prompt__actions">
+        <!-- Фокус на «Скасувати»: випадковий Enter програму не запустить. -->
+        <button class="external-prompt__button" type="button" autofocus (click)="cancel()">Скасувати</button>
+        <button
+          class="external-prompt__button external-prompt__button--primary"
+          type="button"
+          [disabled]="busy()"
+          (click)="open()">
+          Відкрити
+        </button>
+      </div>
+    </div>
+  }
+</dialog>

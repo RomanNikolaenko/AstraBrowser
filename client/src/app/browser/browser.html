@@ -1,18 +1,33 @@
 <!-- Вкладки показуються в спільному заголовку вікна (app-titlebar). -->
 <ng-template appTitlebarContent (spacerMiddleClick)="openNewTab()">
-  <ul class="tab-list" aria-label="Відкриті вкладки" (dblclick)="onChromeDoubleClick($event)">
-    @for (tab of tabs(); track tab.id) {
+  <ul
+    class="tab-list"
+    aria-label="Відкриті вкладки"
+    (dblclick)="onChromeDoubleClick($event)"
+    (dragover)="onTabStripDragOver($event)"
+    (dragleave)="onTabStripDragLeave($event)"
+    (drop)="onTabStripDrop($event)">
+    @for (tab of tabs(); track tab.id; let index = $index) {
       <li
         class="tab"
+        draggable="true"
         [class.tab--active]="tab.id === activeTabId()"
         [class.tab--audio]="tab.site?.playing || tab.site?.muted"
+        [class.tab--pinned]="tab.pinned"
+        [class.tab--drop-before]="dropIndex() === index"
+        [class.tab--drop-after]="dropIndex() === tabs().length && index === tabs().length - 1"
+        (dragstart)="onTabDragStart($event, tab)"
+        (dragend)="onTabDragEnd($event, tab)"
+        (contextmenu)="showTabMenu($event, tab)"
         (appMiddleClick)="closeTab(tab.id)">
         <button
           class="tab__select"
           type="button"
           [attr.aria-current]="tab.id === activeTabId() ? 'page' : null"
           [attr.aria-busy]="tab.site?.loading || null"
-          [title]="tabTitle(tab)"
+          [title]="tab.site?.sleeping ? tabTitle(tab) + ' — вкладка спить, щоб заощадити пам’ять' : tabTitle(tab)"
+          [class.tab__select--sleeping]="tab.site?.sleeping"
+          [class.tab__select--crashed]="!!tab.site?.crashed"
           (click)="selectTab(tab.id)">
           @if (tab.site?.loading) {
             <span class="tab__spinner" aria-hidden="true"></span>
@@ -34,14 +49,16 @@
             <app-icon [icon]="tab.site?.muted ? 'volume-off' : 'volume'" />
           </button>
         }
-        <button
-          class="tab__close"
-          type="button"
-          [attr.aria-label]="'Закрити вкладку «' + tabTitle(tab) + '»'"
-          title="Закрити вкладку"
-          (click)="closeTab(tab.id)">
-          <app-icon icon="close" />
-        </button>
+        @if (!tab.pinned) {
+          <button
+            class="tab__close"
+            type="button"
+            [attr.aria-label]="'Закрити вкладку «' + tabTitle(tab) + '»'"
+            title="Закрити вкладку"
+            (click)="closeTab(tab.id)">
+            <app-icon icon="close" />
+          </button>
+        }
       </li>
     }
   </ul>
@@ -52,6 +69,9 @@
 </ng-template>
 
 <app-download-prompt />
+<app-external-prompt />
+<app-permission-prompt [anchor]="omniboxHost()?.nativeElement ?? null" />
+<app-tab-menu [target]="menuTarget()" (action)="runTabMenu($event)" />
 <app-screenshot />
 <app-password-prompt />
 
@@ -102,6 +122,9 @@
       autocomplete="off"
       [spellcheck]="false"
       enterKeyHint="go"
+      [combobox]="omniboxCombobox()"
+      (input)="onOmniboxInput($event)"
+      (focusout)="closeSuggestions()"
       (keydown)="onOmniboxKeydown($event)">
       @if (activeSitePage()) {
         <span class="omnibox__start" data-input-start>
@@ -129,6 +152,16 @@
       }
       <!-- Кнопки в кінці рядка — групою, щільніше, ніж відступ поля від тексту (--input-gap). -->
       <span class="omnibox__actions">
+        @if (activeTab().site?.blockedPopups?.length) {
+          <button
+            class="omnibox__popup"
+            type="button"
+            popovertarget="popup-blocked"
+            aria-label="Спливне вікно заблоковано"
+            title="Спливне вікно заблоковано">
+            <app-icon icon="popup" />
+          </button>
+        }
         @if (canPictureInPicture()) {
           <button
             class="omnibox__pip"
@@ -166,8 +199,18 @@
       </span>
     </app-input>
     <app-bookmark-editor [pageTitle]="tabTitle(activeTab())" [pageUrl]="tabUrl(activeTab())" />
+    <app-omnibox-suggestions
+      [open]="suggestionsOpen()"
+      [suggestions]="suggestions()"
+      [selected]="selectedSuggestion()"
+      (pick)="pickSuggestion($event)"
+      (highlight)="selectedSuggestion.set($event)" />
     @if (activeSitePage(); as page) {
       <app-site-permissions [page]="page" [pageUrl]="tabUrl(activeTab())" />
+      <app-popup-blocked
+        [pageUrl]="tabUrl(activeTab())"
+        [popups]="activeTab().site?.blockedPopups ?? []"
+        (open)="openBlockedPopup($event)" />
       <app-tracking-panel
         [page]="page"
         [pageUrl]="tabUrl(activeTab())"
@@ -258,7 +301,36 @@
   }
   <div class="content" #content [style.zoom]="zoom() / 100">
     @switch (activeTab().page) {
-      @case ('web') {}
+      @case ('web') {
+        @if (activeTab().site?.crashed; as failure) {
+          <div class="crash" role="alert">
+            <app-icon class="crash__icon" icon="warning" />
+            <h2 class="crash__title">
+              {{ failure === 'unresponsive' ? 'Сторінка не відповідає' : 'Ой! Сторінка аварійно завершила роботу' }}
+            </h2>
+            <p class="crash__text">
+              @switch (failure) {
+                @case ('unresponsive') {
+                  Сторінка зависла. Можна зачекати, поки вона отямиться, або перезавантажити її.
+                }
+                @case ('browser') {
+                  Зупинився процес браузера, що показує сайти. Перезавантажте сторінку.
+                }
+                @default {
+                  Можливо, сайту забракло пам’яті або в ньому сталася помилка. Перезавантажте сторінку — те, що ви ввели, могло не
+                  зберегтися.
+                }
+              }
+            </p>
+            <div class="crash__actions">
+              @if (failure === 'unresponsive') {
+                <button class="crash__button" type="button" (click)="waitForPage()">Чекати</button>
+              }
+              <button class="crash__button crash__button--primary" type="button" (click)="recoverPage()">Перезавантажити</button>
+            </div>
+          </div>
+        }
+      }
       @case ('history') {
         <app-history-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
       }

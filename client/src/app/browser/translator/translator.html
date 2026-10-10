@@ -2,10 +2,11 @@
   <h2 class="translator__title">Перекладач</h2>
 
   <div class="translator__language">
-    <label class="translator__label" for="translator-language">Перекладати на</label>
+    <span class="translator__label" id="translator-language-label">Перекладати на</span>
     <app-select
       class="translator__select"
       selectId="translator-language"
+      ariaLabelledby="translator-language-label"
       selectName="translator-language"
       [options]="languages"
       [value]="language()"

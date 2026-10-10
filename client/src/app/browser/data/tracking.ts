@@ -16,6 +16,8 @@ export interface TrackingRules {
   readonly level: 'standard' | 'strict' | 'off';
   readonly gpc: boolean;
   readonly exceptions: readonly string[];
+  /** Microsoft Defender SmartScreen (server/src/page_events.rs). */
+  readonly smartScreen: boolean;
 }
 
 /** Як категорії називаються й пояснюються в панелі захисту — у порядку показу. */
@@ -78,6 +80,7 @@ export class TrackingStore {
     level: this.settings.trackingProtection(),
     gpc: this.settings.globalPrivacyControl(),
     exceptions: this.exceptions(),
+    smartScreen: this.settings.smartScreen(),
   }));
 
   /** Чи захищено сайт з адресою `url` (`false` — захист вимкнено взагалі чи для цього сайту). */

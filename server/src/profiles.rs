@@ -67,6 +67,19 @@ pub fn site_data_dir(app: &AppHandle) -> Option<PathBuf> {
   own_site_data_dir(app, &user)
 }
 
+/// Перший вхід цього облікового запису на цьому комп'ютері? Позначає комп'ютер знайомим (для листа «Новий пристрій»).
+pub fn first_sign_in(app: &AppHandle, user: &str) -> bool {
+  let Some(dir) = dir(app, user) else {
+    return false;
+  };
+  let marker = dir.join("signed-in");
+  if marker.exists() {
+    return false;
+  }
+  let _ = fs::create_dir_all(&dir).and_then(|()| fs::write(&marker, b""));
+  true
+}
+
 /// Обліковий запис видалено: прибираємо його теку (паролі сайтів) і власну теку WebView2. Дані сайтів у ній
 /// інтерфейс уже очистив, тож якщо теку ще тримають відкриті сторінки, лишаються хіба порожні файли. Власник
 /// лишається власником: типову теку WebView2 (теж очищену) не отримає інший обліковий запис.

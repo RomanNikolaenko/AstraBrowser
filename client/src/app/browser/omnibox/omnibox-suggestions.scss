@@ -1,0 +1,88 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+// Сам хост не займає місця в панелі інструментів: список живе у top layer.
+:host {
+  display: contents;
+}
+
+// Під адресним рядком (anchor-name: --omnibox у browser.scss) і завширшки з нього.
+.omnibox-suggestions {
+  inset: auto;
+  width: anchor-size(width);
+  max-height: calc(100% - 4rem);
+  padding: 0.375rem;
+  margin: 0.375rem 0 0;
+  position-area: bottom span-right;
+  position-anchor: --omnibox;
+  overflow-y: auto;
+  font-family: var(--font-family-base);
+  color: var(--browser-text);
+  background: var(--browser-popover);
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 1rem;
+  box-shadow: var(--browser-popover-shadow);
+
+  &__item {
+    @include popover-item;
+
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    cursor: pointer;
+
+    &--selected {
+      background: var(--browser-hover);
+    }
+  }
+
+  &__icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--browser-icon);
+
+    app-icon {
+      width: 1.125rem;
+      height: 1.125rem;
+    }
+  }
+
+  &__text {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.625rem;
+    align-items: baseline;
+    min-width: 0;
+  }
+
+  &__title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--browser-text);
+    white-space: nowrap;
+  }
+
+  &__detail {
+    display: flex;
+    flex: 1 1 0;
+    gap: 0.375rem;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+    white-space: nowrap;
+  }
+
+  &__badge {
+    flex: 0 0 auto;
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--browser-accent);
+  }
+}

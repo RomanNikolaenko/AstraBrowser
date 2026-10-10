@@ -32,6 +32,19 @@ export const HISTORY_RETENTION: readonly { readonly days: number; readonly label
   { days: 0, label: 'Завжди' },
 ];
 
+/** Що відкривати під час запуску: вкладки з минулого разу чи нову вкладку. */
+export type StartupPage = 'restore' | 'new-tab';
+
+/** Через скільки хвилин бездіяльності фонова вкладка засинає; 0 — ніколи. */
+export const SLEEP_TABS: readonly { readonly minutes: number; readonly label: string }[] = [
+  { minutes: 5, label: '5 хвилин' },
+  { minutes: 15, label: '15 хвилин' },
+  { minutes: 30, label: '30 хвилин' },
+  { minutes: 60, label: '1 годину' },
+  { minutes: 120, label: '2 години' },
+  { minutes: 0, label: 'Ніколи' },
+];
+
 /** Захист від стеження (server/src/tracking.rs): рівень. */
 export type TrackingProtection = 'standard' | 'strict' | 'off';
 
@@ -78,6 +91,14 @@ export class SettingsStore {
   readonly newTabImage = storedSignal('astra.settings.new-tab-image', '');
   /** Скільки днів зберігати історію (HISTORY_RETENTION); давніші записи прибираються самі. */
   readonly historyDays = storedSignal('astra.settings.history-days', 90);
+  /** Підказки пошукової системи в адресному рядку: введене надсилається їй, щоб показати можливі запити. */
+  readonly searchSuggestions = storedSignal('astra.settings.search-suggestions', true);
+  /** Microsoft Defender SmartScreen: попередження про фішинг і шкідливі завантаження. */
+  readonly smartScreen = storedSignal('astra.settings.smart-screen', true);
+  /** Через скільки хвилин бездіяльності фонова вкладка засинає (SLEEP_TABS); 0 — ніколи. */
+  readonly sleepTabsAfter = storedSignal('astra.settings.sleep-tabs', 30);
+  /** Під час запуску — продовжити з того місця, де зупинилися, чи почати з нової вкладки. */
+  readonly startup = storedSignal<StartupPage>('astra.settings.startup', 'restore');
   /** Рівень захисту від стеження (TRACKING_PROTECTION). */
   readonly trackingProtection = storedSignal<TrackingProtection>('astra.settings.tracking-protection', 'standard');
   /** Global Privacy Control: просити сайти не продавати й не поширювати ваші дані. */
@@ -92,6 +113,10 @@ export class SettingsStore {
     newTabBackground: this.newTabBackground as WritableSignal<unknown>,
     newTabImage: this.newTabImage as WritableSignal<unknown>,
     historyDays: this.historyDays as WritableSignal<unknown>,
+    startup: this.startup as WritableSignal<unknown>,
+    smartScreen: this.smartScreen as WritableSignal<unknown>,
+    sleepTabsAfter: this.sleepTabsAfter as WritableSignal<unknown>,
+    searchSuggestions: this.searchSuggestions as WritableSignal<unknown>,
     trackingProtection: this.trackingProtection as WritableSignal<unknown>,
     globalPrivacyControl: this.globalPrivacyControl as WritableSignal<unknown>,
   };
@@ -104,6 +129,10 @@ export class SettingsStore {
     'astra.settings.new-tab-background',
     'astra.settings.new-tab-image',
     'astra.settings.history-days',
+    'astra.settings.startup',
+    'astra.settings.smart-screen',
+    'astra.settings.sleep-tabs',
+    'astra.settings.search-suggestions',
     'astra.settings.tracking-protection',
     'astra.settings.gpc',
   ];

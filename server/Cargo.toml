@@ -18,6 +18,8 @@ ureq = "3"
 base64 = "0.22"
 regex = "1"
 tauri-plugin-dialog = "2"
+# Розмір, положення й розгорнутість головного вікна між запусками.
+tauri-plugin-window-state = "2"
 # Наскрізне шифрування паролів для синхронізації: AES-256-GCM і HMAC (сам ключ з пароля — PBKDF2 Windows, secure.rs).
 aes-gcm = "0.10"
 hmac = "0.12"
@@ -30,7 +32,7 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 # Звук, іконки й дозволи сайтів — через WebView2 напряму, повноекранне вікно — через Win32 (ті самі версії, що й у Tauri/wry).
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Security_Cryptography", "Win32_System_Com", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Security_Cryptography", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-core = "0.62"
 
 # Рушій блокувальника реклами розбирає десятки тисяч правил — і в debug-збірці його варто оптимізувати.

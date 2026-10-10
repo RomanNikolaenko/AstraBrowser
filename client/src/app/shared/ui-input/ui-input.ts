@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   booleanAttribute,
+  computed,
   input,
   linkedSignal,
   model,
@@ -11,6 +12,13 @@ import {
 import { UiIcon } from '../ui-icon/ui-icon';
 
 export type UiInputType = 'text' | 'email' | 'password' | 'search' | 'url' | 'tel';
+
+/** Поле з випадним списком підказок (WAI-ARIA combobox): id списку, чи він відкритий і вибраний у ньому пункт. */
+export interface UiInputCombobox {
+  readonly controls: string;
+  readonly expanded: boolean;
+  readonly active: string | null;
+}
 
 let nextErrorId = 0;
 
@@ -48,6 +56,10 @@ export class UiInput {
   readonly type = input<UiInputType>('text');
   readonly placeholder = input<string>();
   readonly ariaLabel = input<string>();
+  /** id тексту-назви поряд (замість `<label for>`, наведення на який підсвічує поле). */
+  readonly ariaLabelledby = input<string>();
+  /** id тексту, що пояснює поле; помилка, коли вона є, додається до нього. */
+  readonly ariaDescribedby = input<string>();
   readonly autocomplete = input<string>();
   readonly spellcheck = input<boolean>();
   readonly enterKeyHint = input<string>();
@@ -56,8 +68,14 @@ export class UiInput {
   readonly shape = input<'rounded' | 'pill'>('rounded');
   /** Як адресний рядок браузера: поле, у яке щойно перейшли (кліком чи Tab), виділяє весь текст — можна одразу писати. */
   readonly selectOnFocus = input(false, { transform: booleanAttribute });
+  /** Поле — combobox зі списком підказок (адресний рядок). */
+  readonly combobox = input<UiInputCombobox | null>(null);
 
   protected readonly errorId = `ui-input-error-${nextErrorId++}`;
+  /** aria-describedby поля: пояснення поряд і помилка, якщо вона є. */
+  protected readonly describedBy = computed(
+    () => [this.ariaDescribedby(), this.error() ? this.errorId : null].filter(Boolean).join(' ') || null
+  );
 
   // Поки повідомлення згортається, показуємо попередній текст, а не порожній рядок.
   protected readonly shownError = linkedSignal<string | null | undefined, string | null>({
@@ -75,6 +93,15 @@ export class UiInput {
 
   select(): void {
     this.control().nativeElement.select();
+  }
+
+  blur(): void {
+    this.control().nativeElement.blur();
+  }
+
+  /** Виділяє частину тексту — дописане автодоповненням, щоб наступна літера його замінила. */
+  selectRange(start: number, end: number): void {
+    this.control().nativeElement.setSelectionRange(start, end);
   }
 
   protected onPointerDown(): void {

@@ -1,22 +1,53 @@
 <app-popover class="site-permissions" popoverId="site-permissions" align="start" caret (opened)="onOpened()">
   <h2 class="site-permissions__title">Дозволи для {{ host() }}</h2>
 
-  <div class="site-permissions__row">
-    <app-icon class="site-permissions__icon" icon="autoplay" />
-    <label class="site-permissions__label" for="site-permissions-autoplay">Автовідтворення</label>
-    <app-select
-      class="site-permissions__select"
-      selectId="site-permissions-autoplay"
-      selectName="autoplay"
-      [options]="choices"
-      [value]="autoplay() ?? 'block'"
-      [disabled]="autoplay() === null"
-      (valueChange)="setAutoplay($event)" />
+  <div class="site-permissions__list">
+    @for (row of rows; track row.kind) {
+      <div class="site-permissions__row">
+        <app-icon class="site-permissions__icon" [icon]="row.icon" />
+        <label class="site-permissions__label" [for]="'site-permissions-' + row.kind">{{ row.label }}</label>
+        <app-select
+          class="site-permissions__select"
+          [selectId]="'site-permissions-' + row.kind"
+          [selectName]="row.kind"
+          [options]="states"
+          [value]="stateOf(row.kind)"
+          [disabled]="permissions() === null"
+          (valueChange)="setPermission(row.kind, $event)" />
+      </div>
+    }
+
+    <div class="site-permissions__row">
+      <app-icon class="site-permissions__icon" icon="popup" />
+      <span class="site-permissions__label" id="site-permissions-popups-label">Спливні вікна</span>
+      <app-select
+        class="site-permissions__select"
+        selectId="site-permissions-popups"
+        ariaLabelledby="site-permissions-popups-label"
+        selectName="popups"
+        [options]="popupChoices"
+        [value]="popupsAllowed() ? 'allow' : 'deny'"
+        (valueChange)="setPopups($event)" />
+    </div>
+
+    <div class="site-permissions__row">
+      <app-icon class="site-permissions__icon" icon="autoplay" />
+      <span class="site-permissions__label" id="site-permissions-autoplay-label">Автовідтворення</span>
+      <app-select
+        class="site-permissions__select"
+        selectId="site-permissions-autoplay"
+        ariaLabelledby="site-permissions-autoplay-label"
+        selectName="autoplay"
+        [options]="choices"
+        [value]="autoplay() ?? 'block'"
+        [disabled]="autoplay() === null"
+        (valueChange)="setAutoplay($event)" />
+    </div>
   </div>
 
   @if (changed()) {
     <div class="site-permissions__notice" role="status">
-      <span>Діє одразу, а для відео, що вже на сторінці, — після перезавантаження</span>
+      <span>Діє одразу, а для того, що вже на сторінці, — після перезавантаження</span>
       <button class="site-permissions__reload" type="button" (click)="reload()">Перезавантажити</button>
     </div>
   }

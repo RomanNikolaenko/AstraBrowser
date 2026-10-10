@@ -59,6 +59,43 @@
     background: var(--browser-tab-active);
   }
 
+  // Закріплена — лише значок сайту.
+  &--pinned {
+    flex: 0 0 auto;
+    width: 3rem;
+    min-width: 3rem;
+
+    .tab__select {
+      justify-content: center;
+      padding: 0;
+    }
+
+    .tab__title,
+    .tab__audio {
+      display: none;
+    }
+  }
+
+  // Куди стане перетягнута вкладка — риска перед нею (чи після останньої).
+  &--drop-before::before,
+  &--drop-after::after {
+    position: absolute;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 0.1875rem;
+    content: '';
+    background: var(--browser-accent);
+    border-radius: 999px;
+  }
+
+  &--drop-before::before {
+    left: -0.1875rem;
+  }
+
+  &--drop-after::after {
+    right: -0.1875rem;
+  }
+
   &__select {
     display: flex;
     flex: 1;
@@ -79,6 +116,15 @@
 
     // Список вкладок обрізає все, що виходить за його межі, тож кільце — всередині.
     @include focus-ring(-0.25rem);
+
+    // Спляча вкладка — приглушена; та, що впала, — з перекресленим заголовком.
+    &--sleeping {
+      opacity: 0.6;
+    }
+
+    &--crashed .tab__title {
+      text-decoration: line-through;
+    }
   }
 
   &__favicon {
@@ -190,6 +236,11 @@
 }
 
 .omnibox {
+  flex: 1;
+
+  // Підказки (app-omnibox-suggestions) — під рядком і завширшки з нього.
+  anchor-name: --omnibox;
+
   --input-padding-start: 1rem;
   --input-padding-end: 0.25rem;
   --input-font-size: 0.9375rem;
@@ -200,8 +251,6 @@
   --input-icon: var(--browser-icon);
   --input-text: var(--browser-text);
   --input-placeholder: var(--browser-placeholder);
-
-  flex: 1;
 
   &__logo {
     flex: 0 0 auto;
@@ -224,6 +273,7 @@
 
   &__shield,
   &__site,
+  &__popup,
   &__pip,
   &__translate,
   &__action {
@@ -253,6 +303,7 @@
   &:has(+ * .is-open) .omnibox__action,
   &:has(~ app-site-permissions .is-open) .omnibox__site,
   &:has(~ app-tracking-panel .is-open) .omnibox__shield,
+  &:has(~ app-popup-blocked .is-open) .omnibox__popup,
   &:has(~ .toolbar__group app-translator .is-open) .omnibox__translate {
     background: var(--browser-pressed);
   }
@@ -353,5 +404,50 @@
 @container browser (width < 60rem) {
   .profile__chevron {
     display: none;
+  }
+}
+
+// Сторінка впала чи не відповідає: на місці webview — пояснення й «Перезавантажити».
+.crash {
+  display: grid;
+  gap: 0.75rem;
+  place-content: center;
+  justify-items: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+
+  &__icon {
+    width: 3rem;
+    height: 3rem;
+    color: var(--browser-muted);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  &__text {
+    max-width: 32rem;
+    margin: 0;
+    line-height: 1.5;
+    color: var(--browser-muted);
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  &__button {
+    @include pill-button(2.5rem);
+
+    &--primary {
+      @include primary-button;
+    }
   }
 }

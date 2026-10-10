@@ -20,6 +20,11 @@
     border-bottom: 0.0625rem solid var(--browser-divider);
   }
 
+  &__list {
+    display: grid;
+    gap: 0.5rem;
+  }
+
   &__row {
     display: flex;
     gap: 0.75rem;
@@ -41,6 +46,7 @@
     @include select-colors;
 
     flex: 0 0 auto;
+    min-width: 11rem;
   }
 
   &__notice {

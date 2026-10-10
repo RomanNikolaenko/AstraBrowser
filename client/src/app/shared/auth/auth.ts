@@ -108,6 +108,21 @@ export class AuthStore {
     this.apply(await invoke<AuthState>('auth_sign_in', { email, password, remember }));
   }
 
+  /** Лист із кодом для входу без пароля (обліковий запис уже має бути). */
+  sendSignInCode(email: string): Promise<void> {
+    return invoke('auth_send_sign_in_code', { email });
+  }
+
+  /** Код із листа — і вхід без пароля. */
+  async signInWithCode(email: string, code: string, remember: boolean): Promise<void> {
+    this.apply(await invoke<AuthState>('auth_sign_in_with_code', { email, code, remember }));
+  }
+
+  /** Вхід через Google в окремому вікні. Закрили вікно — помилка з кодом `cancelled`. */
+  async signInWithGoogle(remember: boolean): Promise<void> {
+    this.apply(await invoke<AuthState>('auth_google', { remember }));
+  }
+
   async signUp(name: string, email: string, password: string): Promise<SignUpResult> {
     const result = await invoke<SignUpResult>('auth_sign_up', { name, email, password });
     if (result.user) {

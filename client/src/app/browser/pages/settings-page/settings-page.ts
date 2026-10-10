@@ -3,7 +3,9 @@ import {
   HISTORY_RETENTION,
   SEARCH_ENGINES,
   SearchEngine,
+  SLEEP_TABS,
   SettingsStore,
+  StartupPage,
   TRACKING_PROTECTION,
   ThemePreference,
 } from '../../../shared/settings/settings';
@@ -63,10 +65,24 @@ export class SettingsPage {
     { value: 'dark', label: 'Темна', icon: 'moon' },
   ];
 
+  protected readonly startupOptions: readonly { readonly value: StartupPage; readonly label: string }[] = [
+    { value: 'restore', label: 'Продовжити, де зупинилися' },
+    { value: 'new-tab', label: 'Нову вкладку' },
+  ];
+
   protected readonly engines = Object.entries(SEARCH_ENGINES).map(([value, engine]) => ({
     value: value as SearchEngine,
     label: engine.label,
   }));
+
+  protected readonly sleepOptions = SLEEP_TABS.map((option) => ({ value: `${option.minutes}`, label: option.label }));
+
+  protected setSleepTabs(value: string | undefined): void {
+    const minutes = Number(value);
+    if (value !== undefined && Number.isFinite(minutes)) {
+      this.settings.sleepTabsAfter.set(minutes);
+    }
+  }
 
   protected readonly retention = HISTORY_RETENTION.map((option) => ({ value: `${option.days}`, label: option.label }));
 

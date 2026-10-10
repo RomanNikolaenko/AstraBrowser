@@ -9,6 +9,17 @@ const WINDOW_PREFIX = 'window-';
 const PRIVATE_PREFIX = 'private-';
 const GUEST_PREFIX = 'guest-';
 
+/** Параметри WebView2 — ті самі, що `BROWSER_ARGS` у server/src/main.rs. */
+const BROWSER_ARGS = '--disable-features=msWebOOUI,msPdfOOUI';
+
+/** Параметри нового вікна. `additionalBrowserArgs` Tauri приймає (WindowConfig), хоч у типах JS його й немає. */
+type WindowOptions = NonNullable<ConstructorParameters<typeof WebviewWindow>[1]> & { readonly additionalBrowserArgs: string };
+
+/** Звичайне вікно браузера (головне чи нове): його вкладки зберігаються між запусками. */
+export function isNormalWindow(label: string): boolean {
+  return label === 'main' || label.startsWith(WINDOW_PREFIX);
+}
+
 /** Яке вікно відкрити: звичайне, приватне чи гостьове. */
 export type WindowKind = 'normal' | 'private' | 'guest';
 
@@ -35,14 +46,20 @@ export class BrowserWindows {
    * Нове вікно одразу з головним екраном. Приватне — у режимі incognito
    * (InPrivate у WebView2): cookies, сховище й історія зникають, щойно вікно закрито.
    * Розгорнуте на весь екран, якщо розгорнуте поточне (застосунок і стартує розгорнутим).
+   * `session` — мітка вікна з минулого запуску: нове вікно продовжить його вкладки (browser/session).
    */
-  open({ private: isPrivate = false, guest = false } = {}): void {
+  open({
+    private: isPrivate = false,
+    guest = false,
+    session,
+    url,
+  }: { private?: boolean; guest?: boolean; session?: string; url?: string } = {}): void {
     if (!isTauri()) {
       // Поза Tauri (ng serve у звичайному браузері) приватності не відтворити — просто нова вкладка.
-      window.open('/home', '_blank', 'noopener');
+      window.open(url ?? '/home', '_blank', 'noopener');
       return;
     }
-    void this.openWindow(guest ? 'guest' : isPrivate ? 'private' : 'normal');
+    void this.openWindow(guest ? 'guest' : isPrivate ? 'private' : 'normal', session, url);
   }
 
   /** Закрити поточне вікно (вийти з гостьового режиму). */
@@ -52,14 +69,15 @@ export class BrowserWindows {
     }
   }
 
-  private async openWindow(kind: WindowKind): Promise<void> {
+  private async openWindow(kind: WindowKind, session?: string, url?: string): Promise<void> {
     const maximized = await getCurrentWindow()
       .isMaximized()
       .catch(() => false);
     const { prefix, title } = WINDOWS[kind];
     const label = `${prefix}${crypto.randomUUID()}`;
-    const webview = new WebviewWindow(label, {
-      url: '/home',
+    const options: WindowOptions = {
+      // ?session= — продовжити вкладки вікна з минулого запуску, ?url= — одразу відкрити сайт (посилання з меню сайту).
+      url: session ? `/home?session=${encodeURIComponent(session)}` : url ? `/home?url=${encodeURIComponent(url)}` : '/home',
       title,
       width: 1280,
       height: 600,
@@ -71,7 +89,11 @@ export class BrowserWindows {
       // Інакше у Windows Tauri забирає собі перетягування, і в інтерфейсі воно не працює (закладки).
       dragDropEnabled: false,
       incognito: kind !== 'normal',
-    });
+      // Як у головного вікна (server/src/main.rs, BROWSER_ARGS): одна тека даних — однакові параметри WebView2,
+      // і SmartScreen не вимкнено.
+      additionalBrowserArgs: BROWSER_ARGS,
+    };
+    const webview = new WebviewWindow(label, options);
     void webview.once('tauri://error', (event) => console.error('Failed to open a window', event.payload));
   }
 

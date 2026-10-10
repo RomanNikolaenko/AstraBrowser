@@ -4,6 +4,7 @@ import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
 import { PasswordPromptRequest } from '../data/passwords';
+import type { PermissionKind, PermissionState } from '../data/permissions';
 import type { BlockedTracker, TrackingRules } from '../data/tracking';
 
 export interface PageBounds {
@@ -40,9 +41,44 @@ export interface PageFaviconEvent {
   readonly icon: string;
 }
 
+/** Процес сторінки впав чи не відповідає (server/src/page_events.rs). */
+export interface PageCrashedEvent {
+  readonly label: string;
+  readonly failure: PageFailure;
+}
+
+export type PageFailure = 'exited' | 'unresponsive' | 'browser';
+
+/** Сайт просить дозвіл (камера, мікрофон…). */
+export interface PagePermissionEvent {
+  readonly label: string;
+  readonly id: number;
+  readonly kind: PermissionKind;
+  readonly origin: string;
+  readonly userInitiated: boolean;
+}
+
+/** Дія браузера з контекстного меню сайту. */
+export interface PageContextEvent {
+  readonly label: string;
+  readonly action:
+    | 'open-link-tab'
+    | 'open-link-window'
+    | 'open-link-private'
+    | 'open-image-tab'
+    | 'search'
+    | 'translate-text'
+    | 'translate-page'
+    | 'screenshot';
+  readonly url?: string;
+  readonly text?: string;
+}
+
 export interface PageNewTabEvent {
   readonly label: string;
   readonly url: string;
+  /** Після кліку користувача; `false` — спливне вікно, яке браузер блокує. */
+  readonly userInitiated?: boolean;
 }
 
 /** Завантаження зі сторінки чекає відповіді, куди зберегти файл. */
@@ -104,6 +140,12 @@ export interface PageTrackersEvent {
   readonly trackers: readonly BlockedTracker[];
 }
 
+/** Сайт хоче відкрити посилання програмою: mailto:, tel:… (server/src/external.rs). */
+export interface PageExternalEvent {
+  readonly label: string;
+  readonly url: string;
+}
+
 /** Гаряча клавіша браузера, натиснута, поки фокус у сайті (server/src/webview2.rs, watch_shortcuts). */
 export interface PageShortcutEvent {
   readonly label: string;
@@ -135,6 +177,10 @@ interface PageEvents {
   'page://download-prompt': PageDownloadPromptEvent;
   'page://adblock': PageAdBlockEvent;
   'page://trackers': PageTrackersEvent;
+  'page://external': PageExternalEvent;
+  'page://crashed': PageCrashedEvent;
+  'page://permission': PagePermissionEvent;
+  'page://context': PageContextEvent;
   'page://shortcut': PageShortcutEvent;
   'page://password-prompt': PagePasswordPromptEvent;
   'page://passwords-manage': PagePasswordsManageEvent;
@@ -262,6 +308,45 @@ export class PageViews {
   /** Правила автовідтворення — для всіх сайтів вікна: відкритим сторінкам одразу, а відео, що вже на них, — після перезавантаження. */
   setAudioRules(rules: AutoplayRules): Promise<void> {
     return invoke('page_set_audio_rules', { rules });
+  }
+
+  /** Підказки пошукової системи для введеного в адресному рядку (server/src/suggest.rs); без мережі — порожньо. */
+  searchSuggestions(engine: string, query: string): Promise<string[]> {
+    return invoke<string[]>('search_suggestions', { engine, query });
+  }
+
+  /** Присипляє приховану фонову вкладку; `true` — заснула. */
+  suspend(label: string): Promise<boolean> {
+    return invoke<boolean>('page_suspend', { label });
+  }
+
+  /** Вкладка у фоні — WebView2 тримає її в меншій пам'яті. */
+  setBackground(label: string, background: boolean): Promise<void> {
+    return invoke('page_set_background', { label, background });
+  }
+
+  /** Відповідь на запит дозволу сайту; `remember` — запам'ятати для сайту. */
+  answerPermission(id: number, state: PermissionState, remember: boolean): Promise<void> {
+    return invoke('page_permission_answer', { id, state, remember });
+  }
+
+  /** Збережені дозволи сайту вкладки: дозвіл → стан. */
+  permissions(label: string): Promise<Readonly<Record<string, PermissionState>>> {
+    return invoke('page_permissions', { label });
+  }
+
+  setPermission(label: string, kind: PermissionKind, state: PermissionState): Promise<void> {
+    return invoke('page_set_permission', { label, kind, state });
+  }
+
+  /** Назва програми Windows, що відкриє посилання (mailto:, tg:…); null — такої немає. */
+  externalApp(url: string): Promise<string | null> {
+    return invoke<string | null>('external_app', { url });
+  }
+
+  /** Відкриває посилання (mailto:, tel:…) програмою Windows — лише після згоди користувача. */
+  openExternal(url: string): Promise<void> {
+    return invoke('open_external', { url });
   }
 
   /** Правила захисту від стеження для всіх сайтів вікна: запитам — одразу, а куки й GPC — і сторінкам, що вже відкриті. */

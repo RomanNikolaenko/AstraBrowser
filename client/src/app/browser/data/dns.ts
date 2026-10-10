@@ -1,6 +1,7 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { UiSelectOption } from '../../shared/ui-select/ui-select';
+import { SessionStore } from '../session/session';
 
 /** Режим DNS через HTTPS (server/src/dns.rs, Mode). */
 export type DnsMode = 'default' | 'increased' | 'max' | 'off';
@@ -53,6 +54,7 @@ export const DNS_PROVIDERS: readonly UiSelectOption<DnsProvider>[] = [
 @Injectable({ providedIn: 'root' })
 export class DnsStore {
   readonly available = isTauri();
+  private readonly session = inject(SessionStore);
   /** null — ще не прочитано. */
   readonly state = signal<DnsState | null>(null);
 
@@ -66,7 +68,9 @@ export class DnsStore {
     this.state.set(await invoke<DnsState>('dns_set', { settings }));
   }
 
+  /** Перезапуск браузера: вікна закриваються й відкриваються знову — з тими самими вкладками. */
   restart(): Promise<void> {
+    this.session.restoreOnce();
     return invoke('dns_restart');
   }
 }

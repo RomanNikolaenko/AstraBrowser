@@ -28,10 +28,11 @@
       [error]="url.visibleError()" />
     @if (folderOptions().length > 1) {
       <div class="bookmark-editor__folder">
-        <label class="bookmark-editor__label" for="bookmark-editor-folder">Тека</label>
+        <span class="bookmark-editor__label" id="bookmark-editor-folder-label">Тека</span>
         <app-select
           class="bookmark-editor__select"
           selectId="bookmark-editor-folder"
+          ariaLabelledby="bookmark-editor-folder-label"
           selectName="folder"
           [options]="folderOptions()"
           [(value)]="folder" />

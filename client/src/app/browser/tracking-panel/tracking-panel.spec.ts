@@ -134,6 +134,6 @@ describe('TrackingStore', () => {
 
     tracking.setProtected('https://shop.example.net/', false);
     tracking.removeException('shop.example.net');
-    expect(tracking.rules()).toEqual({ level: 'standard', gpc: true, exceptions: [] });
+    expect(tracking.rules()).toEqual({ level: 'standard', gpc: true, exceptions: [], smartScreen: true });
   });
 });

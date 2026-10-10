@@ -7,8 +7,8 @@
 //! показують світлу.
 //!
 //! Змінні — як у Supabase (Go-шаблони): `{{ .Token }}` — код, `{{ .Email }}` — пошта… Частину листів надсилає сам
-//! Supabase (його шаблони Authentication → Emails), решту надсилатиме наш сервер — він підставлятиме змінні в тому
-//! самому вигляді. Скрізь код, а не посилання: браузер просить ввести код, сайту з посиланнями в нього немає.
+//! Supabase (його шаблони Authentication → Emails), решту — наш сервер, функція supabase/functions/notify: генератор
+//! пише для неї templates.ts, а вона підставляє змінні в тому самому вигляді. Скрізь код, а не посилання: браузер просить ввести код, сайту з посиланнями в нього немає.
 //! Ім'я з реєстрації — лише в листі, який надсилають уже після підтвердження пошти (зареєструватися на чужу пошту
 //! може будь-хто, тож у лист до чужої людини не має потрапити текст, який він написав).
 //!
@@ -24,6 +24,8 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 
 /// Куди записати листи — відносно теки server.
 const OUTPUT: &str = "../supabase/templates";
+/// Листи нашого сервера для функції notify — відносно теки server.
+const SERVER_TEMPLATES: &str = "../supabase/functions/notify/templates.ts";
 
 /// Логотип застосунку (відносно теки server) і де його беруть листи: публічний бакет `email` у Supabase Storage.
 const LOGO_SOURCE: &str = "icons/128x128.png";
@@ -220,8 +222,8 @@ fn danger(text: &str) -> String {
 enum Sender {
   /// Сам Supabase: назва шаблону в Authentication → Emails.
   Supabase(&'static str),
-  /// Наш сервер (ще не зроблений): коли саме.
-  Server(&'static str),
+  /// Наш сервер (supabase/functions/notify): вид листа, з яким його просять надіслати, і коли саме.
+  Server(&'static str, &'static str),
   /// Лист не надсилається: чому.
   Unused(&'static str),
 }
@@ -230,7 +232,7 @@ impl Sender {
   fn describe(&self) -> String {
     match self {
       Sender::Supabase(template) => format!("Supabase — шаблон «{template}»"),
-      Sender::Server(when) => format!("наш сервер — {when}"),
+      Sender::Server(_, when) => format!("наш сервер — {when}"),
       Sender::Unused(why) => format!("не надсилається — {why}"),
     }
   }
@@ -284,7 +286,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "02-welcome.html",
-      sender: Sender::Server("одразу після того, як пошту підтвердили кодом"),
+      sender: Sender::Server("welcome", "одразу після того, як пошту підтвердили кодом, чи після першого входу через Google"),
       subject: "Ласкаво просимо до Astra Browser",
       preheader: "Обліковий запис готовий: ваші дані тепер з вами на кожному комп’ютері.",
       heading: "Ваш Astra готовий",
@@ -338,7 +340,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "05-new-sign-in.html",
-      sender: Sender::Server("після кожного входу з нового пристрою чи місця"),
+      sender: Sender::Server("new-sign-in", "після входу з незнайомого місця (IP) на вже знайомому комп’ютері"),
       subject: "Новий вхід в Astra Browser",
       preheader: "У ваш обліковий запис Astra Browser щойно ввійшли.",
       heading: "Новий вхід у ваш обліковий запис",
@@ -366,7 +368,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "07-new-device.html",
-      sender: Sender::Server("коли новий пристрій уперше синхронізується"),
+      sender: Sender::Server("new-device", "після першого входу на комп’ютері, де цей обліковий запис ще не входив"),
       subject: "Новий пристрій синхронізується з Astra Browser",
       preheader: "До вашого облікового запису Astra Browser підключився новий пристрій.",
       heading: "Новий пристрій підключено",
@@ -421,7 +423,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "10-account-deleted.html",
-      sender: Sender::Server("одразу після видалення облікового запису"),
+      sender: Sender::Server("account-deleted", "одразу після видалення облікового запису"),
       subject: "Обліковий запис Astra Browser видалено",
       preheader: "Ваш обліковий запис Astra Browser і його дані видалено.",
       heading: "Обліковий запис видалено",
@@ -569,6 +571,27 @@ fn escape_attribute(text: &str) -> String {
   text.replace('&', "&amp;").replace('"', "&quot;")
 }
 
+/// templates.ts для функції notify: листи нашого сервера за видом — тема й HTML.
+fn server_templates(emails: &[Email]) -> String {
+  let entries: String = emails
+    .iter()
+    .filter_map(|email| match email.sender {
+      Sender::Server(kind, _) => Some(format!(
+        "  {}: {{\n    subject: {},\n    html: {},\n  }},\n",
+        serde_json::to_string(kind).expect("рядок"),
+        serde_json::to_string(email.subject).expect("рядок"),
+        serde_json::to_string(&render(email, Theme::Auto)).expect("рядок"),
+      )),
+      _ => None,
+    })
+    .collect();
+  format!(
+    "// Згенеровано server/examples/email_templates.rs — правте генератор, а не цей файл.\n\n\
+     export const TEMPLATES = {{\n{entries}}} as const;\n\n\
+     export type Template = keyof typeof TEMPLATES;\n"
+  )
+}
+
 /// Сторінка, де кожен лист — у світлій і темній темі поруч.
 fn preview(emails: &[Email], logo: &str) -> String {
   let sections: String = emails
@@ -634,8 +657,9 @@ fn readme(emails: &[Email]) -> String {
      ## Як підключати\n\n\
      - **Supabase**: Authentication → Emails → шаблон із таблиці: тему — у Subject, увесь файл — у Body. «Password changed» \
      спершу ввімкнути в Security notifications.\n\
-     - **Наш сервер** (ще не зроблений): підставляє змінні в тому самому вигляді (`{{{{ .Email }}}}` тощо), а кожне значення \
-     спершу HTML-екранує. `{{{{ .Name }}}}` — ім'я з облікового запису; якщо його немає — частина пошти до @.\n\
+     - **Наш сервер** — Edge Function [notify](../functions/notify/index.ts), як розгорнути — у її \
+     [README](../functions/notify/README.md). Бере ці листи з templates.ts, підставляє змінні в тому самому вигляді \
+     (`{{{{ .Email }}}}` тощо), а кожне значення спершу HTML-екранує. `{{{{ .Name }}}}` — ім'я з облікового запису; якщо його немає — частина пошти до @.\n\
      - «Код діє одну годину» — типовий термін коду в Supabase (Email OTP Expiration = 3600 с). Змінили термін — поправте \
      тексти в генераторі.\n\n\
      ## Логотип\n\n\
@@ -659,6 +683,12 @@ fn main() -> std::io::Result<()> {
   fs::write(output.join("preview.html"), preview(&emails, &logo))?;
   fs::write(output.join("README.md"), readme(&emails))?;
   println!("logo.png, preview.html, README.md");
+  let server = Path::new(env!("CARGO_MANIFEST_DIR")).join(SERVER_TEMPLATES);
+  if let Some(parent) = server.parent() {
+    fs::create_dir_all(parent)?;
+  }
+  fs::write(&server, server_templates(&emails))?;
+  println!("{SERVER_TEMPLATES}");
   Ok(())
 }
 
@@ -668,6 +698,8 @@ mod tests {
 
   /// Змінні, які Supabase підставляє в шаблони, що нам потрібні.
   const SUPABASE_VARIABLES: [&str; 3] = ["{{ .Token }}", "{{ .Email }}", "{{ .NewEmail }}"];
+  /// Змінні, які підставляє функція notify (supabase/functions/notify/index.ts).
+  const SERVER_VARIABLES: [&str; 6] = ["{{ .Email }}", "{{ .Name }}", "{{ .Date }}", "{{ .Device }}", "{{ .Location }}", "{{ .Ip }}"];
 
   /// Усі `{{ … }}` у тексті.
   fn variables_in(html: &str) -> Vec<&str> {
@@ -695,6 +727,11 @@ mod tests {
       if matches!(email.sender, Sender::Supabase(_)) {
         for variable in email.variables {
           assert!(SUPABASE_VARIABLES.contains(variable), "{}: Supabase не знає {variable}", email.file);
+        }
+      }
+      if matches!(email.sender, Sender::Server(..)) {
+        for variable in email.variables {
+          assert!(SERVER_VARIABLES.contains(variable), "{}: функція notify не знає {variable}", email.file);
         }
       }
     }

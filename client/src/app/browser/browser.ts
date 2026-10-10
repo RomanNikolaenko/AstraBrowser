@@ -15,10 +15,11 @@ import {
 } from '@angular/core';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { BrowserWindows } from '../shared/browser-windows/browser-windows';
+import { getAllWebviewWindows } from '@tauri-apps/api/webviewWindow';
+import { BrowserWindows, isNormalWindow } from '../shared/browser-windows/browser-windows';
 import { normalizeUrl } from '../shared/form-field/form-field';
 import { MiddleClick } from '../shared/middle-click/middle-click';
-import { SettingsStore } from '../shared/settings/settings';
+import { SEARCH_ENGINES, SettingsStore } from '../shared/settings/settings';
 import { UiIcon } from '../shared/ui-icon/ui-icon';
 import { UiInput } from '../shared/ui-input/ui-input';
 import { TitlebarContent } from '../shared/titlebar/titlebar-content';
@@ -29,6 +30,7 @@ import { BookmarkEditor } from './bookmark-editor/bookmark-editor';
 import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
 import { DownloadsStore } from './data/downloads';
+import { ExternalAppsStore, schemeOf } from './data/external-apps';
 import { PasswordsStore } from './data/passwords';
 import { BlockedTracker, TrackingStore } from './data/tracking';
 import { DownloadPrompt } from './download-prompt/download-prompt';
@@ -48,6 +50,11 @@ import { FindBar } from './find-bar/find-bar';
 import { NewTab } from './new-tab/new-tab';
 import {
   PageAdBlockEvent,
+  PageExternalEvent,
+  PageCrashedEvent,
+  PageFailure,
+  PagePermissionEvent,
+  PageContextEvent,
   PageTrackersEvent,
   PageAudioEvent,
   PageBounds,
@@ -76,6 +83,15 @@ import { SettingsPage } from './pages/settings-page/settings-page';
 import { ProfileMenu } from './profile-menu/profile-menu';
 import { ReloadMenu } from './reload-menu/reload-menu';
 import { SiteIcon } from './site-icon/site-icon';
+import { ExternalPrompt } from './external-prompt/external-prompt';
+import { PermissionPrompt } from './permission-prompt/permission-prompt';
+import { TabMenu, TabMenuAction, TabMenuTarget } from './tab-menu/tab-menu';
+import { PopupBlocked } from './popup-blocked/popup-blocked';
+import { PermissionsStore } from './data/permissions';
+import { translatePageUrl, translateTextUrl } from './translator/translate-urls';
+import { SavedSession, SavedTab, SessionStore } from './session/session';
+import { OmniboxSuggestions, SUGGESTIONS_ID, suggestionId } from './omnibox/omnibox-suggestions';
+import { Suggestion, inlineCompletion, localSuggestions, withSearchSuggestions } from './omnibox/suggestions';
 import { SitePermissions } from './site-permissions/site-permissions';
 import { TrackingPanel } from './tracking-panel/tracking-panel';
 import { ToolAction, ToolsMenu } from './tools-menu/tools-menu';
@@ -101,6 +117,17 @@ interface Site {
   readonly blocked: number;
   /** Елементи стеження, які захист від стеження заблокував на поточній сторінці. */
   readonly trackers: readonly BlockedTracker[];
+  /** Процес сторінки впав чи не відповідає — замість неї екран «Сторінка аварійно завершила роботу». */
+  readonly crashed?: PageFailure;
+  /** Фонову вкладку приспано, щоб звільнити пам'ять (прокинеться, щойно її відкриють). */
+  readonly sleeping?: boolean;
+  /** Спливні вікна, які сторінка хотіла відкрити без кліку користувача. */
+  readonly blockedPopups?: readonly string[];
+  /**
+   * Вкладку відновлено з минулого запуску, а сайт ще не завантажено: webview створиться, щойно вкладку відкриють
+   * (як у Chrome й Edge — інакше десяток вкладок одразу забрав би десяток webview).
+   */
+  readonly pending?: boolean;
 }
 
 /** Закрита вкладка, яку можна відкрити знову (Ctrl+Shift+T): що в ній було і де вона стояла. */
@@ -118,6 +145,8 @@ interface BrowserTab {
   readonly id: number;
   readonly page: TabPage | 'web';
   readonly site?: Site;
+  /** Закріплена: завжди ліворуч, лише значок, без кнопки «Закрити». */
+  readonly pinned?: boolean;
   /** Внутрішня сторінка, з якої в цій вкладці перейшли на сайт: «Назад» з першої сторінки сайту повертає на неї. */
   readonly back?: TabPage;
   /** Сайт, з якого «Назад» повернув на внутрішню сторінку: «Вперед» відкриває його знову. */
@@ -137,12 +166,17 @@ interface BrowserTab {
     DownloadsPage,
     ExtensionsMenu,
     ExtensionsPage,
+    ExternalPrompt,
+    PermissionPrompt,
+    PopupBlocked,
+    TabMenu,
     FindBar,
     HelpPage,
     HistoryPage,
     MiddleClick,
     NewTab,
     NotesPage,
+    OmniboxSuggestions,
     PasswordPrompt,
     PasswordsPage,
     PersonalizationPage,
@@ -180,6 +214,36 @@ export class Browser {
   private readonly favicons = inject(FaviconStore);
   private readonly autoplay = inject(AutoplayStore);
   private readonly tracking = inject(TrackingStore);
+  private readonly externalApps = inject(ExternalAppsStore);
+  private readonly permissions = inject(PermissionsStore);
+  private readonly translateLanguage = inject(TranslateLanguageStore);
+  /** Адресний рядок як елемент — під ним запитання дозволів сайтів. */
+  protected readonly omniboxHost = viewChild('omnibox', { read: ElementRef });
+  /** Коли фонову сторінку (мітка webview) востаннє бачили — від цього вона засинає. */
+  private readonly lastSeen = new Map<string, number>();
+  /** Сторінка, що зараз на передньому плані (у пам'яті як звичайна). */
+  private foregroundPage: string | null = null;
+  /** Вкладка, для якої відкрито меню вкладки. */
+  private readonly menuTabId = signal<number | null>(null);
+  protected readonly menuTarget = computed<TabMenuTarget>(() => {
+    const tabs = this.tabs();
+    const index = tabs.findIndex((tab) => tab.id === this.menuTabId());
+    const tab = tabs[index];
+    return {
+      pinned: !!tab?.pinned,
+      site: !!tab?.site,
+      muted: !!tab?.site?.muted,
+      others: tabs.length > 1,
+      right: index >= 0 && tabs.slice(index + 1).some((other) => !other.pinned),
+    };
+  });
+  private readonly tabMenu = viewChild.required(TabMenu);
+  /** Вкладка, яку зараз перетягують з цього вікна, і чи її вже прийняло саме це вікно. */
+  private draggedTab: number | null = null;
+  private droppedHere = false;
+  /** Куди стане перетягнута вкладка (перед якою за номером) — там видно риску. */
+  protected readonly dropIndex = signal<number | null>(null);
+  private readonly session = inject(SessionStore);
   private readonly injector = inject(Injector);
 
   protected readonly settings = inject(SettingsStore);
@@ -200,6 +264,46 @@ export class Browser {
 
   /** Текст адресного рядка: адреса поточної вкладки, доки користувач не почав її редагувати. */
   protected readonly omniboxText = linkedSignal(() => this.tabUrl(this.activeTab()));
+
+  /** Підказки під адресним рядком: відкриті, поки в ньому друкують. */
+  protected readonly suggestionsOpen = signal(false);
+  /** Що надрукував сам користувач — без автодоповнення й без підказки, на яку перейшли стрілками. */
+  private readonly typed = signal('');
+  /** Підказка, на яку перейшли стрілками (її текст тоді в рядку); -1 — надруковане. */
+  protected readonly selectedSuggestion = signal(-1);
+  /** Підказки пошукової системи — для якого саме запиту вони прийшли. */
+  private readonly remoteSuggestions = signal<{ readonly query: string; readonly items: readonly string[] }>({
+    query: '',
+    items: [],
+  });
+  /** Автодоповнення в рядку: який текст дописано й куди він веде. */
+  private inline: { readonly text: string; readonly url: string } | null = null;
+  private readonly localSuggestions = computed(() => {
+    if (!this.suggestionsOpen()) {
+      return [];
+    }
+    const active = this.activeTab();
+    return localSuggestions(this.typed(), {
+      history: this.history.entries(),
+      bookmarks: this.bookmarks.entries(),
+      tabs: this.tabs()
+        .filter((tab) => tab.id !== active.id && tab.site)
+        .map((tab) => ({ id: tab.id, title: this.tabTitle(tab), url: this.tabUrl(tab) })),
+      engine: SEARCH_ENGINES[this.settings.searchEngine()].label,
+    });
+  });
+  protected readonly suggestions = computed<readonly Suggestion[]>(() => {
+    const local = this.localSuggestions();
+    const remote = this.remoteSuggestions();
+    return remote.query && remote.query === this.typed()
+      ? withSearchSuggestions(this.typed(), local, remote.items, SEARCH_ENGINES[this.settings.searchEngine()].label)
+      : local;
+  });
+  protected readonly omniboxCombobox = computed(() => ({
+    controls: SUGGESTIONS_ID,
+    expanded: this.suggestionsOpen() && this.suggestions().length > 0,
+    active: this.selectedSuggestion() >= 0 ? suggestionId(this.selectedSuggestion()) : null,
+  }));
 
   /** На сторінці відео YouTube — кнопка «Картинка в картинці» в адресному рядку. */
   protected readonly canPictureInPicture = computed(() => {
@@ -269,7 +373,8 @@ export class Browser {
 
   private readonly visiblePage = computed(() => {
     const tab = this.activeTab();
-    return tab.page === 'web' && !this.overlayOpen() ? this.pageLabel(tab) : null;
+    // Сторінка, що впала чи не відповідає, ховається — на її місці екран з кнопкою «Перезавантажити».
+    return tab.page === 'web' && !this.overlayOpen() && !tab.site?.crashed ? this.pageLabel(tab) : null;
   });
 
   /**
@@ -292,6 +397,8 @@ export class Browser {
 
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   private readonly windowLabel = isTauri() ? getCurrentWindow().label : 'web';
+  /** Звичайне вікно застосунку: його вкладки зберігаються й відновлюються (SessionStore); приватне й гостьове — ні. */
+  private readonly keepsSession = this.pageViews.available && !this.windows.isPrivate && !this.windows.isGuest;
   private shownPage: string | null = null;
   private nextTabId = 2;
   /** Скільки webview сайтів уже створила кожна вкладка — для неповторних міток. */
@@ -301,9 +408,9 @@ export class Browser {
     const destroyRef = inject(DestroyRef);
     // Дані облікового запису синхронізуються, поки відкритий браузер (веде одне вікно — browser/sync).
     this.sync.start();
-    // Мова перекладу виділеного на сайтах — браузеру одразу, а не лише тоді, як відкриють «Перекладач».
-    inject(TranslateLanguageStore);
     const injector = this.injector;
+    this.restoreSession();
+    this.openRequestedUrl();
 
     // Меню оновлення — про сайт, на якому його відкрили: інша вкладка чи не сайт — закриваємо.
     effect(() => {
@@ -327,7 +434,36 @@ export class Browser {
     const activePage = computed(() => `${this.activeTab().id}:${this.activeTab().page}:${this.activeTab().site?.url ?? ''}`);
     effect(() => {
       activePage();
-      untracked(() => this.findOpen.set(false));
+      untracked(() => {
+        this.findOpen.set(false);
+        this.closeSuggestions();
+      });
+    });
+
+    // Підказки пошукової системи — коли друкувати перестали на 150 мс (не на кожну літеру).
+    effect((onCleanup) => {
+      const query = this.typed();
+      const engine = this.settings.searchEngine();
+      if (
+        !this.suggestionsOpen() ||
+        !this.pageViews.available ||
+        !this.settings.searchSuggestions() ||
+        !query.trim() ||
+        /^[a-z][a-z\d+.-]*:\/\//i.test(query.trim())
+      ) {
+        return;
+      }
+      const timer = setTimeout(() => {
+        this.pageViews
+          .searchSuggestions(engine, query)
+          .then((items) => {
+            if (this.typed() === query) {
+              this.remoteSuggestions.set({ query, items });
+            }
+          })
+          .catch(() => undefined);
+      }, 150);
+      onCleanup(() => clearTimeout(timer));
     });
 
     effect(() => {
@@ -420,6 +556,24 @@ export class Browser {
         const rules = this.autoplay.rules();
         untracked(() => this.ignore(this.pageViews.setAudioRules(rules)));
       });
+      // Відновлена вкладка: її сайт вантажиться, щойно вкладку відкрили.
+      effect(() => {
+        const tab = this.activeTab();
+        if (tab.site?.pending) {
+          untracked(() => this.loadPendingSite(tab));
+        }
+      });
+      if (this.keepsSession) {
+        this.keepSession(destroyRef);
+      }
+      // Сплячі вкладки: фонова сторінка — у меншій пам'яті, а неактивна довше, ніж вибрано в налаштуваннях, засинає.
+      effect(() => {
+        const tab = this.activeTab();
+        const label = tab.site && !tab.site.pending ? tab.site.label : null;
+        untracked(() => this.bringToFront(tab, label));
+      });
+      const sleepTimer = setInterval(() => this.sleepInactiveTabs(), 60_000);
+      destroyRef.onDestroy(() => clearInterval(sleepTimer));
       // Захист від стеження (рівень, GPC, винятки) — для запитів і сторінок цього вікна.
       effect(() => {
         const rules = this.tracking.rules();
@@ -452,6 +606,10 @@ export class Browser {
         this.pageViews.on('page://download-prompt', (event) => this.downloads.ask(event)),
         this.pageViews.on('page://adblock', (event) => this.onPageAdBlock(event)),
         this.pageViews.on('page://trackers', (event) => this.onPageTrackers(event)),
+        this.pageViews.on('page://external', (event) => void this.onPageExternal(event)),
+        this.pageViews.on('page://crashed', (event) => this.onPageCrashed(event)),
+        this.pageViews.on('page://permission', (event) => this.onPagePermission(event)),
+        this.pageViews.on('page://context', (event) => this.onPageContext(event)),
         this.pageViews.on('page://shortcut', (event) => this.onPageShortcut(event)),
         this.pageViews.on('page://password-prompt', (event) => this.passwords.ask(event)),
         this.pageViews.on('page://passwords-manage', () => this.openPage('passwords')),
@@ -514,7 +672,227 @@ export class Browser {
     this.activeTabId.set(tab.id);
   }
 
-  protected closeTab(id: number): void {
+  /** Меню вкладки (правий клік). */
+  protected showTabMenu(event: MouseEvent, tab: BrowserTab): void {
+    event.preventDefault();
+    this.menuTabId.set(tab.id);
+    this.tabMenu().show(event);
+  }
+
+  protected runTabMenu(action: TabMenuAction): void {
+    const tabs = this.tabs();
+    const index = tabs.findIndex((tab) => tab.id === this.menuTabId());
+    const tab = tabs[index];
+    if (!tab) {
+      return;
+    }
+    switch (action) {
+      case 'new-tab-right': {
+        const added = this.createNewTab();
+        this.insertTab(added, index + 1);
+        this.activeTabId.set(added.id);
+        break;
+      }
+      case 'reload':
+        if (tab.site && !tab.site.pending) {
+          this.ignore(this.pageViews.reload(tab.site.label));
+        }
+        break;
+      case 'duplicate':
+        this.duplicateTab(tab, index);
+        break;
+      case 'pin':
+      case 'unpin':
+        this.setPinned(tab.id, action === 'pin');
+        break;
+      case 'mute':
+      case 'unmute':
+        this.toggleMute(tab);
+        break;
+      case 'new-window':
+        this.moveToNewWindow(tab);
+        break;
+      case 'close':
+        this.closeTab(tab.id);
+        break;
+      case 'close-others':
+        // Як у Chrome: закріплені лишаються.
+        for (const other of tabs.filter((item) => item.id !== tab.id && !item.pinned)) {
+          this.closeTab(other.id);
+        }
+        break;
+      case 'close-right':
+        for (const other of tabs.slice(index + 1).filter((item) => !item.pinned)) {
+          this.closeTab(other.id);
+        }
+        break;
+    }
+  }
+
+  /** Закріплена вкладка — ліворуч, серед закріплених (у кінці їх), відкріплена — одразу після них. */
+  protected setPinned(id: number, pinned: boolean): void {
+    const tabs = this.tabs();
+    const tab = tabs.find((item) => item.id === id);
+    if (!tab || !!tab.pinned === pinned) {
+      return;
+    }
+    const rest = tabs.filter((item) => item.id !== id);
+    const pinnedCount = rest.filter((item) => item.pinned).length;
+    this.tabs.set([...rest.slice(0, pinnedCount), { ...tab, pinned }, ...rest.slice(pinnedCount)]);
+  }
+
+  private duplicateTab(tab: BrowserTab, index: number): void {
+    const copy: BrowserTab = tab.site ? this.createNewTab() : { id: this.nextTabId++, page: tab.page };
+    this.insertTab(copy, index + 1);
+    this.activeTabId.set(copy.id);
+    if (tab.site) {
+      this.openSite(tab.site.url, copy);
+    }
+  }
+
+  /** Вкладка на місце `index`, не порушуючи порядку: закріплені — завжди перші. */
+  private insertTab(tab: BrowserTab, index: number): void {
+    const tabs = this.tabs();
+    const pinnedCount = tabs.filter((item) => item.pinned).length;
+    const at = tab.pinned ? Math.min(index, pinnedCount) : Math.max(index, pinnedCount);
+    this.tabs.set([...tabs.slice(0, at), tab, ...tabs.slice(at)]);
+  }
+
+  /** Вкладка як її переносять між вікнами й зберігають між запусками. */
+  private savedTab(tab: BrowserTab): SavedTab {
+    const pinned = tab.pinned ? { pinned: true } : {};
+    return tab.site ? { page: 'web', url: tab.site.url, title: tab.site.title, ...pinned } : { page: tab.page, ...pinned };
+  }
+
+  /** Вкладка з перенесеної (з іншого вікна чи з минулого запуску): сайт завантажиться, щойно її відкриють. */
+  private tabFromSaved(item: SavedTab): BrowserTab | null {
+    const id = this.nextTabId++;
+    const pinned = item.pinned ? { pinned: true } : {};
+    if (item.page === 'web' && item.url && /^https?:/i.test(item.url)) {
+      const label = this.newPageLabel({ id, page: 'web' });
+      return { id, page: 'web', site: { ...emptySite(label, item.url), title: item.title ?? '', pending: true }, ...pinned };
+    }
+    return item.page in TAB_PAGES ? { id, page: item.page as TabPage, ...pinned } : null;
+  }
+
+  /** Вкладка — у нове вікно (з меню вкладки чи перетягнута за межі вікна). Сайт у ньому відкриється наново. */
+  protected moveToNewWindow(tab: BrowserTab): void {
+    if (this.tabs().length < 2) {
+      return;
+    }
+    if (tab.site) {
+      this.windows.open({ url: tab.site.url, private: this.windows.isPrivate });
+    } else if (this.keepsSession) {
+      const key = `moved-${crypto.randomUUID()}`;
+      this.session.save(key, { tabs: [this.savedTab(tab)], active: 0 });
+      this.windows.open({ session: key });
+    } else {
+      return;
+    }
+    this.closeTab(tab.id, { moved: true });
+  }
+
+  protected onTabDragStart(event: DragEvent, tab: BrowserTab): void {
+    if (!event.dataTransfer) {
+      return;
+    }
+    this.draggedTab = tab.id;
+    this.droppedHere = false;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(TAB_MIME, JSON.stringify(this.savedTab(tab)));
+  }
+
+  /** Над смугою вкладок — риска там, куди стане вкладка (і з іншого вікна теж). */
+  protected onTabStripDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes(TAB_MIME)) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const items = [...(event.currentTarget as HTMLElement).querySelectorAll('.tab')];
+    const index = items.findIndex((item) => {
+      const rect = item.getBoundingClientRect();
+      return event.clientX < rect.left + rect.width / 2;
+    });
+    this.dropIndex.set(index === -1 ? items.length : index);
+  }
+
+  protected onTabStripDragLeave(event: DragEvent): void {
+    const strip = event.currentTarget as HTMLElement;
+    if (!(event.relatedTarget instanceof Node) || !strip.contains(event.relatedTarget)) {
+      this.dropIndex.set(null);
+    }
+  }
+
+  protected onTabStripDrop(event: DragEvent): void {
+    const data = event.dataTransfer?.getData(TAB_MIME);
+    const index = this.dropIndex() ?? this.tabs().length;
+    this.dropIndex.set(null);
+    if (!data) {
+      return;
+    }
+    event.preventDefault();
+    if (this.draggedTab !== null) {
+      this.droppedHere = true;
+      this.moveTab(this.draggedTab, index);
+      return;
+    }
+    // З іншого вікна: там вкладка закриється (dropEffect «move»), тут відкривається.
+    let item: SavedTab;
+    try {
+      item = JSON.parse(data) as SavedTab;
+    } catch {
+      return;
+    }
+    const tab = this.tabFromSaved(item);
+    if (tab) {
+      this.insertTab(tab, index);
+      this.activeTabId.set(tab.id);
+    }
+  }
+
+  /**
+   * Перетягування закінчилося: вкладку прийняло інше вікно — тут вона закривається; відпустили поза вікнами
+   * браузера — вона переходить у нове вікно, як у Chrome.
+   */
+  protected onTabDragEnd(event: DragEvent, tab: BrowserTab): void {
+    const dragged = this.draggedTab;
+    this.draggedTab = null;
+    this.dropIndex.set(null);
+    if (dragged === null || this.droppedHere) {
+      return;
+    }
+    if (event.dataTransfer?.dropEffect === 'move') {
+      this.closeTab(tab.id, { moved: true });
+      return;
+    }
+    const outside =
+      event.screenX < window.screenX ||
+      event.screenY < window.screenY ||
+      event.screenX > window.screenX + window.outerWidth ||
+      event.screenY > window.screenY + window.outerHeight;
+    if (outside) {
+      this.moveToNewWindow(tab);
+    }
+  }
+
+  /** Новий порядок вкладок у вікні (закріплені лишаються серед закріплених). */
+  private moveTab(id: number, index: number): void {
+    const tabs = this.tabs();
+    const from = tabs.findIndex((tab) => tab.id === id);
+    if (from === -1) {
+      return;
+    }
+    const tab = tabs[from];
+    const rest = tabs.filter((item) => item.id !== id);
+    const target = index > from ? index - 1 : index;
+    const pinnedCount = rest.filter((item) => item.pinned).length;
+    const at = tab.pinned ? Math.min(target, pinnedCount) : Math.max(target, pinnedCount);
+    this.tabs.set([...rest.slice(0, at), tab, ...rest.slice(at)]);
+  }
+
+  /** `moved` — вкладку перенесли в інше вікно, а не закрили: відновлювати її тут не треба. */
+  protected closeTab(id: number, { moved = false } = {}): void {
     const tabs = this.tabs();
     const index = tabs.findIndex((tab) => tab.id === id);
     if (index === -1) {
@@ -525,9 +903,14 @@ export class Browser {
     const site = closed.site;
     if (site) {
       this.ignore(this.pageViews.close(site.label));
+      // Запитання дозволів закритої сторінки вже нікому не потрібні.
+      for (const request of this.permissions.forgetPage(site.label)) {
+        this.ignore(this.pageViews.answerPermission(request.id, 'deny', false));
+      }
+      this.lastSeen.delete(site.label);
     }
-    // Порожню нову вкладку відновлювати нема чого.
-    if (closed.page !== 'new-tab') {
+    // Порожню нову вкладку відновлювати нема чого, як і перенесену в інше вікно.
+    if (closed.page !== 'new-tab' && !moved) {
       this.closedTabs.update((list) => [...list, { page: closed.page, url: site?.url, index }].slice(-CLOSED_TABS_LIMIT));
     }
 
@@ -580,17 +963,100 @@ export class Browser {
     this.openSite(normalizeUrl(text) ?? this.settings.searchUrl(text), this.activeTab(), { back: true });
   }
 
+  /**
+   * Друкують в адресному рядку — підказки, а якщо надруковане — початок адреси знайомого сайту, рядок дописує її
+   * й виділяє дописане (наступна літера його замінить), як у Chrome. Під час стирання не дописує.
+   */
+  protected onOmniboxInput(event: Event): void {
+    if (!(event.target instanceof HTMLInputElement)) {
+      return;
+    }
+    const value = this.omniboxText();
+    this.typed.set(value);
+    this.selectedSuggestion.set(-1);
+    this.suggestionsOpen.set(!!value.trim());
+    this.inline = null;
+    const deleting = typeof InputEvent !== 'undefined' && event instanceof InputEvent && event.inputType.startsWith('delete');
+    const completion = deleting ? null : inlineCompletion(value, this.suggestions());
+    if (completion) {
+      this.inline = completion;
+      this.omniboxText.set(completion.text);
+      afterNextRender(() => this.omnibox().selectRange(value.length, completion.text.length), { injector: this.injector });
+    }
+  }
+
+  /**
+   * Стрілки — по підказках (текст підказки — у рядку), Enter — відкрити вибрану чи надруковане, Esc — спершу закрити
+   * підказки (і прибрати дописане), а вдруге повернути адресу вкладки.
+   */
   protected onOmniboxKeydown(event: KeyboardEvent): void {
     // Кнопки всередині рядка (дозволи сайту, зірочка) обробляють Enter самі.
     if (!(event.target instanceof HTMLInputElement)) {
       return;
     }
-    if (event.key === 'Enter') {
+    const list = this.suggestions();
+    const open = this.suggestionsOpen() && list.length > 0;
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && open) {
       event.preventDefault();
-      this.navigate(this.omniboxText());
+      // По колу: надруковане (-1) → перша → … → остання → знову надруковане.
+      let next = this.selectedSuggestion() + (event.key === 'ArrowDown' ? 1 : -1);
+      if (next >= list.length) {
+        next = -1;
+      } else if (next < -1) {
+        next = list.length - 1;
+      }
+      this.selectedSuggestion.set(next);
+      this.inline = null;
+      this.omniboxText.set(next === -1 ? this.typed() : list[next].fill);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const chosen = open && this.selectedSuggestion() >= 0 ? list[this.selectedSuggestion()] : null;
+      const inline = this.inline && this.omniboxText() === this.inline.text ? this.inline : null;
+      const text = this.omniboxText();
+      this.closeSuggestions();
+      if (chosen) {
+        this.runSuggestion(chosen);
+      } else if (inline) {
+        this.openSite(inline.url, this.activeTab(), { back: true });
+      } else {
+        this.navigate(text);
+      }
       (event.target as HTMLElement).blur();
     } else if (event.key === 'Escape') {
-      this.omniboxText.set(this.tabUrl(this.activeTab()));
+      if (open || this.inline) {
+        this.omniboxText.set(this.typed());
+        this.closeSuggestions();
+      } else {
+        this.omniboxText.set(this.tabUrl(this.activeTab()));
+      }
+    }
+  }
+
+  /** Клік по підказці. */
+  protected pickSuggestion(suggestion: Suggestion): void {
+    this.closeSuggestions();
+    this.runSuggestion(suggestion);
+    this.omnibox().blur();
+  }
+
+  protected closeSuggestions(): void {
+    this.suggestionsOpen.set(false);
+    this.selectedSuggestion.set(-1);
+    this.remoteSuggestions.set({ query: '', items: [] });
+    this.inline = null;
+  }
+
+  private runSuggestion(suggestion: Suggestion): void {
+    switch (suggestion.kind) {
+      case 'search':
+        this.openSite(this.settings.searchUrl(suggestion.query), this.activeTab(), { back: true });
+        break;
+      case 'tab':
+        this.omniboxText.set(this.tabUrl(this.activeTab()));
+        this.selectTab(suggestion.tabId);
+        break;
+      default:
+        this.openLink(suggestion.url);
     }
   }
 
@@ -905,30 +1371,21 @@ export class Browser {
       return;
     }
 
-    if (tab.site) {
+    // У відновленої вкладки, сайт якої ще не завантажено, webview немає — створюється новий.
+    if (tab.site && !tab.site.pending) {
       this.updateSite(tab.id, (site) => ({ ...site, url, loading: true }));
       this.ignore(this.pageViews.navigate(tab.site.label, url));
       return;
     }
 
     const label = this.newPageLabel(tab);
-    const site: Site = {
-      label,
-      url,
-      title: '',
-      loading: true,
-      canGoBack: false,
-      canGoForward: false,
-      playing: false,
-      muted: false,
-      blocked: 0,
-      trackers: [],
-    };
+    const site = emptySite(label, url);
     this.replaceTab({ id: tab.id, page: 'web', site, back: back && tab.page !== 'web' ? tab.page : undefined });
     const autoplay = this.autoplay.rules();
     if (background) {
       // Справжні межі фонова вкладка отримає, коли її відкриють. Якщо відкрили ще до того, як її webview створився
       // («Відкрити всі закладки» одразу показує першу), показ тоді нікуди не дійшов — показуємо, щойно створився.
+      this.lastSeen.set(label, Date.now());
       this.pageViews
         .open(label, url, { x: 0, y: 0, width: 0, height: 0 }, { background, autoplay })
         .then(() => {
@@ -936,6 +1393,8 @@ export class Browser {
             this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
             this.ignore(this.pageViews.setVisible(label, true));
             this.scheduleClip();
+          } else {
+            this.ignore(this.pageViews.setBackground(label, true));
           }
         })
         .catch(() => undefined);
@@ -945,11 +1404,266 @@ export class Browser {
     this.ignore(this.pageViews.open(label, url, this.pageBounds(), { autoplay }));
   }
 
+  /**
+   * Вкладки з минулого запуску — якщо в налаштуваннях «Продовжити, де зупинилися» чи браузер щойно перезапускали
+   * (DNS), — або вкладки іншого вікна, яке відкрили, щоб їх продовжити (?session=…).
+   */
+  private restoreSession(): void {
+    if (!this.keepsSession) {
+      return;
+    }
+    const continued = new URLSearchParams(location.search).get('session');
+    if (continued) {
+      const saved = this.session.load(continued);
+      this.session.remove(continued);
+      if (saved) {
+        this.applySession(saved);
+      }
+      return;
+    }
+    const restore = this.session.takeRestoreOnce() || this.settings.startup() === 'restore';
+    // Інші вікна з минулого разу відкриває головне вікно, щойно запущене.
+    const others = this.windowLabel === 'main' ? this.session.windows().filter((label) => label !== 'main') : [];
+    if (!restore) {
+      return;
+    }
+    let saved = this.session.load(this.windowLabel);
+    // Головне вікно закрили раніше за інші — тоді воно продовжує вкладки першого з них.
+    const adopted = !saved ? others.shift() : undefined;
+    if (adopted) {
+      saved = this.session.load(adopted);
+      this.session.remove(adopted);
+    }
+    if (saved) {
+      this.applySession(saved);
+    }
+    if (others.length) {
+      void this.openSavedWindows(others);
+    }
+  }
+
+  private applySession(saved: SavedSession): void {
+    const restored = saved.tabs.map((item) => this.tabFromSaved(item)).filter((tab): tab is BrowserTab => !!tab);
+    // Закріплені — першими, як і були.
+    const tabs = [...restored.filter((tab) => tab.pinned), ...restored.filter((tab) => !tab.pinned)];
+    if (tabs.length) {
+      this.tabs.set(tabs);
+      this.activeTabId.set(tabs[Math.min(Math.max(saved.active, 0), tabs.length - 1)].id);
+    }
+  }
+
+  /** Вікна з минулого запуску, яких зараз немає (вже відкриті — після повторного входу — не дублюються). */
+  private async openSavedWindows(labels: readonly string[]): Promise<void> {
+    const open = new Set((await getAllWebviewWindows().catch(() => [])).map((window) => window.label));
+    for (const label of labels) {
+      if (!open.has(label)) {
+        this.windows.open({ session: label });
+      }
+    }
+  }
+
+  /**
+   * Вкладки вікна зберігаються з кожною зміною. Закрите вікно, поки є інші, забувається; останнє — ні: це вихід
+   * із браузера, і наступний запуск його продовжить. Перезапуск для DNS закриває вікна без цього запитання.
+   */
+  private keepSession(destroyRef: DestroyRef): void {
+    const saved = computed<SavedSession>(
+      () => {
+        const tabs = this.tabs();
+        return {
+          tabs: tabs.map((tab) => this.savedTab(tab)),
+          active: Math.max(
+            0,
+            tabs.findIndex((tab) => tab.id === this.activeTabId())
+          ),
+        };
+      },
+      { equal: (a, b) => JSON.stringify(a) === JSON.stringify(b) }
+    );
+    effect(() => {
+      const session = saved();
+      untracked(() => this.session.save(this.windowLabel, session));
+    });
+    if (!isTauri()) {
+      return;
+    }
+    const closing = getCurrentWindow().onCloseRequested(async () => {
+      try {
+        const windows = await getAllWebviewWindows();
+        if (windows.some((window) => window.label !== this.windowLabel && isNormalWindow(window.label))) {
+          this.session.remove(this.windowLabel);
+        }
+      } catch {
+        // Не вдалося дізнатися про інші вікна — вкладки лишаються збереженими.
+      }
+    });
+    destroyRef.onDestroy(() => void closing.then((unlisten) => unlisten()).catch(() => undefined));
+  }
+
+  private loadPendingSite(tab: BrowserTab): void {
+    const site = tab.site;
+    if (!site) {
+      return;
+    }
+    this.updateSite(tab.id, (current) => ({ ...current, pending: false, loading: true }));
+    this.ignore(this.pageViews.open(site.label, site.url, this.pageBounds(), { autoplay: this.autoplay.rules() }));
+  }
+
   private onPageLoad({ label, url, loading }: PageLoadEvent): void {
     const tab = this.tabByLabel(label);
     // Порожній документ нового webview, поки сайт ще не відкрився, — не сайт.
     if (tab?.site && /^https?:/i.test(url)) {
-      this.updateSite(tab.id, (site) => ({ ...site, url, loading }));
+      // Нова сторінка — заблоковані спливні вікна попередньої вже не про неї.
+      this.updateSite(tab.id, (site) => ({ ...site, url, loading, ...(loading ? { blockedPopups: [] } : {}) }));
+    }
+  }
+
+  /** Вікно відкрили, щоб показати сайт (?url= — «Відкрити посилання в новому вікні»): він — у першій вкладці. */
+  private openRequestedUrl(): void {
+    const url = new URLSearchParams(location.search).get('url');
+    if (!url || !/^https?:\/\//i.test(url) || !this.pageViews.available) {
+      return;
+    }
+    const tab = this.activeTab();
+    this.replaceTab({ id: tab.id, page: 'web', site: { ...emptySite(this.newPageLabel(tab), url), pending: true } });
+  }
+
+  /** Збій процесу сторінки: замість неї — екран із поясненням і кнопкою «Перезавантажити». */
+  private onPageCrashed({ label, failure }: PageCrashedEvent): void {
+    const tab = this.tabByLabel(label);
+    if (tab?.site) {
+      this.updateSite(tab.id, (site) => ({ ...site, crashed: failure, loading: false, playing: false }));
+    }
+  }
+
+  /** «Перезавантажити» після збою: старий webview закривається, а сайт відкривається в новому. */
+  protected recoverPage(): void {
+    const tab = this.activeTab();
+    const site = tab.site;
+    if (!site) {
+      return;
+    }
+    this.ignore(this.pageViews.close(site.label));
+    this.replaceTab({ ...tab, site: { ...emptySite(this.newPageLabel(tab), site.url), title: site.title, pending: true } });
+  }
+
+  /** Сторінка, що не відповідала, — показуємо знову, раптом отямилася. */
+  protected waitForPage(): void {
+    const tab = this.activeTab();
+    this.updateSite(tab.id, (site) => ({ ...site, crashed: undefined }));
+  }
+
+  private onPagePermission({ label, id, kind, origin }: PagePermissionEvent): void {
+    if (!this.tabByLabel(label)) {
+      this.ignore(this.pageViews.answerPermission(id, 'deny', false));
+      return;
+    }
+    this.permissions.ask({ id, label, kind, origin });
+  }
+
+  /** Дія з контекстного меню сайту. */
+  private onPageContext({ label, action, url, text }: PageContextEvent): void {
+    const tab = this.tabByLabel(label);
+    if (!tab) {
+      return;
+    }
+    switch (action) {
+      case 'open-link-tab':
+      case 'open-image-tab':
+        if (url) {
+          this.openLinkInNewTab(url);
+        }
+        break;
+      case 'open-link-window':
+      case 'open-link-private':
+        if (url) {
+          this.windows.open({ url, private: action === 'open-link-private' });
+        }
+        break;
+      case 'search':
+        if (text) {
+          this.openInNewTab(this.settings.searchUrl(text));
+        }
+        break;
+      case 'translate-text':
+        if (text) {
+          this.openInNewTab(translateTextUrl(text, this.translateLanguage.language()));
+        }
+        break;
+      case 'translate-page':
+        if (tab.site) {
+          this.openSite(translatePageUrl(tab.site.url, this.translateLanguage.language()), tab);
+        }
+        break;
+      case 'screenshot':
+        this.activeTabId.set(tab.id);
+        this.runTool('screenshot');
+        break;
+    }
+  }
+
+  /** Нова вкладка поряд і одразу на неї (пошук чи переклад виділеного). */
+  private openInNewTab(url: string): void {
+    const tab = this.createNewTab();
+    this.tabs.update((tabs) => [...tabs, tab]);
+    this.openSite(url, tab);
+  }
+
+  /** «Спливне вікно заблоковано» → відкрити його все ж. */
+  protected openBlockedPopup(url: string): void {
+    const tab = this.activeTab();
+    this.updateSite(tab.id, (site) => ({ ...site, blockedPopups: (site.blockedPopups ?? []).filter((item) => item !== url) }));
+    this.openInNewTab(url);
+  }
+
+  /** Активна вкладка — у пам'яті як звичайна (і прокинулась, якщо спала), попередня — у фон. */
+  private bringToFront(tab: BrowserTab, label: string | null): void {
+    if (this.foregroundPage && this.foregroundPage !== label) {
+      this.lastSeen.set(this.foregroundPage, Date.now());
+      this.ignore(this.pageViews.setBackground(this.foregroundPage, true));
+    }
+    if (label) {
+      this.lastSeen.delete(label);
+      this.ignore(this.pageViews.setBackground(label, false));
+      if (tab.site?.sleeping) {
+        // Показана сторінка прокидається сама (WebView2).
+        this.updateSite(tab.id, (site) => ({ ...site, sleeping: false }));
+      }
+    }
+    this.foregroundPage = label;
+  }
+
+  /**
+   * Присипляє фонові вкладки, яких не відкривали довше, ніж вибрано в налаштуваннях. Не засинають ті, що грають
+   * звук, вантажаться, впали чи ще не завантажені.
+   */
+  protected sleepInactiveTabs(now = Date.now()): void {
+    const minutes = this.settings.sleepTabsAfter();
+    if (!minutes) {
+      return;
+    }
+    const active = this.activeTab().id;
+    for (const tab of this.tabs()) {
+      const site = tab.site;
+      if (tab.id === active || !site || site.pending || site.sleeping || site.crashed || site.playing || site.loading) {
+        continue;
+      }
+      const seen = this.lastSeen.get(site.label);
+      if (seen === undefined) {
+        this.lastSeen.set(site.label, now);
+        continue;
+      }
+      if (now - seen < minutes * 60_000) {
+        continue;
+      }
+      this.pageViews
+        .suspend(site.label)
+        .then((asleep) => {
+          if (asleep) {
+            this.updateSite(tab.id, (current) => (current.label === site.label ? { ...current, sleeping: true } : current));
+          }
+        })
+        .catch(() => undefined);
     }
   }
 
@@ -981,6 +1695,33 @@ export class Browser {
     const entry = tab.site.historyEntry;
     if (entry && entry.url === tab.site.url && title) {
       this.history.rename(entry.id, title);
+    }
+  }
+
+  /**
+   * Посилання на програму (mailto:, tel:…) — відкриваємо, лише якщо користувач погодиться чи вже дозволив цьому сайту.
+   * Посилання, якого жодна програма на комп’ютері не знає, нічого не робить — як у Chrome.
+   */
+  private async onPageExternal({ label, url }: PageExternalEvent): Promise<void> {
+    const tab = this.tabByLabel(label);
+    const scheme = schemeOf(url);
+    if (!tab || !scheme) {
+      return;
+    }
+    let origin = '';
+    try {
+      origin = new URL(tab.site?.url ?? '').origin;
+    } catch {
+      // Сторінка ще без адреси — питаємо без «Завжди дозволяти».
+    }
+    const app = await this.pageViews.externalApp(url).catch(() => null);
+    if (!app) {
+      return;
+    }
+    if (this.externalApps.isAllowed(origin, scheme)) {
+      this.ignore(this.pageViews.openExternal(url));
+    } else {
+      this.externalApps.ask(url, origin, app);
     }
   }
 
@@ -1177,8 +1918,26 @@ export class Browser {
     }
   }
 
-  private onPageNewTab({ label, url }: PageNewTabEvent): void {
-    if (!this.tabByLabel(label)) {
+  /**
+   * Сайт відкриває нове вікно — новою вкладкою. Без кліку користувача це спливне вікно: його браузер блокує
+   * (кнопка в адресному рядку покаже, що саме), якщо сайтові не дозволено спливні вікна.
+   */
+  private onPageNewTab({ label, url, userInitiated }: PageNewTabEvent): void {
+    const source = this.tabByLabel(label);
+    if (!source) {
+      return;
+    }
+    let origin = '';
+    try {
+      origin = new URL(source.site?.url ?? '').origin;
+    } catch {
+      // Сторінка ще без адреси.
+    }
+    if (userInitiated === false && !this.permissions.popupsAllowed(origin)) {
+      this.updateSite(source.id, (site) => ({
+        ...site,
+        blockedPopups: [...(site.blockedPopups ?? []).filter((item) => item !== url), url].slice(-10),
+      }));
       return;
     }
     const tab = this.createNewTab();
@@ -1240,6 +1999,25 @@ export class Browser {
   private createNewTab(): BrowserTab {
     return { id: this.nextTabId++, page: 'new-tab' };
   }
+}
+
+/** Тип даних перетягуваної вкладки (між вікнами браузера — JSON з SavedTab). */
+const TAB_MIME = 'application/x-astra-tab';
+
+/** Сайт вкладки, що тільки відкривається: ще без назви, історії переходів і заблокованого. */
+function emptySite(label: string, url: string): Site {
+  return {
+    label,
+    url,
+    title: '',
+    loading: true,
+    canGoBack: false,
+    canGoForward: false,
+    playing: false,
+    muted: false,
+    blocked: 0,
+    trackers: [],
+  };
 }
 
 /** Тривалість появи й зникнення панелей ($motion у _mixins.scss). */
