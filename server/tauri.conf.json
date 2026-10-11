@@ -42,6 +42,15 @@
       "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxRUQ0NzkzQzgzM0RDNjUKUldSbDNEUElrMGZ0c2J1TzgzRlZpekxmZUVTclA0MlpwOTlFVDlsVm1LODJJZGFQS3dXcGljZjAK",
+      "endpoints": ["https://github.com/RomanNikolaenko/AstraBrowser/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

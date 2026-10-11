@@ -46,7 +46,6 @@
             popovertarget="browser-menu"
             popovertargetaction="hide"
             [attr.aria-keyshortcuts]="item.keys ?? null"
-            [disabled]="item.action === 'reopen-tab' && !canReopenTab()"
             (click)="run(item)">
             <app-icon class="menu__icon" [icon]="item.icon" />
             <span class="menu__label">{{ item.label }}</span>
@@ -57,5 +56,28 @@
         }
       </div>
     }
+
+    <!-- Меню лишається відкритим: видно, як іде завантаження оновлення. -->
+    <div class="menu__section">
+      <button
+        class="menu__item menu__update"
+        type="button"
+        [class.menu__update--available]="updates.available() && !updates.installing()"
+        [disabled]="!updates.canInstall()"
+        [attr.title]="updateTitle()"
+        (click)="updates.install()">
+        <app-icon class="menu__icon" icon="update" />
+        <span class="menu__label">{{ updateLabel() }}</span>
+        @if (updates.installing()) {
+          @if (updates.percent() !== null) {
+            <span class="menu__version">{{ updates.percent() }}%</span>
+          }
+        } @else if (updates.available(); as update) {
+          <span class="menu__version menu__version--new">{{ update.version }}</span>
+        } @else if (updates.current(); as current) {
+          <span class="menu__version">{{ current }}</span>
+        }
+      </button>
+    </div>
   </div>
 </app-popover>

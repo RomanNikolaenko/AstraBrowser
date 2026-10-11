@@ -265,9 +265,7 @@
       </button>
       <app-browser-menu
         [(zoom)]="zoom"
-        [canReopenTab]="closedTabs().length > 0"
         (newTab)="openNewTab()"
-        (reopenTab)="reopenClosedTab()"
         (newWindow)="openWindow()"
         (privateWindow)="openWindow(true)"
         (openPage)="openPage($event)"

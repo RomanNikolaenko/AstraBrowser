@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input, model, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, model, output } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
+import { UpdateStore } from '../data/updates';
 import { InternalPage } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
 import { canZoomIn, canZoomOut, zoomIn, zoomOut } from '../zoom';
@@ -10,12 +11,15 @@ interface MenuItem {
   readonly shortcut?: string;
   /** Для aria-keyshortcuts — лише ті скорочення, що справді працюють. */
   readonly keys?: string;
-  readonly action?: 'new-tab' | 'reopen-tab' | 'new-window' | 'private-window' | 'find' | 'print';
+  readonly action?: 'new-tab' | 'new-window' | 'private-window' | 'find' | 'print';
   /** Внутрішня сторінка, яку відкриває пункт. */
   readonly page?: InternalPage;
 }
 
-/** Головне меню браузера (кнопка ☰): кожен пункт або виконує дію (action), або відкриває сторінку (page). */
+/**
+ * Головне меню браузера (кнопка ☰): кожен пункт або виконує дію (action), або відкриває сторінку (page).
+ * Останній — оновлення застосунку: доступне, лише коли вийшла новіша версія.
+ */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Popover, UiIcon],
@@ -25,10 +29,7 @@ interface MenuItem {
 })
 export class BrowserMenu {
   readonly zoom = model(100);
-  /** Є закрита вкладка, яку можна відкрити знову. */
-  readonly canReopenTab = input(false);
   readonly newTab = output();
-  readonly reopenTab = output();
   readonly newWindow = output();
   readonly privateWindow = output();
   readonly openPage = output<InternalPage>();
@@ -39,13 +40,6 @@ export class BrowserMenu {
   protected readonly sections: readonly (readonly MenuItem[])[] = [
     [
       { label: 'Нова вкладка', icon: 'tab-plus', shortcut: 'Ctrl+T', keys: 'Control+T', action: 'new-tab' },
-      {
-        label: 'Відновити закриту вкладку',
-        icon: 'tab-restore',
-        shortcut: 'Ctrl+Shift+T',
-        keys: 'Control+Shift+T',
-        action: 'reopen-tab',
-      },
       { label: 'Нове вікно', icon: 'window', shortcut: 'Ctrl+N', keys: 'Control+N', action: 'new-window' },
       { label: 'Приватне вікно', icon: 'private', shortcut: 'Ctrl+Shift+N', keys: 'Control+Shift+N', action: 'private-window' },
     ],
@@ -68,6 +62,27 @@ export class BrowserMenu {
   /** Рядок масштабу стоїть перед секцією з цим індексом. */
   protected readonly zoomSectionIndex = 2;
 
+  protected readonly updates = inject(UpdateStore);
+  protected readonly updateLabel = computed(() =>
+    this.updates.installing() ? 'Оновлюємо Astra Browser…' : 'Оновити Astra Browser'
+  );
+  /** Підказка до пункту оновлення: що станеться чи чому він вимкнений. */
+  protected readonly updateTitle = computed(() => {
+    const update = this.updates.available();
+    const error = this.updates.error();
+    if (error) {
+      return error;
+    }
+    if (this.updates.installing()) {
+      return 'Завантажуємо й встановлюємо оновлення — браузер перезапуститься з тими самими вкладками';
+    }
+    if (update) {
+      return `Встановити версію ${update.version}${update.notes ? `: ${update.notes}` : ''}`;
+    }
+    const current = this.updates.current();
+    return current ? `Оновлень немає — у вас найновіша версія ${current}` : 'Оновлень немає';
+  });
+
   protected readonly canZoomOut = computed(() => canZoomOut(this.zoom()));
   protected readonly canZoomIn = computed(() => canZoomIn(this.zoom()));
 
@@ -88,9 +103,6 @@ export class BrowserMenu {
     switch (item.action) {
       case 'new-tab':
         this.newTab.emit();
-        break;
-      case 'reopen-tab':
-        this.reopenTab.emit();
         break;
       case 'new-window':
         this.newWindow.emit();

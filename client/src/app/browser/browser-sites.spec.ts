@@ -735,7 +735,9 @@ describe('Browser with sites', () => {
       expect(windows.opened.at(-1)).toEqual({ url: 'https://b.example/', private: false });
       expect(titles()).toEqual(['a.example', 'c.example']);
       // Перенесену вкладку не відновлюють як закриту.
-      expect(button('Відновити закриту вкладку')?.disabled ?? true).toBe(true);
+      pages.emit('page://shortcut', { label: label(1), shortcut: 'reopen-tab' });
+      await stable();
+      expect(titles()).toEqual(['a.example', 'c.example']);
     });
 
     it('should reorder tabs by dragging them along the tab strip', async () => {

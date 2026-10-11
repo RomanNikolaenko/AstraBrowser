@@ -1,7 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { Component, signal } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { AppUpdate, UpdateStore } from '../data/updates';
 import { BrowserMenu } from './browser-menu';
 
 @Component({
@@ -21,11 +22,28 @@ class Host {
   readonly events: string[] = [];
 }
 
+/** Оновлення без Tauri: стан задає тест. */
+class FakeUpdates {
+  readonly available = signal<AppUpdate | null>(null);
+  readonly current = signal<string | null>('0.1.0');
+  readonly installing = signal(false);
+  readonly percent = signal<number | null>(null);
+  readonly error = signal<string | null>(null);
+  readonly canInstall = computed(() => this.available() !== null && !this.installing());
+  readonly install = vi.fn(() => {
+    this.installing.set(true);
+    return Promise.resolve();
+  });
+}
+
 describe('BrowserMenu', () => {
+  let updates: FakeUpdates;
+
   const setup = async (zoom = 100) => {
+    updates = new FakeUpdates();
     await TestBed.configureTestingModule({
       imports: [Host],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: UpdateStore, useValue: updates }],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);
@@ -110,5 +128,35 @@ describe('BrowserMenu', () => {
       menuItem.querySelector('.menu__shortcut')
     );
     expect(withShortcut.every((menuItem) => menuItem.hasAttribute('aria-keyshortcuts'))).toBe(true);
+  });
+
+  it('should not offer reopening a closed tab: that is Ctrl+Shift+T', async () => {
+    const { item } = await setup();
+
+    expect(item('Відновити закриту вкладку')).toBeUndefined();
+  });
+
+  it('should keep the update item disabled until a newer version is out, then install it', async () => {
+    const { fixture, element, item } = await setup();
+    const update = () => item('Оновити Astra Browser') as HTMLButtonElement;
+
+    expect(update().disabled).toBe(true);
+    expect(update().title).toBe('Оновлень немає — у вас найновіша версія 0.1.0');
+    expect(element.querySelector('.menu__version')?.textContent?.trim()).toBe('0.1.0');
+    // Пункт оновлення — останній у меню.
+    expect([...element.querySelectorAll('.menu__item')].at(-1)).toBe(update());
+
+    updates.available.set({ version: '0.2.0', notes: 'Швидші вкладки' });
+    await fixture.whenStable();
+    expect(update().disabled).toBe(false);
+    expect(update().title).toBe('Встановити версію 0.2.0: Швидші вкладки');
+    expect(element.querySelector('.menu__version--new')?.textContent?.trim()).toBe('0.2.0');
+
+    update().click();
+    updates.percent.set(45);
+    await fixture.whenStable();
+    expect(updates.install).toHaveBeenCalledTimes(1);
+    expect(item('Оновлюємо Astra Browser…')?.disabled).toBe(true);
+    expect(element.querySelector('.menu__version')?.textContent?.trim()).toBe('45%');
   });
 });

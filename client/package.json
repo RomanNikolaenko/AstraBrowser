@@ -14,7 +14,8 @@
     "lint:styles": "stylelint \"src/**/*.scss\"",
     "lint:styles:fix": "stylelint \"src/**/*.scss\" --fix",
     "tauri:dev": "cd ../server && tauri dev",
-    "tauri:build": "cd ../server && tauri build"
+    "tauri:build": "cd ../server && tauri build",
+    "release": "node scripts/release.mjs"
   },
   "private": true,
   "packageManager": "npm@11.19.0",

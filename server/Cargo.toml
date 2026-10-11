@@ -20,6 +20,7 @@ regex = "1"
 tauri-plugin-dialog = "2"
 # Розмір, положення й розгорнутість головного вікна між запусками.
 tauri-plugin-window-state = "2"
+tauri-plugin-updater = "2"
 # Наскрізне шифрування паролів для синхронізації: AES-256-GCM і HMAC (сам ключ з пароля — PBKDF2 Windows, secure.rs).
 aes-gcm = "0.10"
 hmac = "0.12"

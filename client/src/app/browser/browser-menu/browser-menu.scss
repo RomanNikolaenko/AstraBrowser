@@ -48,6 +48,26 @@
     flex: 1;
   }
 
+  // Пункт оновлення: вимкнений, поки новішої версії немає; вийшла — підсвічений.
+  &__update--available &__icon {
+    color: var(--browser-accent);
+  }
+
+  &__version {
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--browser-muted);
+    white-space: nowrap;
+
+    &--new {
+      padding: 0.125rem 0.5rem;
+      font-weight: 600;
+      color: var(--browser-accent);
+      background: color-mix(in srgb, var(--browser-accent) 16%, transparent);
+      border-radius: 1rem;
+    }
+  }
+
   &__shortcut {
     font-family: inherit;
     font-size: 0.8125rem;

@@ -1,0 +1,77 @@
+# Випуск оновлення: підняти version у server/tauri.conf.json, запушити, потім
+#   git tag -a v0.2.0 -m "Що нового" && git push origin v0.2.0
+# Збирає інсталятор Windows, підписує його ключем оновлень (секрет TAURI_SIGNING_PRIVATE_KEY) і публікує реліз
+# з latest.json — з нього кнопка «Оновити Astra Browser» дізнається про нову версію. Докладно — RELEASING.md.
+#
+# Лише дії самого GitHub (actions/*): у цієї збірки є доступ до ключа підпису.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # checkout приносить тег без його повідомлення, а з нього — «Що нового».
+      - name: Повідомлення тегу
+        shell: bash
+        run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
+      - name: Тег збігається з версією
+        id: version
+        shell: bash
+        run: |
+          version=$(node -p "require('./server/tauri.conf.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Тег $GITHUB_REF_NAME, а в server/tauri.conf.json версія $version. Підніміть version або перейменуйте тег."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Кеш Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            server/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('server/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Залежності
+        working-directory: client
+        run: npm ci
+
+      - name: Збірка й підпис
+        working-directory: client
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          export RELEASE_NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          npm run release
+
+      - name: Реліз
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bundle=server/target/release/bundle/nsis
+          notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          gh release create "$GITHUB_REF_NAME" "$bundle/AstraBrowser_${VERSION}_x64-setup.exe" "$bundle/latest.json" \
+            --title "Astra Browser $VERSION" --notes "${notes:-Astra Browser $VERSION}"

@@ -20,6 +20,7 @@ mod page_events;
 mod screenshots;
 mod suggest;
 mod tracking;
+mod updates;
 #[cfg(windows)]
 mod passwords;
 #[cfg(windows)]
@@ -55,7 +56,9 @@ fn main() {
 		.manage(adblock::AdBlock::default())
 		.manage(tracking::Tracking::default())
 		.manage(tracking::PageScripts::default())
+		.manage(updates::Updates::default())
 		.plugin(tauri_plugin_dialog::init())
+		.plugin(tauri_plugin_updater::Builder::new().build())
 		// Головне вікно відкривається там і такого розміру, як його лишили (розгорнуте чи ні).
 		.plugin(
 			tauri_plugin_window_state::Builder::default()
@@ -210,6 +213,8 @@ fn main() {
 			dns::dns_set,
 			#[cfg(windows)]
 			dns::dns_restart,
+			updates::app_update_check,
+			updates::app_update_install,
 			#[cfg(windows)]
 			external::open_external,
 			#[cfg(windows)]
