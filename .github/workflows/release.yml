@@ -71,7 +71,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          bundle=server/target/release/bundle/nsis
           notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
-          gh release create "$GITHUB_REF_NAME" "$bundle/AstraBrowser_${VERSION}_x64-setup.exe" "$bundle/latest.json" \
+          # Інсталятор і latest.json, як їх склав npm run release (client/scripts/release.mjs).
+          gh release create "$GITHUB_REF_NAME" server/target/release/bundle/release/* \
             --title "Astra Browser $VERSION" --notes "${notes:-Astra Browser $VERSION}"

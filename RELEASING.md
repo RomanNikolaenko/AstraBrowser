@@ -37,7 +37,7 @@
    ```
 
 3. GitHub → Actions → **Release**: збирає інсталятор на Windows, підписує й публікує реліз `v0.2.0` з
-   `AstraBrowser_0.2.0_x64-setup.exe` і `latest.json`. Перша збірка — ~20 хв, далі швидше (кеш).
+   `Astra-Browser_0.2.0_x64-setup.exe` і `latest.json`. Перша збірка — ~20 хв, далі швидше (кеш).
 
 Тег, що не збігається з версією в `server/tauri.conf.json`, workflow зупиняє з поясненням.
 
@@ -45,7 +45,7 @@
 
 1. Підняти версію, як вище.
 2. У теці `client`: `npm run release -- "Що нового"` — підписаний інсталятор і `latest.json` у
-   `server/target/release/bundle/nsis`.
+   `server/target/release/bundle/release`.
 3. GitHub → Releases → **Draft a new release**: тег `v<версія>`, перетягнути обидва файли, **Publish release**
    (не Pre-release: такий GitHub не вважає останнім).
 

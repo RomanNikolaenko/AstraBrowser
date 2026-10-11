@@ -6,7 +6,7 @@
 // вручну обидва файли — у реліз з тегом v<версія> (RELEASING.md).
 // Версію перед випуском піднімають у server/tauri.conf.json ("version").
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -44,6 +44,12 @@ if (build.status !== 0) {
 
 const bundle = join(root, 'server/target/release/bundle/nsis');
 const installer = `${config.productName}_${config.version}_x64-setup.exe`;
+// Файли релізу — окремо й без пробілів у назвах: GitHub замінює їх крапками, і посилання з latest.json не збіглося б.
+const release = join(root, 'server/target/release/bundle/release');
+const asset = installer.replaceAll(' ', '-');
+rmSync(release, { recursive: true, force: true });
+mkdirSync(release, { recursive: true });
+copyFileSync(join(bundle, installer), join(release, asset));
 const manifest = {
   version: config.version,
   notes: process.env.RELEASE_NOTES?.trim() || process.argv.slice(2).join(' ') || undefined,
@@ -51,13 +57,13 @@ const manifest = {
   platforms: {
     'windows-x86_64': {
       signature: readFileSync(join(bundle, `${installer}.sig`), 'utf8').trim(),
-      url: `${repository}/releases/download/${tag}/${encodeURIComponent(installer)}`,
+      url: `${repository}/releases/download/${tag}/${encodeURIComponent(asset)}`,
     },
   },
 };
-writeFileSync(join(bundle, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(join(release, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
-console.log(`\nВерсія ${config.version} готова. GitHub → Releases → Draft a new release, тег ${tag}, файли:`);
-console.log(`  ${join(bundle, installer)}`);
-console.log(`  ${join(bundle, 'latest.json')}`);
+console.log(`\nВерсія ${config.version} готова. GitHub → Releases → Draft a new release, тег ${tag}, файли з ${release}:`);
+console.log(`  ${asset}`);
+console.log('  latest.json');
 console.log(`${repository}/releases/new?tag=${tag}`);
