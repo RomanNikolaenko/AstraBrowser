@@ -1,4 +1,4 @@
-<app-popover class="menu" popoverId="browser-menu" caret>
+<app-popover class="menu" popoverId="browser-menu" caret (opened)="updates.markSeen()">
   <div class="menu__scroll">
     @for (section of sections; track $index) {
       @if ($index === zoomSectionIndex) {

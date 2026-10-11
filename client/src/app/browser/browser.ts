@@ -88,6 +88,7 @@ import { PermissionPrompt } from './permission-prompt/permission-prompt';
 import { TabMenu, TabMenuAction, TabMenuTarget } from './tab-menu/tab-menu';
 import { PopupBlocked } from './popup-blocked/popup-blocked';
 import { PermissionsStore } from './data/permissions';
+import { UpdateStore } from './data/updates';
 import { translatePageUrl, translateTextUrl } from './translator/translate-urls';
 import { SavedSession, SavedTab, SessionStore } from './session/session';
 import { OmniboxSuggestions, SUGGESTIONS_ID, suggestionId } from './omnibox/omnibox-suggestions';
@@ -216,6 +217,8 @@ export class Browser {
   private readonly tracking = inject(TrackingStore);
   private readonly externalApps = inject(ExternalAppsStore);
   private readonly permissions = inject(PermissionsStore);
+  /** Оновлення застосунку: кнопка меню привертає увагу, поки нову версію ще не бачили в меню. */
+  protected readonly updates = inject(UpdateStore);
   private readonly translateLanguage = inject(TranslateLanguageStore);
   /** Адресний рядок як елемент — під ним запитання дозволів сайтів. */
   protected readonly omniboxHost = viewChild('omnibox', { read: ElementRef });

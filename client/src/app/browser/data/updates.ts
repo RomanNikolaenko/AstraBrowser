@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { storedSignal } from '../../shared/storage/stored-signal';
 import { SessionStore } from '../session/session';
 
 /** Новіша версія застосунку (server/src/updates.rs). */
@@ -43,6 +44,14 @@ export class UpdateStore {
   readonly error = signal<string | null>(null);
   readonly canInstall = computed(() => this.available() !== null && !this.installing());
 
+  /** Версія, яку вже бачили в меню (на цьому комп'ютері; не синхронізується). */
+  private readonly seenVersion = storedSignal<string | null>('astra.update-seen', null);
+  /** Вийшла нова версія, а меню відтоді ще не відкривали: кнопка меню привертає увагу. */
+  readonly attention = computed(() => {
+    const update = this.available();
+    return update !== null && !this.installing() && this.seenVersion() !== update.version;
+  });
+
   private readonly session = inject(SessionStore);
 
   constructor() {
@@ -54,6 +63,14 @@ export class UpdateStore {
     void listen<UpdateProgress>('update://progress', ({ payload }) =>
       this.percent.set(payload.total ? Math.min(100, Math.round((payload.downloaded / payload.total) * 100)) : null)
     );
+  }
+
+  /** Меню відкрили — про цю версію вже знають, навіть якщо не оновилися: кнопка меню більше не блимає. */
+  markSeen(): void {
+    const update = this.available();
+    if (update) {
+      this.seenVersion.set(update.version);
+    }
   }
 
   async check(): Promise<void> {

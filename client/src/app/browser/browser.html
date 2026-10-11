@@ -258,10 +258,14 @@
       <button
         class="toolbar__button toolbar__button--filled toolbar__button--menu"
         type="button"
-        aria-label="Меню"
-        title="Меню"
+        [class.toolbar__button--update]="updates.attention()"
+        [attr.aria-label]="updates.attention() ? 'Меню — доступне оновлення' : 'Меню'"
+        [attr.title]="updates.attention() ? 'Меню — доступне оновлення' : 'Меню'"
         popovertarget="browser-menu">
         <app-icon icon="menu" />
+        @if (updates.attention()) {
+          <span class="toolbar__update-dot" aria-hidden="true"></span>
+        }
       </button>
       <app-browser-menu
         [(zoom)]="zoom"

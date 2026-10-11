@@ -34,6 +34,7 @@ class FakeUpdates {
     this.installing.set(true);
     return Promise.resolve();
   });
+  readonly markSeen = vi.fn();
 }
 
 describe('BrowserMenu', () => {
@@ -128,6 +129,15 @@ describe('BrowserMenu', () => {
       menuItem.querySelector('.menu__shortcut')
     );
     expect(withShortcut.every((menuItem) => menuItem.hasAttribute('aria-keyshortcuts'))).toBe(true);
+  });
+
+  it('should mark the update as seen whenever the menu opens', async () => {
+    const { fixture, element } = await setup();
+    const panel = element.querySelector('#browser-menu') as HTMLElement;
+
+    panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
+    await fixture.whenStable();
+    expect(updates.markSeen).toHaveBeenCalledTimes(1);
   });
 
   it('should not offer reopening a closed tab: that is Ctrl+Shift+T', async () => {

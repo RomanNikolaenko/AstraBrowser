@@ -4,6 +4,7 @@ import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
+import { UpdateStore } from './data/updates';
 import { BrowserWindows } from '../shared/browser-windows/browser-windows';
 import { Titlebar } from '../shared/titlebar/titlebar';
 import { Browser } from './browser';
@@ -782,6 +783,35 @@ describe('Browser with sites', () => {
       await stable();
       expect(titles()).toEqual(['b.example', 'c.example', 'D']);
     });
+  });
+
+  it('should make the menu button call for attention until the new version is seen in the menu', async () => {
+    const menuButton = () => element.querySelector('.toolbar__button--menu') as HTMLButtonElement;
+    const openMenu = async () => {
+      element.querySelector('#browser-menu')?.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
+      await stable();
+    };
+    const updates = TestBed.inject(UpdateStore);
+    expect(menuButton().classList).not.toContain('toolbar__button--update');
+
+    updates.available.set({ version: '0.2.0' });
+    await stable();
+    expect(menuButton().classList).toContain('toolbar__button--update');
+    expect(menuButton().querySelector('.toolbar__update-dot')).toBeTruthy();
+    expect(menuButton().getAttribute('aria-label')).toBe('Меню — доступне оновлення');
+
+    // Просто відкрили й закрили меню, не оновившись, — і більше не блимає, навіть після перевірки знову.
+    await openMenu();
+    updates.available.set({ version: '0.2.0' });
+    await stable();
+    expect(menuButton().classList).not.toContain('toolbar__button--update');
+    expect(menuButton().querySelector('.toolbar__update-dot')).toBeNull();
+    expect(localStorage.getItem('astra.update-seen')).toBe('"0.2.0"');
+
+    // Вийшла ще новіша версія — знову.
+    updates.available.set({ version: '0.3.0' });
+    await stable();
+    expect(menuButton().classList).toContain('toolbar__button--update');
   });
 
   it('should reopen the last closed tab in its place with Ctrl+Shift+T, also from a site', async () => {

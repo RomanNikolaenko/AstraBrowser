@@ -227,11 +227,39 @@
       background: var(--browser-field);
     }
 
+    // Вийшло оновлення, а меню ще не відкривали: кнопка пульсує, крапка в кутку (без анімації — лише крапка).
+    &--update {
+      position: relative;
+      animation: update-pulse 2.4s ease-out infinite;
+    }
+
     // Кнопка лишається «натиснутою», поки її панель відкрита (.is-open — на <app-popover> у меню поруч).
     &:has(+ * .is-open) {
       color: var(--browser-tab-active-text);
       background: var(--browser-pressed);
     }
+  }
+}
+
+.toolbar__update-dot {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--browser-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.125rem var(--browser-field);
+}
+
+@keyframes update-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--browser-accent) 55%, transparent);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--browser-accent) 0%, transparent);
   }
 }
 
