@@ -23,7 +23,7 @@ use windows_core::{Interface, BOOL, HSTRING, PWSTR};
 use crate::webview2::{core, profile, Reply};
 
 /// Що сталося з процесом сторінки.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Failure {
   /// Процес сторінки завершився (аварія, нестача пам'яті, його закрили).
@@ -57,7 +57,7 @@ pub fn watch_process_failed(webview: &Webview, report: impl Fn(Failure) + Send +
       unsafe { core(&platform)?.add_ProcessFailed(&handler, &mut token) }
     };
     if let Err(error) = watch() {
-      eprintln!("page: не вдалося стежити за процесом сторінки: {error}");
+      log::warn!("page: не вдалося стежити за процесом сторінки: {error}");
     }
   })
 }
@@ -70,7 +70,7 @@ pub fn set_smart_screen(webview: &Webview, enabled: bool) -> tauri::Result<()> {
       unsafe { settings.SetIsReputationCheckingRequired(enabled) }
     };
     if let Err(error) = set() {
-      eprintln!("page: не вдалося задати SmartScreen: {error}");
+      log::warn!("page: не вдалося задати SmartScreen: {error}");
     }
   })
 }
@@ -105,7 +105,7 @@ pub fn suspend(webview: &Webview, reply: Reply<bool>) -> tauri::Result<()> {
 // --- Дозволи ---
 
 /// Запит дозволу, який чекає відповіді інтерфейсу.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRequest {
   pub id: u64,
@@ -116,7 +116,7 @@ pub struct PermissionRequest {
 }
 
 /// Відповідь інтерфейсу на запит дозволу.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum PermissionState {
   Allow,
@@ -201,7 +201,7 @@ pub fn watch_permissions(webview: &Webview, report: impl Fn(PermissionRequest) +
       unsafe { core(&platform)?.add_PermissionRequested(&handler, &mut token) }
     };
     if let Err(error) = watch() {
-      eprintln!("page: не вдалося стежити за дозволами сторінки: {error}");
+      log::warn!("page: не вдалося стежити за дозволами сторінки: {error}");
     }
   })
 }
@@ -304,7 +304,7 @@ pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool) + Send
       unsafe { core(&platform)?.add_NewWindowRequested(&handler, &mut token) }
     };
     if let Err(error) = watch() {
-      eprintln!("page: не вдалося стежити за новими вікнами: {error}");
+      log::warn!("page: не вдалося стежити за новими вікнами: {error}");
     }
   })
 }
@@ -312,7 +312,7 @@ pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool) + Send
 // --- Контекстне меню ---
 
 /// Дія браузера з контекстного меню сайту — для інтерфейсу.
-#[derive(Clone, Serialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, PartialEq, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextAction {
   pub action: &'static str,
@@ -406,7 +406,7 @@ pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) 
       unsafe { core(&platform)?.cast::<ICoreWebView2_11>()?.add_ContextMenuRequested(&handler, &mut token) }
     };
     if let Err(error) = watch() {
-      eprintln!("page: не вдалося змінити контекстне меню: {error}");
+      log::warn!("page: не вдалося змінити контекстне меню: {error}");
     }
   })
 }

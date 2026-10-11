@@ -41,7 +41,7 @@ const VAULT_FILE: &str = "passwords.json";
 const ENTROPY: &[u8] = b"AstraBrowser passwords v1";
 const PAGE_SCRIPT: &str = include_str!("password-page.js");
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct Entry {
   id: String,
@@ -57,7 +57,7 @@ struct Entry {
   used: Option<u64>,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, specta::Type)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
   /// Пропонувати зберегти пароль, коли користувач входить на сайт.
@@ -72,7 +72,7 @@ impl Default for Settings {
   }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
 struct Vault {
   entries: Vec<Entry>,
@@ -82,7 +82,7 @@ struct Vault {
 }
 
 /// Збережений пароль для інтерфейсу — без самого пароля.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PasswordInfo {
   id: String,
@@ -93,13 +93,28 @@ pub struct PasswordInfo {
   used: Option<u64>,
 }
 
+/// Налаштування для інтерфейсу. Ті самі, що й Settings, але без serde(default): у TypeScript поля обов'язкові
+/// (default лишається там, де його справді треба, — у збереженому сховищі).
+#[derive(Clone, Copy, Serialize, specta::Type)]
+#[serde(rename = "PasswordSettings")]
+pub struct SettingsView {
+  offer: bool,
+  autofill: bool,
+}
+
+impl From<Settings> for SettingsView {
+  fn from(settings: Settings) -> Self {
+    Self { offer: settings.offer, autofill: settings.autofill }
+  }
+}
+
 /// Усе, що показує сторінка «Паролі»; надсилається й подією passwords://changed.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PasswordsState {
   entries: Vec<PasswordInfo>,
   never: Vec<String>,
-  settings: Settings,
+  settings: SettingsView,
 }
 
 /// Пароль, який користувач щойно ввів на сайті, — чекає відповіді на «Зберегти пароль?».
@@ -110,7 +125,7 @@ struct Pending {
 }
 
 /// «Зберегти пароль?» для інтерфейсу вікна, де користувач увійшов на сайт.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PromptEvent {
   label: String,
@@ -122,7 +137,7 @@ struct PromptEvent {
   update: bool,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct ManageEvent {
   label: String,
@@ -143,7 +158,7 @@ const NEVER_ITEM: &str = "never";
 
 /// Запис паролів для сервера синхронізації: `k` — відбиток ключа, `n` і `c` — nonce й шифр AES-GCM (base64),
 /// `h` — HMAC відкритого тексту: за ним видно зміни, не розшифровуючи.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 pub struct Envelope {
   k: String,
   n: String,
@@ -152,7 +167,7 @@ pub struct Envelope {
 }
 
 /// Що шифрується для запису синхронізації — збережений пароль разом із сайтом та ім'ям.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 struct SyncedEntry {
   origin: String,
   username: String,
@@ -163,7 +178,7 @@ struct SyncedEntry {
 }
 
 /// Зашифровані записи для синхронізації; без ключа (`key_id` — None) синхронізувати паролі не можна.
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncItems {
   key_id: Option<String>,
@@ -173,13 +188,13 @@ pub struct SyncItems {
 }
 
 /// Запис із сервера: `data` — None, якщо його видалили.
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct SyncChange {
   id: String,
   data: Option<Envelope>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncApplied {
   /// Записи, зашифровані іншим ключем (пароль облікового запису змінили), — їх не прочитати.
@@ -228,7 +243,7 @@ impl Vault {
       })
       .collect();
     entries.sort_by(|a, b| a.origin.cmp(&b.origin).then_with(|| a.username.cmp(&b.username)));
-    PasswordsState { entries, never: self.never.clone(), settings: self.settings }
+    PasswordsState { entries, never: self.never.clone(), settings: self.settings.into() }
   }
 
   fn find(&self, origin: &str, username: &str) -> Option<usize> {
@@ -462,6 +477,7 @@ fn open_item(key: &secure::SyncKey, envelope: &Envelope) -> Result<Vec<u8>, Stri
 
 /// Усі паролі облікового запису, зашифровані для синхронізації (і список «ніколи не зберігати» — записом `never`).
 #[tauri::command]
+#[specta::specta]
 pub fn passwords_sync_items(app: AppHandle, window: Window, passwords: State<'_, Passwords>) -> Result<SyncItems, String> {
   deny_guest(&window)?;
   let Some((key, key_time)) = crate::auth::sync_key(&app) else {
@@ -484,6 +500,7 @@ pub fn passwords_sync_items(app: AppHandle, window: Window, passwords: State<'_,
 
 /// Записи з сервера: нові й змінені паролі — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є.
 #[tauri::command]
+#[specta::specta]
 pub fn passwords_sync_apply(
   app: AppHandle,
   window: Window,
@@ -547,9 +564,10 @@ fn deny_guest(window: &Window) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn passwords_state(window: Window, passwords: State<'_, Passwords>) -> Result<PasswordsState, String> {
   if window.label().starts_with(GUEST_PREFIX) {
-    return Ok(PasswordsState { entries: Vec::new(), never: Vec::new(), settings: Settings { offer: false, autofill: false } });
+    return Ok(PasswordsState { entries: Vec::new(), never: Vec::new(), settings: SettingsView { offer: false, autofill: false } });
   }
   Ok(passwords.vault.lock().map_err(|error| error.to_string())?.state())
 }
@@ -557,6 +575,7 @@ pub fn passwords_state(window: Window, passwords: State<'_, Passwords>) -> Resul
 /// Відповідь на «Зберегти пароль?»: save — зберегти (з тим ім'ям і паролем, що в полях вікна), never — більше не
 /// пропонувати для цього сайту, інше — не зараз.
 #[tauri::command]
+#[specta::specta]
 pub fn password_prompt_answer(
   app: AppHandle,
   window: Window,
@@ -588,6 +607,7 @@ pub fn password_prompt_answer(
 
 /// Сам пароль — щоб показати чи скопіювати його на сторінці «Паролі».
 #[tauri::command]
+#[specta::specta]
 pub fn password_reveal(window: Window, passwords: State<'_, Passwords>, id: String) -> Result<String, String> {
   deny_guest(&window)?;
   let vault = passwords.vault.lock().map_err(|error| error.to_string())?;
@@ -597,6 +617,7 @@ pub fn password_reveal(window: Window, passwords: State<'_, Passwords>, id: Stri
 
 /// Пароль, доданий вручну. Для сайту й імені, що вже є, — помилка (змінити наявний можна password_edit).
 #[tauri::command]
+#[specta::specta]
 pub fn password_add(
   app: AppHandle,
   window: Window,
@@ -621,6 +642,7 @@ pub fn password_add(
 
 /// Нове ім'я чи пароль збереженого запису; порожній пароль — пароль не змінюється.
 #[tauri::command]
+#[specta::specta]
 pub fn password_edit(
   app: AppHandle,
   window: Window,
@@ -649,6 +671,7 @@ pub fn password_edit(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn password_remove(app: AppHandle, window: Window, passwords: State<'_, Passwords>, id: String) -> Result<(), String> {
   deny_guest(&window)?;
   passwords.change(&app, |vault| {
@@ -659,6 +682,7 @@ pub fn password_remove(app: AppHandle, window: Window, passwords: State<'_, Pass
 
 /// Сайт знову може пропонувати зберегти пароль.
 #[tauri::command]
+#[specta::specta]
 pub fn passwords_never_remove(app: AppHandle, window: Window, passwords: State<'_, Passwords>, origin: String) -> Result<(), String> {
   deny_guest(&window)?;
   passwords.change(&app, |vault| {
@@ -668,6 +692,7 @@ pub fn passwords_never_remove(app: AppHandle, window: Window, passwords: State<'
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn passwords_set_settings(app: AppHandle, window: Window, passwords: State<'_, Passwords>, offer: bool, autofill: bool) -> Result<(), String> {
   deny_guest(&window)?;
   passwords.change(&app, |vault| {

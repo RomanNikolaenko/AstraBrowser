@@ -6,6 +6,35 @@
 ; не видаляє (лише якщо в його вікні позначити «Видалити дані застосунку»).
 !define OLD_UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\AstraBrowser"
 
+; Astra як браузер у Windows: «Параметри → Програми за замовчуванням» пропонують його для посилань http і https,
+; а Windows відкриває їх командою `astra-browser.exe "<посилання>"` (server/src/launch.rs). Назва й клас посилань —
+; ті самі, що в server/src/default_browser.rs. Значення — латиницею, щоб не залежати від кодування, в якому NSIS
+; прочитає цей файл.
+!define BROWSER_KEY "Software\Clients\StartMenuInternet\Astra Browser"
+!define BROWSER_URL_CLASS "Software\Classes\AstraBrowserURL"
+
+!macro ASTRA_REGISTER_BROWSER
+  WriteRegStr HKCU "${BROWSER_URL_CLASS}" "" "Astra Browser URL"
+  WriteRegStr HKCU "${BROWSER_URL_CLASS}" "URL Protocol" ""
+  WriteRegStr HKCU "${BROWSER_URL_CLASS}\DefaultIcon" "" "$INSTDIR\astra-browser.exe,0"
+  WriteRegStr HKCU "${BROWSER_URL_CLASS}\shell\open\command" "" '"$INSTDIR\astra-browser.exe" "%1"'
+  WriteRegStr HKCU "${BROWSER_URL_CLASS}\Application" "ApplicationName" "Astra Browser"
+  WriteRegStr HKCU "${BROWSER_URL_CLASS}\Application" "ApplicationIcon" "$INSTDIR\astra-browser.exe,0"
+
+  WriteRegStr HKCU "${BROWSER_KEY}" "" "Astra Browser"
+  WriteRegStr HKCU "${BROWSER_KEY}\DefaultIcon" "" "$INSTDIR\astra-browser.exe,0"
+  WriteRegStr HKCU "${BROWSER_KEY}\shell\open\command" "" '"$INSTDIR\astra-browser.exe"'
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities" "ApplicationName" "Astra Browser"
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities" "ApplicationDescription" "Fast and private web browser"
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities" "ApplicationIcon" "$INSTDIR\astra-browser.exe,0"
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\StartMenu" "StartMenuInternet" "Astra Browser"
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\URLAssociations" "http" "AstraBrowserURL"
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\URLAssociations" "https" "AstraBrowserURL"
+  WriteRegStr HKCU "Software\RegisteredApplications" "Astra Browser" "${BROWSER_KEY}\Capabilities"
+  ; Оболонка перечитує зв'язки: Astra одразу видно в «Параметрах».
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+!macroend
+
 !macro NSIS_HOOK_POSTINSTALL
   Push $R0
   Push $R1
@@ -46,4 +75,17 @@
   Pop $R2
   Pop $R1
   Pop $R0
+
+  ; І під час встановлення, і під час оновлення: шлях до програми в реєстрі завжди актуальний.
+  !insertmacro ASTRA_REGISTER_BROWSER
+!macroend
+
+; Видалення (не оновлення) прибирає Astra з браузерів Windows.
+!macro NSIS_HOOK_POSTUNINSTALL
+  ${If} $UpdateMode <> 1
+    DeleteRegKey HKCU "${BROWSER_KEY}"
+    DeleteRegKey HKCU "${BROWSER_URL_CLASS}"
+    DeleteRegValue HKCU "Software\RegisteredApplications" "Astra Browser"
+    System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+  ${EndIf}
 !macroend

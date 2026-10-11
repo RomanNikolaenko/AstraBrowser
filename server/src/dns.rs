@@ -30,7 +30,7 @@ const SETTINGS_FILE: &str = "dns.json";
 /// Скільки чекати, поки браузер WebView2 вийде й відпустить свою теку.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
   /// Захищений DNS, якщо його підтримує ваш постачальник DNS (як за замовчуванням у Chrome й Edge).
@@ -43,7 +43,7 @@ pub enum Mode {
   Off,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Provider {
   #[default]
@@ -54,8 +54,11 @@ pub enum Provider {
   Custom,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize, specta::Type)]
+// Без serde(default): з ним specta зробила б поля необов'язковими й у відповіді. Файл налаштувань завжди пише
+// сам застосунок, з усіма полями, а якщо він зіпсований — діють типові налаштування (Settings::default).
+#[serde(rename_all = "camelCase")]
+#[serde(rename = "DnsSettings")]
 pub struct Settings {
   pub mode: Mode,
   pub provider: Provider,
@@ -107,7 +110,7 @@ pub struct Dns {
 }
 
 /// Що бачить інтерфейс.
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DnsState {
   settings: Settings,
@@ -169,9 +172,21 @@ fn apply(root: &Path, settings: &Settings) {
   }
 }
 
+/// Плагін, що готує DNS: плагіни Tauri запускаються до перших вікон. Окремим плагіном після single-instance
+/// (main.rs) — щоб повторний запуск, який лише передає посилання вже відкритому браузеру, не чекав тут на його
+/// теку WebView2 (prepare чекає, поки її відпустять, до 10 с).
+pub fn plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+  tauri::plugin::Builder::new("astra-dns")
+    .setup(|app, _api| {
+      app.manage(prepare(&app.config().identifier));
+      Ok(())
+    })
+    .build()
+}
+
 /// Записує вибране в налаштування всіх тек WebView2 застосунку — до того, як створено перше вікно.
 /// `identifier` — ідентифікатор застосунку (tauri.conf.json): від нього шлях до локальної теки даних.
-pub fn prepare(identifier: &str) -> Dns {
+fn prepare(identifier: &str) -> Dns {
   let root = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default().join(identifier);
   let settings: Settings =
     fs::read(root.join(SETTINGS_FILE)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
@@ -208,12 +223,14 @@ fn write_local_state(path: &Path, settings: &Settings) {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn dns_settings(dns: State<'_, Dns>) -> DnsState {
   dns.state()
 }
 
 /// Новий вибір — у dns.json; діятиме після перезапуску браузера.
 #[tauri::command]
+#[specta::specta]
 pub fn dns_set(dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, String> {
   let needs_provider = matches!(settings.mode, Mode::Increased | Mode::Max);
   if needs_provider && settings.template().is_none() {
@@ -230,11 +247,13 @@ pub fn dns_set(dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, Stri
 /// налаштування записуються, і головне вікно відкривається знову (вкладки інтерфейс відновить сам). Сам застосунок
 /// не виходить: так і обліковий запис лишається, і `tauri dev` не вважає застосунок закритим.
 #[tauri::command]
+#[specta::specta]
 pub async fn dns_restart(app: AppHandle) -> Result<(), String> {
   let dns = app.state::<Dns>();
   if dns.restarting.swap(true, Ordering::SeqCst) {
     return Ok(());
   }
+  log::info!("Перезапуск браузера для нових налаштувань DNS");
   for window in app.windows().into_values() {
     let _ = window.destroy();
   }
@@ -255,7 +274,7 @@ pub async fn dns_restart(app: AppHandle) -> Result<(), String> {
       tauri::WebviewWindowBuilder::from_config(&app, config).and_then(|builder| builder.build()).map_err(|error| error.to_string())
     });
   dns.restarting.store(false, Ordering::SeqCst);
-  reopened.map(drop)
+  reopened.map(drop).inspect_err(|error| log::error!("Після перезапуску для DNS вікно не відкрилося: {error}"))
 }
 
 #[cfg(test)]

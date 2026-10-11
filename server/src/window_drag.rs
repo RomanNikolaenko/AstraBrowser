@@ -21,6 +21,7 @@ fn screen_point(x: i32, y: i32) -> LPARAM {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn window_start_drag(window: Window) -> Result<(), String> {
   let hwnd = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
   // Захоплення миші й черга повідомлень — потоку вікна.

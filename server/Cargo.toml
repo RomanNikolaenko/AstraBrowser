@@ -10,7 +10,7 @@ rust-version = "1.90"
 tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
-tauri = { version = "2.12.1", features = ["unstable"] }
+tauri = { version = "2.12.1", features = ["unstable", "specta"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 adblock = { version = "0.13.3", default-features = false, features = ["css-validation", "embedded-domain-resolver", "full-regex-handling"] }
@@ -21,10 +21,18 @@ tauri-plugin-dialog = "2"
 # Розмір, положення й розгорнутість головного вікна між запусками.
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
+# Повторний запуск і посилання з інших програм — у вже запущений браузер (launch.rs).
+tauri-plugin-single-instance = "2"
+# Журнал помилок у файлі (%LOCALAPPDATA%\com.astrabrowser.desktop\logs) — «Відкрити журнал» у довідці.
+tauri-plugin-log = "2"
+log = "0.4"
 # Наскрізне шифрування паролів для синхронізації: AES-256-GCM і HMAC (сам ключ з пароля — PBKDF2 Windows, secure.rs).
 aes-gcm = "0.10"
 hmac = "0.12"
 sha2 = "0.10"
+specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json"] }
+specta-typescript = "=0.0.12"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 
 [dev-dependencies]
 # Перевірка, що PBKDF2 Windows рахує так само, як незалежна реалізація.

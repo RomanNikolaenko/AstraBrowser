@@ -1,6 +1,7 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
 import { BrowserWindows } from '../browser-windows/browser-windows';
 import { SettingsStore } from '../settings/settings';
@@ -12,14 +13,6 @@ export interface AuthUser {
   readonly email: string;
   /** Ім'я з облікового запису; порожнє, якщо не вказали. */
   readonly name: string;
-}
-
-/** Відповідь на код зі зміни пошти (server/src/auth.rs, EmailChange). */
-interface EmailChange {
-  /** Пошту змінено. */
-  readonly state: AuthState | null;
-  /** Supabase чекає ще код із листа на цю адресу. */
-  readonly waiting: string | null;
 }
 
 interface AuthState {
@@ -105,62 +98,47 @@ export class AuthStore {
   }
 
   async signIn(email: string, password: string, remember: boolean): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_sign_in', { email, password, remember }));
-  }
-
-  /** Лист із кодом для входу без пароля (обліковий запис уже має бути). */
-  sendSignInCode(email: string): Promise<void> {
-    return invoke('auth_send_sign_in_code', { email });
-  }
-
-  /** Код із листа — і вхід без пароля. */
-  async signInWithCode(email: string, code: string, remember: boolean): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_sign_in_with_code', { email, code, remember }));
-  }
-
-  /** Вхід через Google в окремому вікні. Закрили вікно — помилка з кодом `cancelled`. */
-  async signInWithGoogle(remember: boolean): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_google', { remember }));
+    this.apply(await commands.authSignIn(email, password, remember));
   }
 
   async signUp(name: string, email: string, password: string): Promise<SignUpResult> {
-    const result = await invoke<SignUpResult>('auth_sign_up', { name, email, password });
+    const result = await commands.authSignUp(name, email, password);
     if (result.user) {
       // Відповідь реєстрації не каже, чи це власник і чи є ключ синхронізації, — питаємо стан окремо.
-      this.apply(await invoke<AuthState>('auth_state'));
+      this.apply(await commands.authState());
     }
     return result;
   }
 
   /** Код із листа «Підтвердіть пошту» — і вхід. */
   async verify(email: string, code: string): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_verify', { email, code }));
+    this.apply(await commands.authVerify(email, code));
   }
 
   /** Новий лист із кодом підтвердження. */
-  resend(email: string): Promise<void> {
-    return invoke('auth_resend', { email });
+  async resend(email: string): Promise<void> {
+    await commands.authResend(email);
   }
 
   /** Лист із кодом відновлення пароля. */
-  recover(email: string): Promise<void> {
-    return invoke('auth_recover', { email });
+  async recover(email: string): Promise<void> {
+    await commands.authRecover(email);
   }
 
   /** Код відновлення й новий пароль — і вхід. */
   async resetPassword(email: string, code: string, password: string): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_reset_password', { email, code, password }));
+    this.apply(await commands.authResetPassword(email, code, password));
   }
 
   /** Новий пароль для того, хто вже ввійшов. */
   async setPassword(password: string): Promise<void> {
-    await invoke('auth_set_password', { password });
-    this.apply(await invoke<AuthState>('auth_state'));
+    await commands.authSetPassword(password);
+    this.apply(await commands.authState());
   }
 
   /** Лист із кодом на нову пошту (а з «Secure email change» у Supabase — і на поточну). Повторно — нові коди. */
-  changeEmail(email: string): Promise<void> {
-    return invoke('auth_change_email', { email });
+  async changeEmail(email: string): Promise<void> {
+    await commands.authChangeEmail(email);
   }
 
   /**
@@ -168,7 +146,7 @@ export class AuthStore {
    * коди з обох листів), або `null` — пошту змінено.
    */
   async confirmEmailChange(email: string, code: string): Promise<string | null> {
-    const result = await invoke<EmailChange>('auth_confirm_email_change', { email, code });
+    const result = await commands.authConfirmEmailChange(email, code);
     if (result.state) {
       this.apply(result.state);
     }
@@ -182,7 +160,7 @@ export class AuthStore {
    */
   async deleteAccount(password: string, clearSiteData: () => Promise<void>): Promise<void> {
     const user = this.user();
-    await invoke('auth_delete_account', { password });
+    await commands.authDeleteAccount(password);
     try {
       await clearSiteData();
     } catch {
@@ -195,23 +173,23 @@ export class AuthStore {
         removeAccountData(user.id);
       }
     }
-    await invoke('auth_sign_out');
+    await commands.authSignOut();
     this.apply({ user: null });
   }
 
   /** Пароль облікового запису ще раз — щоб синхронізувати паролі сайтів. */
   async unlockSync(password: string): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_unlock_sync', { password }));
+    this.apply(await commands.authUnlockSync(password));
   }
 
   /** Нове ім'я — в обліковий запис (його побачать інші комп'ютери). */
   async updateName(name: string): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_update_name', { name }));
+    this.apply(await commands.authUpdateName(name));
   }
 
   /** Свіжі дані облікового запису з сервера (ім'я могли змінити на іншому комп'ютері). */
   async reloadUser(): Promise<void> {
-    this.apply(await invoke<AuthState>('auth_reload_user'));
+    this.apply(await commands.authReloadUser());
   }
 
   async signOut(): Promise<void> {
@@ -219,7 +197,7 @@ export class AuthStore {
       await this.router.navigate(['/sign-in']);
       return;
     }
-    await invoke('auth_sign_out');
+    await commands.authSignOut();
     this.apply({ user: null });
   }
 
@@ -241,7 +219,7 @@ export class AuthStore {
   private async load(): Promise<void> {
     try {
       await listen<AuthState>('auth://changed', (event) => this.apply(event.payload));
-      this.apply(await invoke<AuthState>('auth_state'));
+      this.apply(await commands.authState());
     } catch {
       this.user.set(null);
     }

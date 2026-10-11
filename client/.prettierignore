@@ -13,3 +13,6 @@ package-lock.json
 # Статика (картинки, шрифти) й іконки — як є
 public/
 src/assets/icons/
+
+# Прив'язки до команд Rust — їх генерує server/src/ipc.rs (tauri-specta)
+src/app/bindings.ts

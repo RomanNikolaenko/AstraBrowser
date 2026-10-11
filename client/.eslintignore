@@ -11,3 +11,6 @@ node_modules/
 
 # Статика (картинки, шрифти)
 public/
+
+# Прив'язки до команд Rust — їх генерує server/src/ipc.rs (tauri-specta)
+src/app/bindings.ts

@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { SettingsStore } from '../../../shared/settings/settings';
+import { DefaultBrowserState, DefaultBrowserStore } from '../../data/default-browser';
 import { DnsSettings, DnsStore } from '../../data/dns';
 import { DownloadSettings, DownloadSettingsStore } from '../../data/download-settings';
 import { TrackingStore } from '../../data/tracking';
@@ -61,8 +62,28 @@ class FakeDns extends DnsStore {
   }
 }
 
+/** Браузер за замовчуванням без Windows: `current` — що «в реєстрі»; null — поза застосунком. */
+class FakeDefaultBrowser extends DefaultBrowserStore {
+  current: DefaultBrowserState | null = null;
+  opened = 0;
+
+  override refresh(): Promise<void> {
+    this.state.set(this.current);
+    return Promise.resolve();
+  }
+
+  override openSettings(): Promise<void> {
+    this.opened++;
+    return Promise.resolve();
+  }
+}
+
 describe('SettingsPage', () => {
-  const setup = async (downloads: DownloadSettings | null = null, dns: DnsSettings | null = null) => {
+  const setup = async (
+    downloads: DownloadSettings | null = null,
+    dns: DnsSettings | null = null,
+    defaultBrowser: DefaultBrowserState | null = null
+  ) => {
     await TestBed.configureTestingModule({
       imports: [SettingsPage],
       providers: [
@@ -70,8 +91,10 @@ describe('SettingsPage', () => {
         provideHttpClientTesting(),
         { provide: DownloadSettingsStore, useClass: FakeDownloadSettings },
         { provide: DnsStore, useClass: FakeDns },
+        { provide: DefaultBrowserStore, useClass: FakeDefaultBrowser },
       ],
     }).compileComponents();
+    (TestBed.inject(DefaultBrowserStore) as FakeDefaultBrowser).current = defaultBrowser;
     (TestBed.inject(DownloadSettingsStore) as FakeDownloadSettings).set(downloads);
     (TestBed.inject(DnsStore) as FakeDns).applied = dns;
 
@@ -89,6 +112,44 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     localStorage.clear();
     delete document.documentElement.dataset['theme'];
+  });
+
+  describe('default browser', () => {
+    const makeDefault = (element: HTMLElement) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.page__button')].find((button) =>
+        button.textContent?.includes('Зробити основним')
+      );
+
+    it('should open Windows settings and notice when Astra is chosen there', async () => {
+      const { fixture, element, click } = await setup(null, null, { registered: true, isDefault: false });
+      const store = TestBed.inject(DefaultBrowserStore) as FakeDefaultBrowser;
+      expect(element.querySelector('.page__group')?.textContent?.trim()).toBe('Браузер за замовчуванням');
+      expect(makeDefault(element)?.disabled).toBe(false);
+
+      await click(makeDefault(element));
+      expect(store.opened).toBe(1);
+      expect(element.textContent).toContain('У «Параметрах Windows», що відкрилися');
+
+      // Вибрали Astra в «Параметрах» і повернулися у вікно браузера.
+      store.current = { registered: true, isDefault: true };
+      window.dispatchEvent(new Event('focus'));
+      await fixture.whenStable();
+      expect(element.textContent).toContain('Astra Browser — ваш браузер за замовчуванням');
+      expect(makeDefault(element)).toBeUndefined();
+    });
+
+    it('should explain that only the installed browser can become the default one', async () => {
+      const { element, meta } = await setup(null, null, { registered: false, isDefault: false });
+
+      expect(makeDefault(element)?.disabled).toBe(true);
+      expect(meta()[0]).toBe('Доступно в Astra Browser, встановленому інсталятором.');
+    });
+
+    it('should hide the section outside the app', async () => {
+      const { element } = await setup();
+
+      expect(element.textContent).not.toContain('Браузер за замовчуванням');
+    });
   });
 
   it('should switch the theme on the whole document', async () => {

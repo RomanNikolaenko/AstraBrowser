@@ -1,6 +1,21 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { commands } from '../../bindings';
+
+type Commands = typeof commands;
+/** Команди server/src/passwords.rs, якими користується сховище (bindings.ts). */
+export type PasswordCommand =
+  | 'passwordsState'
+  | 'passwordPromptAnswer'
+  | 'passwordReveal'
+  | 'passwordAdd'
+  | 'passwordEdit'
+  | 'passwordRemove'
+  | 'passwordsNeverRemove'
+  | 'passwordsSetSettings';
+export type PasswordCommandArgs<K extends PasswordCommand> = Parameters<Commands[K]>;
+export type PasswordCommandResult<K extends PasswordCommand> = ReturnType<Commands[K]>;
 
 /** Збережений пароль — без самого пароля (server/src/passwords.rs, PasswordInfo). */
 export interface SavedPassword {
@@ -66,7 +81,7 @@ export class PasswordsStore {
   }
 
   async refresh(): Promise<void> {
-    this.current.set(await this.call<PasswordsState>('passwords_state'));
+    this.current.set(await this.call('passwordsState'));
   }
 
   ask(request: PasswordPromptRequest): void {
@@ -76,44 +91,45 @@ export class PasswordsStore {
   /** Відповідь на «Зберегти пароль?»; зберігаються ім'я й пароль, які лишилися в полях вікна. */
   answer(id: number, choice: PasswordPromptChoice, username?: string, password?: string): Promise<void> {
     this.asking.update((prompts) => prompts.filter((prompt) => prompt.id !== id));
-    return this.change('password_prompt_answer', { id, choice, username, password });
+    return this.change('passwordPromptAnswer', id, choice, username ?? null, password ?? null);
   }
 
   /** Сам пароль — щоб показати чи скопіювати. */
   reveal(id: string): Promise<string> {
-    return this.call<string>('password_reveal', { id });
+    return this.call('passwordReveal', id);
   }
 
   /** Пароль, доданий вручну; `site` — адреса як її ввели («example.com» теж підходить). */
   add(site: string, username: string, password: string): Promise<void> {
-    return this.change('password_add', { site, username, password });
+    return this.change('passwordAdd', site, username, password);
   }
 
   /** Нове ім'я чи пароль; порожній пароль лишає старий. */
   edit(id: string, username: string, password: string): Promise<void> {
-    return this.change('password_edit', { id, username, password });
+    return this.change('passwordEdit', id, username, password);
   }
 
   remove(id: string): Promise<void> {
-    return this.change('password_remove', { id });
+    return this.change('passwordRemove', id);
   }
 
   /** Сайт знову може пропонувати зберегти пароль. */
   allowSaving(origin: string): Promise<void> {
-    return this.change('passwords_never_remove', { origin });
+    return this.change('passwordsNeverRemove', origin);
   }
 
   setSettings(settings: PasswordSettings): Promise<void> {
-    return this.change('passwords_set_settings', { ...settings });
+    return this.change('passwordsSetSettings', settings.offer, settings.autofill);
   }
 
-  /** Команда server/src/passwords.rs; тести підміняють її, щоб обійтися без Rust. */
-  protected call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    return invoke<T>(command, args);
+  /** Команда server/src/passwords.rs (bindings.ts); тести підміняють її, щоб обійтися без Rust. */
+  protected call<K extends PasswordCommand>(command: K, ...args: PasswordCommandArgs<K>): PasswordCommandResult<K> {
+    const run = commands[command] as (...args: PasswordCommandArgs<K>) => PasswordCommandResult<K>;
+    return run(...args);
   }
 
-  private async change(command: string, args: Record<string, unknown>): Promise<void> {
-    await this.call(command, args);
+  private async change<K extends PasswordCommand>(command: K, ...args: PasswordCommandArgs<K>): Promise<void> {
+    await this.call(command, ...args);
     await this.refresh();
   }
 }

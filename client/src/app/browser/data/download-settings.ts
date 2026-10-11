@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
 
 /** Куди зберігаються завантаження (server/src/downloads.rs, DownloadSettings). */
@@ -24,7 +25,7 @@ export class DownloadSettingsStore {
   constructor() {
     if (isTauri()) {
       void listen<DownloadSettings>('downloads://settings', ({ payload }) => this.state.set(payload));
-      invoke<DownloadSettings>('downloads_settings').then(
+      commands.downloadsSettings().then(
         (settings) => this.state.set(settings),
         () => undefined
       );
@@ -33,21 +34,21 @@ export class DownloadSettingsStore {
 
   /** Вікно вибору теки Windows; якщо теку не вибрали, нічого не змінюється. */
   chooseFolder(): Promise<void> {
-    return this.apply(invoke<DownloadSettings>('downloads_choose_folder'));
+    return this.apply(commands.downloadsChooseFolder());
   }
 
   /** Знову стандартна тека «Завантаження». */
   resetFolder(): Promise<void> {
-    return this.apply(invoke<DownloadSettings>('downloads_reset_folder'));
+    return this.apply(commands.downloadsResetFolder());
   }
 
   setAsk(ask: boolean): Promise<void> {
-    return this.apply(invoke<DownloadSettings>('downloads_set_ask', { ask }));
+    return this.apply(commands.downloadsSetAsk(ask));
   }
 
   /** Відкриває теку завантажень у Провіднику. */
-  openFolder(): Promise<void> {
-    return invoke('downloads_open_folder');
+  async openFolder(): Promise<void> {
+    await commands.downloadsOpenFolder();
   }
 
   private async apply(request: Promise<DownloadSettings>): Promise<void> {

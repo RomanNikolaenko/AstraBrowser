@@ -70,7 +70,7 @@ const UBO_RELEASE: &str = "1.75.0";
 /// Скрипт сторінки: `(host, selectors, procedural, runScriptlets) => { … }`.
 const PAGE_SCRIPT: &str = include_str!("adblock-page.js");
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default, rename_all = "camelCase")]
 struct Settings {
   enabled: bool,
@@ -85,7 +85,7 @@ impl Default for Settings {
 }
 
 /// Стан для інтерфейсу; надсилається подією `adblock://status` щоразу, як змінюється.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
   enabled: bool,
@@ -341,7 +341,7 @@ fn refresh(app: &AppHandle) {
       }
     }
     Err(message) => {
-      eprintln!("adblock: не вдалося оновити списки: {message}");
+      log::warn!("adblock: не вдалося оновити списки: {message}");
       if let Ok(mut error) = adblock.error.lock() {
         *error = Some(message);
       }
@@ -363,7 +363,7 @@ fn build(dir: &Path) -> Result<(Engine, Vec<Resource>), String> {
 
   // Без свіжих скриптлетів рушій усе одно корисний — тоді беремо їх з попереднього оновлення.
   let resources = ubo_resources().unwrap_or_else(|error| {
-    eprintln!("adblock: не вдалося завантажити скриптлети uBlock Origin: {error}");
+    log::warn!("adblock: не вдалося завантажити скриптлети uBlock Origin: {error}");
     cached_resources(dir)
   });
   engine.use_resources(resources.clone());
@@ -410,7 +410,7 @@ pub(crate) fn download_all(urls: &[String]) -> Vec<Result<Vec<u8>, String>> {
 }
 
 fn ubo_release() -> Result<String, String> {
-  #[derive(Deserialize)]
+  #[derive(Deserialize, specta::Type)]
   struct Release {
     tag_name: String,
   }
@@ -630,12 +630,14 @@ fn redirect_resources(src: &str) -> Result<Vec<Resource>, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn adblock_status(adblock: State<'_, AdBlock>) -> Status {
   adblock.status()
 }
 
 /// Вмикає чи вимикає блокування на всіх сайтах; відкриті сторінки побачать зміну після перезавантаження.
 #[tauri::command]
+#[specta::specta]
 pub fn adblock_set_enabled(app: AppHandle, adblock: State<'_, AdBlock>, enabled: bool) -> Result<(), String> {
   adblock.change(|settings| settings.enabled = enabled)?;
   broadcast(&app);
@@ -645,6 +647,7 @@ pub fn adblock_set_enabled(app: AppHandle, adblock: State<'_, AdBlock>, enabled:
 /// Вимикає блокування на сайті `site` (хост сторінки) і його піддоменах або знову вмикає —
 /// тоді прибираються й винятки для ширших доменів, що його накривають (example.com для news.example.com).
 #[tauri::command]
+#[specta::specta]
 pub fn adblock_set_site_enabled(app: AppHandle, adblock: State<'_, AdBlock>, site: String, enabled: bool) -> Result<(), String> {
   let site = normalize_site(&site).ok_or_else(|| format!("Invalid site: {site}"))?;
   adblock.change(|settings| {
@@ -660,6 +663,7 @@ pub fn adblock_set_site_enabled(app: AppHandle, adblock: State<'_, AdBlock>, sit
 
 /// Оновлює списки зараз, не чекаючи чотирьох днів.
 #[tauri::command]
+#[specta::specta]
 pub fn adblock_update(app: AppHandle) {
   thread::spawn(move || refresh(&app));
 }

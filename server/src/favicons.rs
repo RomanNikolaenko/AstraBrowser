@@ -121,6 +121,7 @@ fn find(start: Url) -> Option<String> {
 
 /// Значок сайту з адресою `url` (беремо його головну сторінку); `None` — не знайшли.
 #[tauri::command]
+#[specta::specta]
 pub async fn favicon_find(url: String) -> Option<String> {
   let start = Url::parse(&url).ok().filter(|url| matches!(url.scheme(), "http" | "https"))?.join("/").ok()?;
   tauri::async_runtime::spawn_blocking(move || find(start)).await.ok().flatten()

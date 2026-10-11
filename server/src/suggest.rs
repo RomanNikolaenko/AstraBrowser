@@ -66,6 +66,7 @@ fn fetch(engine: &str, query: &str) -> Vec<String> {
 
 /// Підказки для `query` від пошукової системи `engine` (google, duckduckgo, bing); без мережі — порожньо.
 #[tauri::command]
+#[specta::specta]
 pub async fn search_suggestions(engine: String, query: String) -> Vec<String> {
   tauri::async_runtime::spawn_blocking(move || fetch(&engine, &query)).await.unwrap_or_default()
 }

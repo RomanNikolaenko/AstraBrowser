@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { UiSelectOption } from '../../shared/ui-select/ui-select';
 import { SessionStore } from '../session/session';
 
@@ -60,17 +61,17 @@ export class DnsStore {
 
   async load(): Promise<void> {
     if (this.available) {
-      this.state.set(await invoke<DnsState>('dns_settings'));
+      this.state.set(await commands.dnsSettings());
     }
   }
 
   async save(settings: DnsSettings): Promise<void> {
-    this.state.set(await invoke<DnsState>('dns_set', { settings }));
+    this.state.set(await commands.dnsSet(settings));
   }
 
   /** Перезапуск браузера: вікна закриваються й відкриваються знову — з тими самими вкладками. */
-  restart(): Promise<void> {
+  async restart(): Promise<void> {
     this.session.restoreOnce();
-    return invoke('dns_restart');
+    await commands.dnsRestart();
   }
 }

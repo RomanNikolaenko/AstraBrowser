@@ -1,12 +1,20 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { PasswordSettings, PasswordsStore, SavedPassword, generatePassword } from '../../data/passwords';
+import {
+  PasswordCommand,
+  PasswordCommandArgs,
+  PasswordCommandResult,
+  PasswordSettings,
+  PasswordsStore,
+  SavedPassword,
+  generatePassword,
+} from '../../data/passwords';
 import { PasswordsPage } from './passwords-page';
 
 /** Паролі без Rust: команди виконуються над сховищем у пам'яті й записуються. */
 class FakePasswords extends PasswordsStore {
-  readonly calls: [string, Record<string, unknown> | undefined][] = [];
+  readonly calls: [PasswordCommand, readonly unknown[]][] = [];
   private saved: SavedPassword[] = [];
   private readonly secrets = new Map<string, string>();
   private neverSites: string[] = [];
@@ -21,41 +29,42 @@ class FakePasswords extends PasswordsStore {
     return this.refresh();
   }
 
-  protected override call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  protected override call<K extends PasswordCommand>(command: K, ...args: PasswordCommandArgs<K>): PasswordCommandResult<K> {
     this.calls.push([command, args]);
-    const text = (key: string) => String(args?.[key] ?? '');
+    const text = (index: number) => String(args[index] ?? '');
+    const done = (value?: unknown) => Promise.resolve(value) as PasswordCommandResult<K>;
     switch (command) {
-      case 'passwords_state': {
+      case 'passwordsState': {
         const entries = [...this.saved].sort((a, b) => a.origin.localeCompare(b.origin));
-        return Promise.resolve({ entries, never: [...this.neverSites], settings: this.settingsValue } as T);
+        return done({ entries, never: [...this.neverSites], settings: this.settingsValue });
       }
-      case 'password_reveal':
-        return Promise.resolve(this.secrets.get(text('id')) as T);
-      case 'password_add': {
-        const origin = new URL(text('site').includes('://') ? text('site') : `https://${text('site')}`).origin;
-        if (this.saved.some((entry) => entry.origin === origin && entry.username === text('username'))) {
-          return Promise.reject("Для цього сайту вже збережено пароль із таким ім'ям");
+      case 'passwordReveal':
+        return done(this.secrets.get(text(0)));
+      case 'passwordAdd': {
+        const origin = new URL(text(0).includes('://') ? text(0) : `https://${text(0)}`).origin;
+        if (this.saved.some((entry) => entry.origin === origin && entry.username === text(1))) {
+          return Promise.reject("Для цього сайту вже збережено пароль із таким ім'ям") as PasswordCommandResult<K>;
         }
-        this.put(origin, text('username'), text('password'));
-        return Promise.resolve(undefined as T);
+        this.put(origin, text(1), text(2));
+        return done();
       }
-      case 'password_edit':
-        this.saved = this.saved.map((entry) => (entry.id === text('id') ? { ...entry, username: text('username') } : entry));
-        if (text('password')) {
-          this.secrets.set(text('id'), text('password'));
+      case 'passwordEdit':
+        this.saved = this.saved.map((entry) => (entry.id === text(0) ? { ...entry, username: text(1) } : entry));
+        if (text(2)) {
+          this.secrets.set(text(0), text(2));
         }
-        return Promise.resolve(undefined as T);
-      case 'password_remove':
-        this.saved = this.saved.filter((entry) => entry.id !== text('id'));
-        return Promise.resolve(undefined as T);
-      case 'passwords_never_remove':
-        this.neverSites = this.neverSites.filter((origin) => origin !== text('origin'));
-        return Promise.resolve(undefined as T);
-      case 'passwords_set_settings':
-        this.settingsValue = { offer: Boolean(args?.['offer']), autofill: Boolean(args?.['autofill']) };
-        return Promise.resolve(undefined as T);
+        return done();
+      case 'passwordRemove':
+        this.saved = this.saved.filter((entry) => entry.id !== text(0));
+        return done();
+      case 'passwordsNeverRemove':
+        this.neverSites = this.neverSites.filter((origin) => origin !== text(0));
+        return done();
+      case 'passwordsSetSettings':
+        this.settingsValue = { offer: Boolean(args[0]), autofill: Boolean(args[1]) };
+        return done();
       default:
-        return Promise.resolve(undefined as T);
+        return done();
     }
   }
 
@@ -115,10 +124,7 @@ describe('PasswordsPage', () => {
     expect(element.querySelector<HTMLInputElement>('#passwords-offer')?.checked).toBe(true);
 
     await click(element.querySelector('#passwords-autofill'));
-    expect(store.calls.find(([command]) => command === 'passwords_set_settings')?.[1]).toEqual({
-      offer: true,
-      autofill: false,
-    });
+    expect(store.calls.find(([command]) => command === 'passwordsSetSettings')?.[1]).toEqual([true, false]);
     expect(element.querySelector<HTMLInputElement>('#passwords-autofill')?.checked).toBe(false);
   });
 
@@ -155,7 +161,7 @@ describe('PasswordsPage', () => {
     await click(
       [...element.querySelectorAll('.confirm-dialog__button')].find((button) => button.textContent?.includes('Видалити'))
     );
-    expect(store.calls.some(([command, args]) => command === 'password_remove' && args?.['id'] === '1')).toBe(true);
+    expect(store.calls.some(([command, args]) => command === 'passwordRemove' && args[0] === '1')).toBe(true);
     expect(text('.passwords__list .page__name')).toEqual(['example.com']);
   });
 
@@ -196,18 +202,14 @@ describe('PasswordsPage', () => {
     await type('password-editor-username', 'mona');
     await type('password-editor-password', 'new-secret');
     await click(element.querySelector('.password-editor__button--primary'));
-    expect(store.calls.find(([command]) => command === 'password_edit')?.[1]).toEqual({
-      id: '1',
-      username: 'mona',
-      password: 'new-secret',
-    });
+    expect(store.calls.find(([command]) => command === 'passwordEdit')?.[1]).toEqual(['1', 'mona', 'new-secret']);
     expect(text('.passwords__list .page__meta')[0]).toBe('mona');
 
     expect(text('.page__group')).toEqual(['Збережені паролі · 1', 'Ніколи не зберігати']);
     await click(labelled('Знову пропонувати зберігати паролі для bank.example'));
-    expect(
-      store.calls.some(([command, args]) => command === 'passwords_never_remove' && args?.['origin'] === 'https://bank.example')
-    ).toBe(true);
+    expect(store.calls.some(([command, args]) => command === 'passwordsNeverRemove' && args[0] === 'https://bank.example')).toBe(
+      true
+    );
     expect(text('.page__group')).toEqual(['Збережені паролі · 1']);
   });
 });

@@ -17,7 +17,7 @@ pub struct Updates {
   pending: Mutex<Option<Update>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateState {
   /// Версія, що працює зараз.
@@ -26,7 +26,7 @@ pub struct UpdateState {
   available: Option<AvailableUpdate>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableUpdate {
   version: String,
@@ -35,7 +35,7 @@ pub struct AvailableUpdate {
 }
 
 /// Скільки завантажено — подія `update://progress`.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct Progress {
   downloaded: u64,
   total: Option<u64>,
@@ -43,9 +43,16 @@ struct Progress {
 
 /// Чи є новіша версія. Помилка — немає зв'язку чи файлу з оновленням на сервері.
 #[tauri::command]
+#[specta::specta]
 pub async fn app_update_check(app: AppHandle, updates: State<'_, Updates>) -> Result<UpdateState, String> {
   let current = app.package_info().version.to_string();
-  let update = app.updater().map_err(|error| error.to_string())?.check().await.map_err(|error| error.to_string())?;
+  let update = app
+    .updater()
+    .map_err(|error| error.to_string())?
+    .check()
+    .await
+    .map_err(|error| error.to_string())
+    .inspect_err(|error| log::warn!("Не вдалося перевірити оновлення: {error}"))?;
   let available = update.as_ref().map(|update| AvailableUpdate { version: update.version.clone(), notes: update.body.clone() });
   *updates.pending.lock().map_err(|_| "Оновлення недоступне.".to_string())? = update;
   Ok(UpdateState { current, available })
@@ -53,6 +60,7 @@ pub async fn app_update_check(app: AppHandle, updates: State<'_, Updates>) -> Re
 
 /// Завантажити й встановити знайдене оновлення; застосунок закриється й відкриється вже новим.
 #[tauri::command]
+#[specta::specta]
 pub async fn app_update_install(app: AppHandle, updates: State<'_, Updates>) -> Result<(), String> {
   let update = updates
     .pending
@@ -60,6 +68,7 @@ pub async fn app_update_install(app: AppHandle, updates: State<'_, Updates>) -> 
     .map_err(|_| "Оновлення недоступне.".to_string())?
     .take()
     .ok_or_else(|| "Оновлень немає.".to_string())?;
+  log::info!("Встановлюємо оновлення {}", update.version);
   let mut downloaded = 0;
   update
     .download_and_install(
@@ -70,6 +79,7 @@ pub async fn app_update_install(app: AppHandle, updates: State<'_, Updates>) -> 
       || {},
     )
     .await
-    .map_err(|error| format!("Не вдалося встановити оновлення: {error}"))?;
+    .map_err(|error| format!("Не вдалося встановити оновлення: {error}"))
+    .inspect_err(|error| log::error!("{error}"))?;
   app.restart()
 }

@@ -22,7 +22,7 @@ use crate::webview2;
 const SETTINGS_FILE: &str = "downloads.json";
 const PAGE_PREFIX: &str = "page-";
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default, rename_all = "camelCase")]
 struct Settings {
   /// Своя тека; None — «Завантаження» Windows.
@@ -38,7 +38,7 @@ impl Default for Settings {
 }
 
 /// Запит «куди зберегти» для інтерфейсу вікна, з якого завантажують.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PromptEvent {
   label: String,
@@ -50,7 +50,7 @@ struct PromptEvent {
 }
 
 /// Налаштування завантажень для інтерфейсу; надсилаються й подією downloads://settings.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadSettings {
   folder: String,
@@ -180,6 +180,7 @@ fn free_path(folder: &Path, file_name: &str) -> PathBuf {
 
 /// Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None).
 #[tauri::command]
+#[specta::specta]
 pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64, folder: Option<String>) -> Result<(), String> {
   let file_name = downloads.prompts.lock().map_err(|error| error.to_string())?.remove(&id);
   let path = match (folder, file_name) {
@@ -197,6 +198,7 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
 
 /// Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються.
 #[tauri::command]
+#[specta::specta]
 pub async fn downloads_pick_folder(app: AppHandle, window: Window, current: Option<String>) -> Result<Option<String>, String> {
   let mut dialog = app.dialog().file().set_parent(&window).set_title("Куди зберегти файл");
   if let Some(current) = current.map(PathBuf::from).filter(|folder| folder.is_dir()) {
@@ -213,12 +215,14 @@ pub async fn downloads_pick_folder(app: AppHandle, window: Window, current: Opti
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn downloads_settings(app: AppHandle, downloads: State<'_, Downloads>) -> DownloadSettings {
   downloads.status(&app)
 }
 
 /// Вибір своєї теки для завантажень (вікно вибору теки Windows).
 #[tauri::command]
+#[specta::specta]
 pub async fn downloads_choose_folder(app: AppHandle, window: Window) -> Result<DownloadSettings, String> {
   let downloads = app.state::<Downloads>();
   let mut dialog = app.dialog().file().set_parent(&window).set_title("Тека для завантажень");
@@ -240,12 +244,14 @@ pub async fn downloads_choose_folder(app: AppHandle, window: Window) -> Result<D
 
 /// Знову «Завантаження» Windows.
 #[tauri::command]
+#[specta::specta]
 pub fn downloads_reset_folder(app: AppHandle, downloads: State<'_, Downloads>) -> Result<DownloadSettings, String> {
   downloads.change(|settings| settings.folder = None)?;
   Ok(apply(&app))
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn downloads_set_ask(app: AppHandle, downloads: State<'_, Downloads>, ask: bool) -> Result<DownloadSettings, String> {
   downloads.change(|settings| settings.ask = ask)?;
   Ok(apply(&app))
@@ -253,18 +259,21 @@ pub fn downloads_set_ask(app: AppHandle, downloads: State<'_, Downloads>, ask: b
 
 /// Відкриває теку завантажень у Провіднику.
 #[tauri::command]
+#[specta::specta]
 pub fn downloads_open_folder(app: AppHandle, downloads: State<'_, Downloads>) -> Result<(), String> {
   let folder = downloads.folder(&app).ok_or("Немає теки для завантажень")?;
   Command::new("explorer").arg(folder).spawn().map(|_| ()).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn download_cancel(app: AppHandle, id: u64) -> Result<(), String> {
   app.run_on_main_thread(move || webview2::cancel_download(id)).map_err(|error| error.to_string())
 }
 
 /// Відкриває файл програмою, що стоїть для нього у Windows (як подвійний клік у Провіднику).
 #[tauri::command]
+#[specta::specta]
 pub fn download_open(path: String) -> Result<(), String> {
   let path = Path::new(&path);
   if !path.is_file() {
@@ -281,6 +290,7 @@ pub fn download_open(path: String) -> Result<(), String> {
 
 /// Показує файл виділеним у його теці; якщо файла вже немає — просто теку.
 #[tauri::command]
+#[specta::specta]
 pub fn download_show(path: String) -> Result<(), String> {
   let path = Path::new(&path);
   let mut explorer = Command::new("explorer");

@@ -286,7 +286,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "02-welcome.html",
-      sender: Sender::Server("welcome", "одразу після того, як пошту підтвердили кодом, чи після першого входу через Google"),
+      sender: Sender::Server("welcome", "одразу після того, як пошту підтвердили кодом"),
       subject: "Ласкаво просимо до Astra Browser",
       preheader: "Обліковий запис готовий: ваші дані тепер з вами на кожному комп’ютері.",
       heading: "Ваш Astra готовий",
@@ -356,7 +356,7 @@ fn emails() -> Vec<Email> {
     },
     Email {
       file: "06-sign-in-code.html",
-      sender: Sender::Supabase("Magic link or OTP"),
+      sender: Sender::Unused("входу за кодом без пароля в застосунку поки немає"),
       subject: "Ваш код входу в Astra Browser",
       preheader: "Код, щоб увійти в Astra Browser без пароля.",
       heading: "Код для входу",

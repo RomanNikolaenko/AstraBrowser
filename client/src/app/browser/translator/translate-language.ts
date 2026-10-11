@@ -1,5 +1,6 @@
 import { Injectable, effect } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { accountSignal } from '../../shared/storage/stored-signal';
 
 /**
@@ -14,7 +15,7 @@ export class TranslateLanguageStore {
     if (isTauri()) {
       effect(() => {
         const language = this.language();
-        invoke('translate_set_language', { language }).catch(() => undefined);
+        commands.translateSetLanguage(language).catch(() => undefined);
       });
     }
   }

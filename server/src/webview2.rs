@@ -49,7 +49,7 @@ use crate::{
 pub type Reply<T> = Sender<Result<T, String>>;
 
 /// Дозвіл на автовідтворення: явно дозволено, заборонено чи як за замовчуванням.
-#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Autoplay {
   Allow,
@@ -86,7 +86,7 @@ pub(crate) fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreW
 
 /// Отвір у сторінці під панель інтерфейсу: прямокутник із заокругленими кутами, у логічних пікселях від лівого
 /// верхнього кута сторінки.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 pub struct Hole {
   x: f64,
   y: f64,
@@ -312,7 +312,7 @@ pub fn set_tracking_prevention(webview: &Webview, level: tracking::Level) -> tau
       unsafe { profile.SetPreferredTrackingPreventionLevel(level) }
     };
     if let Err(error) = set() {
-      eprintln!("tracking: не вдалося задати рівень захисту WebView2: {error}");
+      log::warn!("tracking: не вдалося задати рівень захисту WebView2: {error}");
     }
   })
 }
@@ -389,7 +389,7 @@ fn report_navigation(sender: Option<ICoreWebView2>, report: &impl Fn(String, boo
 }
 
 /// Особливі оновлення з меню кнопки «Оновити».
-#[derive(Clone, Copy, serde::Deserialize)]
+#[derive(Clone, Copy, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReloadMode {
   /// Повторно завантажити все, минаючи кеш.
@@ -452,7 +452,7 @@ fn finish(reply: &Reply<()>, result: windows_core::Result<()>) {
 }
 
 /// Що очистити в діалозі «Очистити дані перегляду».
-#[derive(Clone, Copy, serde::Deserialize)]
+#[derive(Clone, Copy, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ClearKinds {
   /// Cookies і сховища сайтів.
@@ -686,10 +686,19 @@ const PICTURE_IN_PICTURE_SCRIPT: &str = r#"(async () => {
   return 'opened';
 })()"#;
 
+/// Що зробила «картинка в картинці».
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, specta::Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum PictureInPicture {
+  Opened,
+  Closed,
+  /// На сторінці немає відео.
+  NoVideo,
+}
+
 /// Перемикає «картинку в картинці». Без жесту користувача браузер її не дозволить, тож скрипт
 /// виконується з жестом — це чесно, бо запускає його сам користувач (кнопка чи Ctrl+Shift+]).
-/// `reply` отримує opened, closed чи no-video.
-pub fn picture_in_picture(webview: &Webview, reply: Reply<String>) -> tauri::Result<()> {
+pub fn picture_in_picture(webview: &Webview, reply: Reply<PictureInPicture>) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let failed = reply.clone();
     let params = serde_json::json!({
@@ -705,7 +714,12 @@ pub fn picture_in_picture(webview: &Webview, reply: Reply<String>) -> tauri::Res
           let response: serde_json::Value = serde_json::from_str(&json).map_err(|error| error.to_string())?;
           match response.get("exceptionDetails") {
             Some(details) => Err(details["exception"]["description"].as_str().unwrap_or("Picture-in-picture failed").to_string()),
-            None => Ok(response["result"]["value"].as_str().unwrap_or_default().to_string()),
+            None => match response["result"]["value"].as_str() {
+              Some("opened") => Ok(PictureInPicture::Opened),
+              Some("closed") => Ok(PictureInPicture::Closed),
+              Some("no-video") => Ok(PictureInPicture::NoVideo),
+              other => Err(format!("Picture-in-picture: unexpected result {other:?}")),
+            },
           }
         });
         let _ = reply.send(outcome);
@@ -895,7 +909,7 @@ pub fn block_ads(webview: &Webview, app: AppHandle, ui: String, url: String, rep
   webview.with_webview(move |platform| {
     let watch = core(&platform).and_then(|core| watch_requests(&core, platform.environment(), app, ui, &url, report));
     if let Err(error) = watch {
-      eprintln!("adblock: не вдалося під'єднатися до сторінки: {error}");
+      log::warn!("adblock: не вдалося під'єднатися до сторінки: {error}");
     }
   })
 }

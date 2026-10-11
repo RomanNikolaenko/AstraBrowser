@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import {
   HISTORY_RETENTION,
   SEARCH_ENGINES,
@@ -14,6 +14,7 @@ import { UiInput } from '../../../shared/ui-input/ui-input';
 import { UiSelect } from '../../../shared/ui-select/ui-select';
 import { UiSwitch } from '../../../shared/ui-switch/ui-switch';
 import { ClearDataDialog } from '../../clear-data/clear-data-dialog';
+import { DefaultBrowserStore } from '../../data/default-browser';
 import { DNS_MODES, DNS_PROVIDERS, DnsMode, DnsProvider, DnsSettings, DnsStore } from '../../data/dns';
 import { DownloadSettingsStore } from '../../data/download-settings';
 import { HistoryStore } from '../../data/history';
@@ -35,6 +36,10 @@ export class SettingsPage {
   protected readonly downloadSettings = inject(DownloadSettingsStore);
   protected readonly tracking = inject(TrackingStore);
   protected readonly dns = inject(DnsStore);
+  protected readonly defaultBrowser = inject(DefaultBrowserStore);
+  /** «Параметри Windows» відкрили — підказуємо, що там натиснути. */
+  protected readonly defaultBrowserAsked = signal(false);
+  protected readonly defaultBrowserError = signal<string | null>(null);
   protected readonly dnsModes = DNS_MODES;
   protected readonly dnsProviders = DNS_PROVIDERS;
   /** Вибраний у списку постачальник: «Власний…» діє, лише коли збережуть його адресу. */
@@ -43,6 +48,7 @@ export class SettingsPage {
   protected readonly dnsError = signal<string | null>(null);
 
   constructor() {
+    void this.defaultBrowser.refresh();
     void this.dns
       .load()
       .then(() => {
@@ -54,6 +60,22 @@ export class SettingsPage {
       })
       .catch(() => undefined);
   }
+  /** Повернулися з «Параметрів Windows» — чи вибрали там Astra. */
+  @HostListener('window:focus')
+  protected onWindowFocus(): void {
+    void this.defaultBrowser.refresh();
+  }
+
+  protected async makeDefaultBrowser(): Promise<void> {
+    this.defaultBrowserError.set(null);
+    try {
+      await this.defaultBrowser.openSettings();
+      this.defaultBrowserAsked.set(true);
+    } catch (error) {
+      this.defaultBrowserError.set(typeof error === 'string' ? error : 'Не вдалося відкрити «Параметри Windows».');
+    }
+  }
+
   protected readonly trackingLevels = TRACKING_PROTECTION;
   protected readonly trackingHint = computed(
     () => TRACKING_PROTECTION.find((level) => level.value === this.settings.trackingProtection())?.hint ?? ''

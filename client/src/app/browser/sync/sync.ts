@@ -1,5 +1,5 @@
 import { DestroyRef, Injectable, computed, effect, inject, untracked } from '@angular/core';
-import { invoke } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
 import { AuthStore, isAuthError } from '../../shared/auth/auth';
 import { BrowserWindows } from '../../shared/browser-windows/browser-windows';
@@ -15,7 +15,7 @@ export interface SyncRow {
   readonly data: unknown;
   readonly deleted: boolean;
   readonly updated_at: number;
-  readonly revision?: number;
+  readonly revision?: number | null;
 }
 
 /** Як іде синхронізація — для сторінки профілю (у всіх вікнах). */
@@ -230,7 +230,7 @@ export class SyncService {
         deleted: false,
         updated_at: keyAt,
       };
-      const rejected = await invoke<SyncRow[]>('sync_push', { items: [row] });
+      const rejected = await commands.syncPush([row]);
       state.keyMarker = { id: snapshot.keyId, at: keyAt };
       await this.apply(state, rejected, { passwords: 'ok' });
       if (state.keyMarker.id !== snapshot.keyId) {
@@ -260,7 +260,7 @@ export class SyncService {
   ): Promise<void> {
     let after = collection ? 0 : state.revision;
     for (;;) {
-      const rows = await invoke<SyncRow[]>('sync_pull', { after, collection: collection ?? null });
+      const rows = await commands.syncPull(after, collection ?? null);
       await this.apply(state, rows, { first, passwords });
       after = rows.reduce((last, row) => Math.max(last, row.revision ?? 0), after);
       if (!collection) {
@@ -349,7 +349,7 @@ export class SyncService {
     }
     for (let start = 0; start < rows.length; start += PUSH_BATCH) {
       const batch = rows.slice(start, start + PUSH_BATCH);
-      const rejected = await invoke<SyncRow[]>('sync_push', { items: batch });
+      const rejected = await commands.syncPush(batch);
       for (const row of batch) {
         if (row.deleted) {
           delete base[row.id];

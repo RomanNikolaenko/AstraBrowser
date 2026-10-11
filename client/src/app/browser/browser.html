@@ -231,10 +231,6 @@
       </button>
       <app-tools-menu (openPage)="openPage($event)" (runAction)="runTool($event)" />
       <app-translator [pageUrl]="activeSiteUrl()" (navigate)="openLink($event)" (openInNewTab)="openLinkInNewTab($event)" />
-      <button class="profile" type="button" aria-label="Профіль" title="Профіль" popovertarget="profile-menu">
-        <app-avatar class="profile__avatar" [guest]="isGuest" />
-        <app-icon class="profile__chevron" icon="chevron-down" />
-      </button>
       <app-profile-menu
         [guest]="isGuest"
         (openPage)="openPage($event)"
@@ -305,32 +301,7 @@
     @switch (activeTab().page) {
       @case ('web') {
         @if (activeTab().site?.crashed; as failure) {
-          <div class="crash" role="alert">
-            <app-icon class="crash__icon" icon="warning" />
-            <h2 class="crash__title">
-              {{ failure === 'unresponsive' ? 'Сторінка не відповідає' : 'Ой! Сторінка аварійно завершила роботу' }}
-            </h2>
-            <p class="crash__text">
-              @switch (failure) {
-                @case ('unresponsive') {
-                  Сторінка зависла. Можна зачекати, поки вона отямиться, або перезавантажити її.
-                }
-                @case ('browser') {
-                  Зупинився процес браузера, що показує сайти. Перезавантажте сторінку.
-                }
-                @default {
-                  Можливо, сайту забракло пам’яті або в ньому сталася помилка. Перезавантажте сторінку — те, що ви ввели, могло не
-                  зберегтися.
-                }
-              }
-            </p>
-            <div class="crash__actions">
-              @if (failure === 'unresponsive') {
-                <button class="crash__button" type="button" (click)="waitForPage()">Чекати</button>
-              }
-              <button class="crash__button crash__button--primary" type="button" (click)="recoverPage()">Перезавантажити</button>
-            </div>
-          </div>
+          <app-page-crashed [failure]="failure" (wait)="waitForPage()" (reload)="recoverPage()" />
         }
       }
       @case ('history') {

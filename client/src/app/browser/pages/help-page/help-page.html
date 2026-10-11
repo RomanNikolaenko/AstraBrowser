@@ -37,4 +37,20 @@
       <dd>{{ engineVersion ? 'Chromium ' + engineVersion : '—' }}</dd>
     </div>
   </dl>
+
+  @if (inApp) {
+    <h2 class="page__group">Журнал помилок</h2>
+    <div class="page__list help-log">
+      <span class="help-log__text">
+        <span class="page__name">Якщо щось не працює</span>
+        <span class="page__meta">
+          Браузер записує свої помилки у файл на цьому комп’ютері. Його можна надіслати, коли просите про допомогу.
+        </span>
+      </span>
+      <button class="page__button" type="button" (click)="openLog()">Відкрити журнал</button>
+    </div>
+    @if (logError(); as message) {
+      <p class="help-log__error" role="alert">{{ message }}</p>
+    }
+  }
 </section>

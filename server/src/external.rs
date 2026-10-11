@@ -39,6 +39,7 @@ pub fn app_name(scheme: &str) -> Option<String> {
 /// Відкриває посилання програмою, що в Windows для нього вибрана (пошта для mailto: тощо).
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn open_external(url: String) -> Result<(), String> {
   use windows::Win32::UI::{
     Shell::{ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SHELLEXECUTEINFOW},
@@ -68,6 +69,7 @@ pub fn open_external(url: String) -> Result<(), String> {
 /// (як у Chrome: посилання, якого жодна програма не знає, просто нічого не робить).
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn external_app(url: String) -> Option<String> {
   let parsed = Url::parse(&url).ok()?;
   app_name(scheme_of(&parsed)?)

@@ -70,6 +70,12 @@ class FakePageViews {
   setPermission(label: string, kind: string, state: string) {
     return this.record('set-permission', label, kind, state);
   }
+  /** Посилання, з якими «запустили» браузер. */
+  launch: string[] = [];
+  launchUrls() {
+    return Promise.resolve(this.launch);
+  }
+
   apps: Record<string, string> = { mailto: 'Вибрати програми', tel: 'Вибрати програми', tg: 'Telegram Desktop' };
   externalApp(url: string) {
     return Promise.resolve(this.apps[url.split(':')[0]] ?? null);
@@ -812,6 +818,42 @@ describe('Browser with sites', () => {
     updates.available.set({ version: '0.3.0' });
     await stable();
     expect(menuButton().classList).toContain('toolbar__button--update');
+  });
+
+  describe('links from other apps', () => {
+    it('should open links from another app as new tabs, taking the empty new tab first', async () => {
+      pages.emit('app://open', { urls: ['https://t.me/astra', 'https://mail.example/inbox'] });
+      await stable();
+
+      expect(titles()).toEqual(['t.me', 'mail.example']);
+      expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('mail.example');
+      expect(windows.opened).toEqual([]);
+    });
+
+    it('should load a single link right away in the empty new tab', async () => {
+      pages.emit('app://open', { urls: ['https://t.me/astra'] });
+      await stable();
+
+      expect(titles()).toEqual(['t.me']);
+      expect(pages.called('open').map((call) => call[1])).toEqual(['https://t.me/astra']);
+    });
+
+    it('should keep the open site and add the link next to it', async () => {
+      await typeInOmnibox('angular.dev');
+      pages.emit('app://open', { urls: ['https://t.me/astra', 'file:///C:/secret.txt'] });
+      await stable();
+
+      expect(titles()).toEqual(['angular.dev', 't.me']);
+      expect(pages.called('open').at(-1)?.[1]).toBe('https://t.me/astra');
+    });
+
+    it('should open a new window when the browser is started again without links', async () => {
+      pages.emit('app://open', { urls: [] });
+      await stable();
+
+      expect(windows.opened).toEqual([{}]);
+      expect(titles()).toEqual(['Нова вкладка']);
+    });
   });
 
   it('should reopen the last closed tab in its place with Ctrl+Shift+T, also from a site', async () => {

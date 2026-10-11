@@ -25,7 +25,6 @@ import { UiInput } from '../shared/ui-input/ui-input';
 import { TitlebarContent } from '../shared/titlebar/titlebar-content';
 import { BookmarksBar } from './bookmarks-bar/bookmarks-bar';
 import { BrowserMenu } from './browser-menu/browser-menu';
-import { Avatar } from './avatar/avatar';
 import { BookmarkEditor } from './bookmark-editor/bookmark-editor';
 import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
@@ -49,6 +48,7 @@ import { HistoryStore } from './data/history';
 import { FindBar } from './find-bar/find-bar';
 import { NewTab } from './new-tab/new-tab';
 import {
+  AppOpenEvent,
   PageAdBlockEvent,
   PageExternalEvent,
   PageCrashedEvent,
@@ -80,6 +80,7 @@ import { ProfilePage } from './pages/profile-page/profile-page';
 import { PasswordsPage } from './pages/passwords-page/passwords-page';
 import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
+import { PageCrashed } from './page-crashed/page-crashed';
 import { ProfileMenu } from './profile-menu/profile-menu';
 import { ReloadMenu } from './reload-menu/reload-menu';
 import { SiteIcon } from './site-icon/site-icon';
@@ -89,6 +90,7 @@ import { TabMenu, TabMenuAction, TabMenuTarget } from './tab-menu/tab-menu';
 import { PopupBlocked } from './popup-blocked/popup-blocked';
 import { PermissionsStore } from './data/permissions';
 import { UpdateStore } from './data/updates';
+import { LaunchLinks } from './launch/launch-links';
 import { translatePageUrl, translateTextUrl } from './translator/translate-urls';
 import { SavedSession, SavedTab, SessionStore } from './session/session';
 import { OmniboxSuggestions, SUGGESTIONS_ID, suggestionId } from './omnibox/omnibox-suggestions';
@@ -157,7 +159,6 @@ interface BrowserTab {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    Avatar,
     BookmarkEditor,
     BookmarksBar,
     BookmarksPage,
@@ -181,6 +182,7 @@ interface BrowserTab {
     PasswordPrompt,
     PasswordsPage,
     PersonalizationPage,
+    PageCrashed,
     ProfileMenu,
     ProfilePage,
     ReloadMenu,
@@ -217,6 +219,7 @@ export class Browser {
   private readonly tracking = inject(TrackingStore);
   private readonly externalApps = inject(ExternalAppsStore);
   private readonly permissions = inject(PermissionsStore);
+  private readonly launchLinks = inject(LaunchLinks);
   /** Оновлення застосунку: кнопка меню привертає увагу, поки нову версію ще не бачили в меню. */
   protected readonly updates = inject(UpdateStore);
   private readonly translateLanguage = inject(TranslateLanguageStore);
@@ -414,6 +417,12 @@ export class Browser {
     const injector = this.injector;
     this.restoreSession();
     this.openRequestedUrl();
+    // Посилання з інших програм і повторний запуск — сюди (і ті, що чекали, поки вікно було на сторінці входу).
+    destroyRef.onDestroy(this.launchLinks.attach((event) => this.onAppOpen(event)));
+    // Браузер запустили посиланням з іншої програми — воно відкривається після відновлених вкладок.
+    if (this.windowLabel === 'main' || !isTauri()) {
+      this.ignore(this.pageViews.launchUrls().then((urls) => this.openLinks(urls)));
+    }
 
     // Меню оновлення — про сайт, на якому його відкрили: інша вкладка чи не сайт — закриваємо.
     effect(() => {
@@ -1518,6 +1527,38 @@ export class Browser {
     if (tab?.site && /^https?:/i.test(url)) {
       // Нова сторінка — заблоковані спливні вікна попередньої вже не про неї.
       this.updateSite(tab.id, (site) => ({ ...site, url, loading, ...(loading ? { blockedPopups: [] } : {}) }));
+    }
+  }
+
+  /** Браузер запустили ще раз (server/src/launch.rs): з посиланнями — вони тут, без них — нове вікно, як у Chrome. */
+  private onAppOpen({ urls }: AppOpenEvent): void {
+    if (urls.length === 0) {
+      this.windows.open();
+    } else {
+      this.openLinks(urls);
+    }
+  }
+
+  /**
+   * Посилання ззовні (Telegram, пошта) — новими вкладками, остання стає активною; порожня нова вкладка
+   * не лишається — її займає посилання. Приватне й гостьове вікна відкривають їх у звичайному.
+   */
+  private openLinks(urls: readonly string[]): void {
+    const links = urls.filter((url) => /^https?:\/\//i.test(url));
+    if (this.windows.isPrivate || this.isGuest) {
+      links.forEach((url) => this.windows.open({ url }));
+      return;
+    }
+    for (const url of links) {
+      const active = this.activeTab();
+      if (active.page === 'new-tab' && !active.site) {
+        this.replaceTab({ id: active.id, page: 'web', site: { ...emptySite(this.newPageLabel(active), url), pending: true } });
+      } else {
+        const tab = this.createNewTab();
+        this.tabs.update((tabs) => [...tabs, tab]);
+        this.activeTabId.set(tab.id);
+        this.openSite(url, tab);
+      }
     }
   }
 

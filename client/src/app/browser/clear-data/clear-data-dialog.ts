@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { UiSelect, UiSelectOption } from '../../shared/ui-select/ui-select';
 import { AutoplayStore } from '../data/autoplay';
 import { DownloadsStore } from '../data/downloads';
@@ -57,9 +58,9 @@ export interface SiteDataKinds {
  * Очищає дані сайтів у WebView2 (server/src/browsing_data.rs), змінені від `since` (мс; 0 — за весь час).
  * `visited` — адреси з історії: у профілі, спільному з інтерфейсом браузера, localStorage їхніх сайтів чиститься окремо.
  */
-export function clearSiteData(kinds: SiteDataKinds, since: number, visited: readonly string[]): Promise<void> {
+export async function clearSiteData(kinds: SiteDataKinds, since: number, visited: readonly string[]): Promise<void> {
   const origins = [...new Set(visited.map(originOf))].filter((origin): origin is string => !!origin);
-  return invoke('browsing_data_clear', { kinds, since: since / 1000, origins });
+  await commands.browsingDataClear(kinds, since / 1000, origins);
 }
 
 /** Початок проміжку (мс); 0 — увесь час. */
@@ -110,7 +111,8 @@ export class ClearDataDialog {
     }
     this.sizes.set(null);
     if (isTauri()) {
-      invoke<BrowsingDataSizes>('browsing_data_sizes')
+      commands
+        .browsingDataSizes()
         .then((sizes) => this.sizes.set(sizes))
         .catch(() => undefined);
     }

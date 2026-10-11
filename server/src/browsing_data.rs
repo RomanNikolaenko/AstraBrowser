@@ -39,7 +39,7 @@ const CLEAR_TIMEOUT: Duration = Duration::from_secs(120);
 
 static NEXT_CLEANER: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowsingDataSizes {
   site_data: u64,
@@ -63,6 +63,7 @@ fn profile_dir(app: &AppHandle) -> Option<PathBuf> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn browsing_data_sizes(app: AppHandle) -> BrowsingDataSizes {
   let measure = move || {
     let Some(dir) = profile_dir(&app) else {
@@ -77,6 +78,7 @@ pub async fn browsing_data_sizes(app: AppHandle) -> BrowsingDataSizes {
 /// Очищає вибране (`kinds`), змінене від `since` (секунди Unix; 0 — за весь час). `origins` — сайти з історії: у
 /// профілі, спільному з інтерфейсом, їхній localStorage чиститься окремо (webview2::clear_browsing_data).
 #[tauri::command]
+#[specta::specta]
 pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, origins: Vec<String>) -> Result<(), String> {
   let app = window.app_handle().clone();
   let separate = profiles::site_data_dir(&app);

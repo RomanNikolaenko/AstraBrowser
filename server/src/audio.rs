@@ -115,7 +115,7 @@ fn json<T: serde::Serialize + ?Sized>(value: &T) -> String {
 
 /// Правила автовідтворення: сайти (origin), яким усе дозволено, і ті, яким заборонено лише звук. Решта — «Блокувати
 /// аудіо та відео».
-#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AutoplayRules {
   pub allow: Vec<String>,

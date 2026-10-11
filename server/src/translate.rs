@@ -44,6 +44,7 @@ fn language() -> String {
 
 /// Мова, на яку перекладати виділене, — та, що вибрана в «Перекладачі».
 #[tauri::command]
+#[specta::specta]
 pub fn translate_set_language(language: String) -> Result<(), String> {
   if !is_language(&language) {
     return Err("Некоректна мова".into());

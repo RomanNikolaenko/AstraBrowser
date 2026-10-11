@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { getTauriVersion, getVersion } from '@tauri-apps/api/app';
 import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../../bindings';
 import { SHORTCUTS } from '../internal-pages';
 
 @Component({
@@ -16,6 +17,10 @@ export class HelpPage {
   protected readonly appVersion = signal<string | null>(null);
   protected readonly tauriVersion = signal<string | null>(null);
 
+  /** Журнал помилок є лише в застосунку (server/src/logging.rs). */
+  protected readonly inApp = isTauri();
+  protected readonly logError = signal<string | null>(null);
+
   /** WebView2 — це Chromium; його версію видно з User-Agent. */
   protected readonly engineVersion = /Chrome\/([\d.]+)/.exec(navigator.userAgent)?.[1] ?? null;
 
@@ -23,6 +28,16 @@ export class HelpPage {
     if (isTauri()) {
       void getVersion().then((version) => this.appVersion.set(version));
       void getTauriVersion().then((version) => this.tauriVersion.set(version));
+    }
+  }
+
+  /** Файл журналу — у Провіднику, щоб його можна було надіслати. */
+  protected async openLog(): Promise<void> {
+    this.logError.set(null);
+    try {
+      await commands.appOpenLogs();
+    } catch {
+      this.logError.set('Не вдалося відкрити теку з журналом.');
     }
   }
 }

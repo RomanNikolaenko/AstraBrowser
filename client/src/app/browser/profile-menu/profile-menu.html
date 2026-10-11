@@ -1,3 +1,7 @@
+<button class="profile" type="button" aria-label="Профіль" title="Профіль" popovertarget="profile-menu">
+  <app-avatar class="profile__avatar" [guest]="guest()" />
+  <app-icon class="profile__chevron" icon="chevron-down" />
+</button>
 <app-popover class="profile-menu" popoverId="profile-menu" caret>
   <h2 class="profile-menu__title">Профіль</h2>
 

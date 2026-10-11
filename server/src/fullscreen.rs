@@ -11,6 +11,7 @@ use windows::Win32::{
 };
 
 #[tauri::command]
+#[specta::specta]
 pub fn window_fill_monitor(window: Window) -> Result<(), String> {
   let monitor = window.current_monitor().map_err(|error| error.to_string())?.ok_or("No monitor for the window")?;
   let (position, size) = (*monitor.position(), *monitor.size());

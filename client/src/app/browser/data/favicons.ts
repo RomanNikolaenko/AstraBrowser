@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { accountSignal } from '../../shared/storage/stored-signal';
 
 /** Скільки сайтів пам'ятати: найстаріші записи витісняються. */
@@ -58,7 +59,8 @@ export class FaviconStore {
       return;
     }
     this.searched.add(site.host);
-    invoke<string | null>('favicon_find', { url: site.href })
+    commands
+      .faviconFind(site.href)
       .then((icon) => {
         if (icon) {
           this.remember(url, icon);

@@ -17,5 +17,7 @@ describe('HelpPage', () => {
     const about = [...element.querySelectorAll('.help-about dd')].map((value) => value.textContent?.trim());
     expect(about[0]).toBe('Версія розробки');
     expect(about[1]).toBe('—');
+    // Журнал помилок пише лише застосунок.
+    expect(element.textContent).not.toContain('Журнал помилок');
   });
 });

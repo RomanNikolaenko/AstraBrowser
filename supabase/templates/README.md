@@ -5,11 +5,11 @@
 | Файл | Хто надсилає | Тема (Subject) | Змінні |
 |---|---|---|---|
 | [01-confirm-signup.html](01-confirm-signup.html) | Supabase — шаблон «Confirm sign up» | Код підтвердження Astra Browser | `{{ .Token }}` |
-| [02-welcome.html](02-welcome.html) | наш сервер — одразу після того, як пошту підтвердили кодом, чи після першого входу через Google | Ласкаво просимо до Astra Browser | `{{ .Name }}` |
+| [02-welcome.html](02-welcome.html) | наш сервер — одразу після того, як пошту підтвердили кодом | Ласкаво просимо до Astra Browser | `{{ .Name }}` |
 | [03-reset-password.html](03-reset-password.html) | Supabase — шаблон «Reset password» | Відновлення пароля Astra Browser | `{{ .Email }}`, `{{ .Token }}` |
 | [04-password-changed.html](04-password-changed.html) | Supabase — шаблон «Password changed (Security notifications)» | Пароль Astra Browser змінено | `{{ .Email }}` |
 | [05-new-sign-in.html](05-new-sign-in.html) | наш сервер — після входу з незнайомого місця (IP) на вже знайомому комп’ютері | Новий вхід в Astra Browser | `{{ .Email }}`, `{{ .Date }}`, `{{ .Device }}`, `{{ .Location }}`, `{{ .Ip }}` |
-| [06-sign-in-code.html](06-sign-in-code.html) | Supabase — шаблон «Magic link or OTP» | Ваш код входу в Astra Browser | `{{ .Token }}` |
+| [06-sign-in-code.html](06-sign-in-code.html) | не надсилається — входу за кодом без пароля в застосунку поки немає | Ваш код входу в Astra Browser | `{{ .Token }}` |
 | [07-new-device.html](07-new-device.html) | наш сервер — після першого входу на комп’ютері, де цей обліковий запис ще не входив | Новий пристрій синхронізується з Astra Browser | `{{ .Email }}`, `{{ .Device }}`, `{{ .Date }}` |
 | [08-email-change.html](08-email-change.html) | Supabase — шаблон «Change email address» | Підтвердіть зміну пошти Astra Browser | `{{ .Email }}`, `{{ .NewEmail }}`, `{{ .Token }}` |
 | [09-delete-account.html](09-delete-account.html) | не надсилається — видалення облікового запису підтверджується паролем (supabase/account.sql) | Підтвердіть видалення облікового запису Astra Browser | `{{ .Email }}`, `{{ .Token }}` |

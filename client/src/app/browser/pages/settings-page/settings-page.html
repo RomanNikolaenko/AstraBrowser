@@ -3,6 +3,40 @@
     <h1 class="page__title">Налаштування</h1>
   </header>
 
+  @if (defaultBrowser.state(); as state) {
+    <h2 class="page__group">Браузер за замовчуванням</h2>
+    <div class="page__list settings">
+      <div class="settings__row">
+        <span class="settings__text settings__text--wide">
+          @if (state.isDefault) {
+            <span class="page__name">Astra Browser — ваш браузер за замовчуванням</span>
+            <span class="page__meta">Посилання з Telegram, пошти й документів відкриваються тут.</span>
+          } @else {
+            <span class="page__name">Зробити Astra браузером за замовчуванням</span>
+            <span class="page__meta">
+              @if (!state.registered) {
+                Доступно в Astra Browser, встановленому інсталятором.
+              } @else if (defaultBrowserAsked()) {
+                У «Параметрах Windows», що відкрилися, натисніть кнопку вгорі сторінки Astra Browser — і посилання з інших програм
+                відкриватимуться тут.
+              } @else {
+                Зараз посилання з Telegram, пошти й документів відкриває інший браузер.
+              }
+            </span>
+          }
+        </span>
+        @if (!state.isDefault) {
+          <button class="page__button" type="button" [disabled]="!state.registered" (click)="makeDefaultBrowser()">
+            Зробити основним…
+          </button>
+        }
+      </div>
+      @if (defaultBrowserError(); as message) {
+        <p class="settings__error" role="alert">{{ message }}</p>
+      }
+    </div>
+  }
+
   <h2 class="page__group">Вигляд</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">

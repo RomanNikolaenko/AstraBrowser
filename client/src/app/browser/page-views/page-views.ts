@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
@@ -165,7 +166,16 @@ export interface PagePasswordsManageEvent {
 /** Дозвіл сайту на автовідтворення; `default` у WebView2 теж дозволяє. */
 export type AutoplayPermission = 'allow' | 'block' | 'default';
 
+/**
+ * Посилання з іншої програми (Telegram, пошта) чи повторний запуск браузера (server/src/launch.rs).
+ * Без посилань — просто відкрити нове вікно.
+ */
+export interface AppOpenEvent {
+  readonly urls: readonly string[];
+}
+
 interface PageEvents {
+  'app://open': AppOpenEvent;
   'page://load': PageLoadEvent;
   'page://navigation': PageNavigationEvent;
   'page://audio': PageAudioEvent;
@@ -191,6 +201,11 @@ interface PageEvents {
  * webview поверх області вмісту, тож інтерфейс лише задає йому межі, видимість і навігацію.
  * Поза Tauri (ng serve у звичайному браузері) сайтів не вбудувати — `available` = false.
  */
+/** Правила автовідтворення для Rust: bindings.ts описує масиви без readonly. */
+function autoplayArgs(rules: AutoplayRules = { allow: [], blockAudio: [] }) {
+  return { allow: [...rules.allow], blockAudio: [...rules.blockAudio] };
+}
+
 @Injectable({ providedIn: 'root' })
 export class PageViews {
   readonly available = isTauri();
@@ -202,26 +217,20 @@ export class PageViews {
    * `background` — для фонової вкладки: webview прихований і не забирає фокус.
    * `autoplay` — правила автовідтворення сайтів (server/src/audio.rs).
    */
-  open(label: string, url: string, bounds: PageBounds, options: PageOpenOptions = {}): Promise<void> {
-    return invoke('page_open', {
-      label,
-      url,
-      bounds,
-      background: options.background ?? false,
-      autoplay: options.autoplay ?? { allow: [], blockAudio: [] },
-    });
+  async open(label: string, url: string, bounds: PageBounds, options: PageOpenOptions = {}): Promise<void> {
+    await commands.pageOpen(label, url, bounds, options.background ?? false, autoplayArgs(options.autoplay));
   }
 
-  navigate(label: string, url: string): Promise<void> {
-    return invoke('page_navigate', { label, url });
+  async navigate(label: string, url: string): Promise<void> {
+    await commands.pageNavigate(label, url);
   }
 
-  go(label: string, step: -1 | 1): Promise<void> {
-    return invoke('page_go', { label, step });
+  async go(label: string, step: -1 | 1): Promise<void> {
+    await commands.pageGo(label, step);
   }
 
-  reload(label: string): Promise<void> {
-    return invoke('page_reload', { label });
+  async reload(label: string): Promise<void> {
+    await commands.pageReload(label);
   }
 
   /**
@@ -231,11 +240,11 @@ export class PageViews {
    */
   /** Вмикає чи вимикає «картинку в картинці» для відео на сторінці. */
   pictureInPicture(label: string): Promise<'opened' | 'closed' | 'no-video'> {
-    return invoke('page_picture_in_picture', { label });
+    return commands.pagePictureInPicture(label);
   }
 
-  reloadWith(label: string, mode: ReloadMode): Promise<void> {
-    return invoke('page_reload_with', { label, mode });
+  async reloadWith(label: string, mode: ReloadMode): Promise<void> {
+    await commands.pageReloadWith(label, mode);
   }
 
   setBounds(label: string, bounds: PageBounds): Promise<void> {
@@ -246,21 +255,21 @@ export class PageViews {
     return Promise.resolve();
   }
 
-  setVisible(label: string, visible: boolean): Promise<void> {
-    return invoke('page_set_visible', { label, visible });
+  async setVisible(label: string, visible: boolean): Promise<void> {
+    await commands.pageSetVisible(label, visible);
   }
 
   /** Отвори в сайті під панелі інтерфейсу (server/src/webview2.rs, set_clip); порожній список — сайт знову цілий. */
-  setClip(label: string, holes: readonly PageHole[]): Promise<void> {
-    return invoke('page_set_clip', { label, holes });
+  async setClip(label: string, holes: readonly PageHole[]): Promise<void> {
+    await commands.pageSetClip(label, [...holes]);
   }
 
-  setZoom(label: string, scale: number): Promise<void> {
-    return invoke('page_set_zoom', { label, scale });
+  async setZoom(label: string, scale: number): Promise<void> {
+    await commands.pageSetZoom(label, scale);
   }
 
-  focus(label: string): Promise<void> {
-    return invoke('page_focus', { label });
+  async focus(label: string): Promise<void> {
+    await commands.pageFocus(label);
   }
 
   /** Фокус — у сам інтерфейс вікна (скажімо, з прихованого щойно сайту). */
@@ -268,21 +277,21 @@ export class PageViews {
     return getCurrentWebview().setFocus();
   }
 
-  print(label: string): Promise<void> {
-    return invoke('page_print', { label });
+  async print(label: string): Promise<void> {
+    await commands.pagePrint(label);
   }
 
-  close(label: string): Promise<void> {
-    return invoke('page_close', { label });
+  async close(label: string): Promise<void> {
+    await commands.pageClose(label);
   }
 
   /** Виділяє наступний (чи попередній) збіг на сторінці; true — якщо знайшовся. */
   find(label: string, query: string, backwards: boolean): Promise<boolean> {
-    return invoke('page_find', { label, query, backwards });
+    return commands.pageFind(label, query, backwards);
   }
 
-  setMuted(label: string, muted: boolean): Promise<void> {
-    return invoke('page_set_muted', { label, muted });
+  async setMuted(label: string, muted: boolean): Promise<void> {
+    await commands.pageSetMuted(label, muted);
   }
 
   /** Знімок того, що показує сторінка (JPEG): лежить на місці webview, поки той прихований під панеллю. */
@@ -306,86 +315,91 @@ export class PageViews {
   }
 
   /** Правила автовідтворення — для всіх сайтів вікна: відкритим сторінкам одразу, а відео, що вже на них, — після перезавантаження. */
-  setAudioRules(rules: AutoplayRules): Promise<void> {
-    return invoke('page_set_audio_rules', { rules });
+  async setAudioRules(rules: AutoplayRules): Promise<void> {
+    await commands.pageSetAudioRules(autoplayArgs(rules));
   }
 
   /** Підказки пошукової системи для введеного в адресному рядку (server/src/suggest.rs); без мережі — порожньо. */
   searchSuggestions(engine: string, query: string): Promise<string[]> {
-    return invoke<string[]>('search_suggestions', { engine, query });
+    return commands.searchSuggestions(engine, query);
   }
 
   /** Присипляє приховану фонову вкладку; `true` — заснула. */
   suspend(label: string): Promise<boolean> {
-    return invoke<boolean>('page_suspend', { label });
+    return commands.pageSuspend(label);
   }
 
   /** Вкладка у фоні — WebView2 тримає її в меншій пам'яті. */
-  setBackground(label: string, background: boolean): Promise<void> {
-    return invoke('page_set_background', { label, background });
+  async setBackground(label: string, background: boolean): Promise<void> {
+    await commands.pageSetBackground(label, background);
   }
 
   /** Відповідь на запит дозволу сайту; `remember` — запам'ятати для сайту. */
-  answerPermission(id: number, state: PermissionState, remember: boolean): Promise<void> {
-    return invoke('page_permission_answer', { id, state, remember });
+  async answerPermission(id: number, state: PermissionState, remember: boolean): Promise<void> {
+    await commands.pagePermissionAnswer(id, state, remember);
   }
 
   /** Збережені дозволи сайту вкладки: дозвіл → стан. */
   permissions(label: string): Promise<Readonly<Record<string, PermissionState>>> {
-    return invoke('page_permissions', { label });
+    return commands.pagePermissions(label);
   }
 
-  setPermission(label: string, kind: PermissionKind, state: PermissionState): Promise<void> {
-    return invoke('page_set_permission', { label, kind, state });
+  async setPermission(label: string, kind: PermissionKind, state: PermissionState): Promise<void> {
+    await commands.pageSetPermission(label, kind, state);
+  }
+
+  /** Посилання, з якими браузер запустили (Astra — браузер за замовчуванням); віддаються один раз. */
+  launchUrls(): Promise<string[]> {
+    return this.available ? commands.launchUrls() : Promise.resolve([]);
   }
 
   /** Назва програми Windows, що відкриє посилання (mailto:, tg:…); null — такої немає. */
   externalApp(url: string): Promise<string | null> {
-    return invoke<string | null>('external_app', { url });
+    return commands.externalApp(url);
   }
 
   /** Відкриває посилання (mailto:, tel:…) програмою Windows — лише після згоди користувача. */
-  openExternal(url: string): Promise<void> {
-    return invoke('open_external', { url });
+  async openExternal(url: string): Promise<void> {
+    await commands.openExternal(url);
   }
 
   /** Правила захисту від стеження для всіх сайтів вікна: запитам — одразу, а куки й GPC — і сторінкам, що вже відкриті. */
-  setTrackingRules(rules: TrackingRules): Promise<void> {
-    return invoke('tracking_set_rules', { rules });
+  async setTrackingRules(rules: TrackingRules): Promise<void> {
+    await commands.trackingSetRules({ ...rules, exceptions: [...rules.exceptions] });
   }
 
   /** Збережений для сайту дозвіл на автовідтворення (у приватному вікні — лише до його закриття). */
   autoplay(label: string): Promise<AutoplayPermission> {
-    return invoke('page_autoplay', { label });
+    return commands.pageAutoplay(label);
   }
 
   /** Сторінка побачить новий дозвіл після перезавантаження. */
-  setAutoplay(label: string, autoplay: AutoplayPermission): Promise<void> {
-    return invoke('page_set_autoplay', { label, autoplay });
+  async setAutoplay(label: string, autoplay: AutoplayPermission): Promise<void> {
+    await commands.pageSetAutoplay(label, autoplay);
   }
 
   /** Відповідь «куди зберегти»: тека чи null — не завантажувати. */
-  resolveDownload(id: number, folder: string | null): Promise<void> {
-    return invoke('download_resolve', { id, folder });
+  async resolveDownload(id: number, folder: string | null): Promise<void> {
+    await commands.downloadResolve(id, folder);
   }
 
   /** Вікно вибору теки Windows для одного файла; null — теку не вибрали. */
   pickDownloadFolder(current: string): Promise<string | null> {
-    return invoke('downloads_pick_folder', { current });
+    return commands.downloadsPickFolder(current);
   }
 
-  cancelDownload(id: number): Promise<void> {
-    return invoke('download_cancel', { id });
+  async cancelDownload(id: number): Promise<void> {
+    await commands.downloadCancel(id);
   }
 
   /** Відкриває завантажений файл програмою, що стоїть для нього в Windows. */
-  openDownload(path: string): Promise<void> {
-    return invoke('download_open', { path });
+  async openDownload(path: string): Promise<void> {
+    await commands.downloadOpen(path);
   }
 
   /** Показує файл виділеним у його теці. */
-  showDownload(path: string): Promise<void> {
-    return invoke('download_show', { path });
+  async showDownload(path: string): Promise<void> {
+    await commands.downloadShow(path);
   }
 
   /** Події надходять лише webview інтерфейсу поточного вікна. */
@@ -399,7 +413,7 @@ export class PageViews {
       for (let bounds = this.pendingBounds.get(label); bounds; bounds = this.pendingBounds.get(label)) {
         this.pendingBounds.delete(label);
         // Webview може ще створюватися чи вже бути закритим — тоді просто пропускаємо.
-        await invoke('page_set_bounds', { label, bounds }).catch(() => undefined);
+        await commands.pageSetBounds(label, bounds).catch(() => undefined);
       }
     } finally {
       this.sendingBounds.delete(label);

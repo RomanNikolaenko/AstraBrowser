@@ -5,7 +5,56 @@
   display: contents;
 }
 
-// Якір панелі — аватар (anchor-name у browser.scss), тож стрілка над ним, а не над усією кнопкою.
+// Кнопка з аватаром на панелі інструментів; «натиснута», поки меню відкрите (.is-open — на сусідньому <app-popover>).
+.profile {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  height: 2.5rem;
+  padding: 0.1875rem 0.375rem 0.1875rem 0.1875rem;
+  color: var(--browser-icon);
+  background: transparent;
+  border: 0;
+  border-radius: 1.25rem;
+  transition:
+    background-color $motion,
+    outline-color $motion,
+    outline-offset $motion;
+
+  @include focus-ring(0.125rem);
+
+  &__avatar {
+    --avatar-size: 2.125rem;
+
+    anchor-name: --profile-menu;
+  }
+
+  &__chevron {
+    width: 1rem;
+    height: 1rem;
+    transition: transform $motion;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--browser-hover);
+
+    .profile__chevron {
+      transform: translateY(0.125rem);
+    }
+  }
+
+  &:active,
+  &:has(+ .is-open) {
+    background: var(--browser-pressed);
+  }
+
+  &:has(+ .is-open) .profile__chevron {
+    transform: rotate(180deg);
+  }
+}
+
+// Якір панелі — аватар (anchor-name вище), тож стрілка над ним, а не над усією кнопкою.
 .profile-menu {
   --popover-width: 17rem;
   --popover-padding: 0.75rem;

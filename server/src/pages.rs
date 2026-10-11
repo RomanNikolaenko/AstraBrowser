@@ -22,7 +22,7 @@ pub(crate) const PAGE_PREFIX: &str = "page-";
 pub const GUEST_PREFIX: &str = "guest-";
 
 /// Положення й розмір області вмісту в логічних пікселях вікна.
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct Bounds {
   x: f64,
   y: f64,
@@ -30,21 +30,21 @@ pub struct Bounds {
   height: f64,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct LoadEvent {
   label: String,
   url: String,
   loading: bool,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct TitleEvent {
   label: String,
   title: String,
 }
 
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct NavigationEvent {
   label: String,
@@ -54,14 +54,14 @@ struct NavigationEvent {
 }
 
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct FullscreenEvent {
   label: String,
   fullscreen: bool,
 }
 
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct AudioEvent {
   label: String,
   playing: bool,
@@ -69,7 +69,7 @@ struct AudioEvent {
 }
 
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct FaviconEvent {
   label: String,
   url: String,
@@ -78,7 +78,7 @@ struct FaviconEvent {
 
 /// Гаряча клавіша браузера, натиснута, поки фокус у сайті (webview2::watch_shortcuts).
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct ShortcutEvent {
   label: String,
   shortcut: &'static str,
@@ -86,7 +86,7 @@ struct ShortcutEvent {
 
 /// Скільки запитів блокувальник реклами відсік на поточній сторінці вкладки.
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct AdBlockEvent {
   label: String,
   blocked: u32,
@@ -94,7 +94,7 @@ struct AdBlockEvent {
 
 /// Елемент стеження, заблокований на поточній сторінці вкладки (tracking.rs).
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct BlockedTracker {
   category: crate::tracking::Category,
   host: String,
@@ -102,7 +102,7 @@ struct BlockedTracker {
 
 /// Усі елементи стеження, заблоковані на поточній сторінці вкладки (порожньо — на новій сторінці).
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct TrackersEvent {
   label: String,
   trackers: Vec<BlockedTracker>,
@@ -110,7 +110,7 @@ struct TrackersEvent {
 
 /// Процес сторінки впав чи не відповідає (page_events.rs).
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct CrashedEvent {
   label: String,
   failure: crate::page_events::Failure,
@@ -118,7 +118,7 @@ struct CrashedEvent {
 
 /// Сайт просить дозвіл (камера, мікрофон…): інтерфейс питає й відповідає page_permission_answer.
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PermissionEvent {
   label: String,
@@ -128,7 +128,7 @@ struct PermissionEvent {
 
 /// Дія браузера з контекстного меню сайту.
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct ContextEvent {
   label: String,
   #[serde(flatten)]
@@ -136,13 +136,13 @@ struct ContextEvent {
 }
 
 /// Сайт хоче відкрити посилання програмою (mailto:, tel:…): інтерфейс спершу спитає користувача (external.rs).
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 struct ExternalEvent {
   label: String,
   url: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct NewTabEvent {
   label: String,
@@ -153,7 +153,7 @@ struct NewTabEvent {
 
 /// Завантаження почалося, іде чи скінчилося (webview2::watch_downloads).
 #[cfg(windows)]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct DownloadEvent {
   label: String,
@@ -245,6 +245,7 @@ fn on_page_message(
 /// `background` — вкладка відкривається у фоні: webview прихований і не забирає фокус.
 /// `autoplay` — правила автовідтворення сайтів (audio.rs).
 #[tauri::command]
+#[specta::specta]
 pub async fn page_open(
   window: Window,
   label: String,
@@ -384,6 +385,8 @@ pub async fn page_open(
   crate::page_events::watch_process_failed(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |failure| {
+      // Без адреси сторінки: журнал не має знати, що відкривали.
+      log::warn!("Процес сторінки: {failure:?}");
       let _ = app.emit_to(&ui, "page://crashed", CrashedEvent { label: label.clone(), failure });
     }
   })
@@ -527,12 +530,14 @@ pub async fn page_open(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_navigate(window: Window, label: String, url: String) -> Result<(), String> {
   page(&window, &label)?.navigate(web_url(&url)?).map_err(|error| error.to_string())
 }
 
 /// Крок по історії сторінки: -1 — назад, 1 — вперед.
 #[tauri::command]
+#[specta::specta]
 pub fn page_go(window: Window, label: String, step: i32) -> Result<(), String> {
   let webview = page(&window, &label)?;
   // На Windows — нативно: history.go() через eval дав би сторінці «активацію користувача».
@@ -543,16 +548,19 @@ pub fn page_go(window: Window, label: String, step: i32) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_reload(window: Window, label: String) -> Result<(), String> {
   page(&window, &label)?.reload().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_set_bounds(window: Window, label: String, bounds: Bounds) -> Result<(), String> {
   place(&page(&window, &label)?, &bounds)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<(), String> {
   let webview = page(&window, &label)?;
   if visible { webview.show() } else { webview.hide() }.map_err(|error| error.to_string())
@@ -561,6 +569,7 @@ pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<
 /// Отвори в сайті під відкриті панелі інтерфейсу (webview2::set_clip); порожній список — сайт знову цілий.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn page_set_clip(window: Window, label: String, holes: Vec<webview2::Hole>) -> Result<(), String> {
   let webview = page(&window, &label)?;
   let scale = window.scale_factor().map_err(|error| error.to_string())?;
@@ -568,21 +577,25 @@ pub fn page_set_clip(window: Window, label: String, holes: Vec<webview2::Hole>) 
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_set_zoom(window: Window, label: String, scale: f64) -> Result<(), String> {
   page(&window, &label)?.set_zoom(scale).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_focus(window: Window, label: String) -> Result<(), String> {
   page(&window, &label)?.set_focus().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_print(window: Window, label: String) -> Result<(), String> {
   page(&window, &label)?.print().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label: String) -> Result<(), String> {
   scripts.0.lock().map_err(|error| error.to_string())?.remove(&label);
   let Some(webview) = window.get_webview(&label) else {
@@ -602,6 +615,7 @@ pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label
 /// Пошук тексту на сторінці через window.find: виділяє наступний (чи попередній) збіг і каже, чи він знайшовся.
 /// Скрипт через WebView2 дає сторінці «активацію користувача»; тут це прийнятно — пошук запускає сам користувач.
 #[tauri::command]
+#[specta::specta]
 pub async fn page_find(window: Window, label: String, query: String, backwards: bool) -> Result<bool, String> {
   let webview = page(&window, &label)?;
   let query = serde_json::to_string(&query).map_err(|error| error.to_string())?;
@@ -637,6 +651,7 @@ fn page_origin(webview: &Webview) -> Result<String, String> {
 /// Нові правила автовідтворення (audio.rs) для всіх сайтів вікна: відкритим сторінкам — одразу, новим — зі скриптом.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn page_set_audio_rules(window: Window, rules: audio::AutoplayRules) -> Result<(), String> {
   let script = audio::rules_script(&rules);
   let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(PAGE_PREFIX));
@@ -660,6 +675,7 @@ pub fn page_set_audio_rules(window: Window, rules: audio::AutoplayRules) -> Resu
 
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_set_muted(window: Window, label: String, muted: bool) -> Result<(), String> {
   let (reply, receiver) = mpsc::channel();
   webview2::set_muted(&page(&window, &label)?, muted, reply).map_err(|error| error.to_string())?;
@@ -689,10 +705,11 @@ pub async fn page_screenshot(window: Window, label: String, full: bool) -> Resul
   Ok(tauri::ipc::Response::new(image))
 }
 
-/// «Картинка в картинці» для відео на сторінці: opened, closed чи no-video.
+/// «Картинка в картинці» для відео на сторінці.
 #[cfg(windows)]
 #[tauri::command]
-pub async fn page_picture_in_picture(window: Window, label: String) -> Result<String, String> {
+#[specta::specta]
+pub async fn page_picture_in_picture(window: Window, label: String) -> Result<webview2::PictureInPicture, String> {
   let (reply, receiver) = mpsc::channel();
   webview2::picture_in_picture(&page(&window, &label)?, reply).map_err(|error| error.to_string())?;
   receive(receiver).await?
@@ -701,6 +718,7 @@ pub async fn page_picture_in_picture(window: Window, label: String) -> Result<St
 /// Особливе оновлення з меню кнопки «Оновити»: без кешу, з очищенням даних чи cookies сайту.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_reload_with(window: Window, label: String, mode: webview2::ReloadMode) -> Result<(), String> {
   let webview = page(&window, &label)?;
   let url = webview.url().map_err(|error| error.to_string())?.to_string();
@@ -712,6 +730,7 @@ pub async fn page_reload_with(window: Window, label: String, mode: webview2::Rel
 /// Дозвіл сайту на автовідтворення, збережений у профілі WebView2.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_autoplay(window: Window, label: String) -> Result<Autoplay, String> {
   let webview = page(&window, &label)?;
   let (reply, receiver) = mpsc::channel();
@@ -722,6 +741,7 @@ pub async fn page_autoplay(window: Window, label: String) -> Result<Autoplay, St
 /// Присипляє приховану фонову вкладку (page_events.rs); `true` — заснула.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_suspend(window: Window, label: String) -> Result<bool, String> {
   let webview = page(&window, &label)?;
   let (reply, receiver) = mpsc::channel();
@@ -732,6 +752,7 @@ pub async fn page_suspend(window: Window, label: String) -> Result<bool, String>
 /// Вкладка пішла у фон (менше пам'яті) чи стала активною.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn page_set_background(window: Window, label: String, background: bool) -> Result<(), String> {
   crate::page_events::set_background(&page(&window, &label)?, background).map_err(|error| error.to_string())
 }
@@ -739,6 +760,7 @@ pub fn page_set_background(window: Window, label: String, background: bool) -> R
 /// Відповідь користувача на запит дозволу сайту.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn page_permission_answer(
   app: AppHandle,
   id: u64,
@@ -753,6 +775,7 @@ pub fn page_permission_answer(
 /// Збережені дозволи сайту вкладки — для панелі дозволів.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_permissions(
   window: Window,
   label: String,
@@ -766,6 +789,7 @@ pub async fn page_permissions(
 /// Зберігає дозвіл сайту вкладки (з панелі дозволів).
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_set_permission(
   window: Window,
   label: String,
@@ -780,6 +804,7 @@ pub async fn page_set_permission(
 
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub async fn page_set_autoplay(window: Window, label: String, autoplay: Autoplay) -> Result<(), String> {
   let webview = page(&window, &label)?;
   let (reply, receiver) = mpsc::channel();

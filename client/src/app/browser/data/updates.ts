@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
 import { storedSignal } from '../../shared/storage/stored-signal';
 import { SessionStore } from '../session/session';
@@ -9,11 +10,6 @@ export interface AppUpdate {
   readonly version: string;
   /** Що нового. */
   readonly notes?: string | null;
-}
-
-interface UpdateState {
-  readonly current: string;
-  readonly available: AppUpdate | null;
 }
 
 interface UpdateProgress {
@@ -78,7 +74,7 @@ export class UpdateStore {
       return;
     }
     try {
-      const state = await invoke<UpdateState>('app_update_check');
+      const state = await commands.appUpdateCheck();
       this.current.set(state.current);
       this.available.set(state.available);
     } catch {
@@ -96,7 +92,7 @@ export class UpdateStore {
     // Після оновлення браузер відкриється з тими самими вкладками, навіть якщо в налаштуваннях — «Нова вкладка».
     this.session.restoreOnce();
     try {
-      await invoke('app_update_install');
+      await commands.appUpdateInstall();
     } catch (error) {
       this.installing.set(false);
       this.error.set(typeof error === 'string' ? error : 'Не вдалося встановити оновлення.');

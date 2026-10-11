@@ -12,10 +12,6 @@
 //! шифруються перед відправкою на сервер (passwords.rs). Сам пароль ніде не зберігається, а ключ живе в сеансі.
 //! Зміна облікового запису перемикає дані браузера на його власні (profiles.rs).
 //!
-//! Увійти можна й без пароля: кодом з листа ([`auth_send_sign_in_code`]) чи через Google ([`auth_google`] —
-//! OAuth з PKCE в окремому вікні; Supabase повертає на адресу, яку застосунок перехоплює). Без пароля ключа
-//! синхронізації паролів немає — паролі сайтів синхронізуються, щойно в профілі задати чи ввести пароль.
-//!
 //! Після входу й підтвердження пошти — лист «нашого сервера» (supabase/functions/notify): привітання, новий пристрій
 //! чи новий вхід. Функцію розгортають у Supabase окремо; без неї листи просто не надсилаються.
 //!
@@ -48,7 +44,7 @@ const REFRESH_AHEAD: u64 = 300;
 /// Як часто фоновий потік перевіряє, чи не пора оновити токен.
 const REFRESH_CHECK: Duration = Duration::from_secs(30);
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
   id: String,
@@ -57,7 +53,7 @@ pub struct User {
   name: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 struct Session {
   access_token: String,
   refresh_token: String,
@@ -76,7 +72,7 @@ struct Session {
 }
 
 /// Що бачить інтерфейс: користувач або `None`, якщо не ввійшли.
-#[derive(Clone, Serialize, PartialEq)]
+#[derive(Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthState {
   user: Option<User>,
@@ -87,7 +83,7 @@ pub struct AuthState {
 }
 
 /// Результат коду зі зміни пошти.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailChange {
   /// Пошту змінено — новий стан облікового запису.
@@ -96,7 +92,7 @@ pub struct EmailChange {
   waiting: Option<String>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SignUpResult {
   /// Користувач, якщо пошту підтверджувати не треба й вхід уже відбувся.
@@ -106,7 +102,7 @@ pub struct SignUpResult {
 }
 
 /// Помилка для інтерфейсу: код Supabase (чи власний: offline, server) і повідомлення українською.
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Debug, specta::Type)]
 pub struct AuthError {
   code: String,
   message: String,
@@ -115,6 +111,13 @@ pub struct AuthError {
 impl AuthError {
   pub fn new(code: &str, message: &str) -> Self {
     Self { code: code.to_string(), message: message.to_string() }
+  }
+}
+
+/// Для журналу: «код — повідомлення».
+impl std::fmt::Display for AuthError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(formatter, "{} — {}", self.code, self.message)
   }
 }
 
@@ -501,11 +504,13 @@ fn clean_email(email: &str) -> String {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn auth_state(app: AppHandle, auth: State<'_, Auth>) -> AuthState {
   state_of(&app, auth.current().as_ref())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_sign_in(app: AppHandle, email: String, password: String, remember: bool) -> Result<AuthState, AuthError> {
   blocking(move || {
     let reply = call(Method::Post, "token?grant_type=password", None, &json!({ "email": clean_email(&email), "password": password }))?;
@@ -550,139 +555,8 @@ fn device_name() -> String {
   }
 }
 
-/// Лист із кодом для входу без пароля (шаблон Supabase «Magic link or OTP»). Обліковий запис має вже існувати.
 #[tauri::command]
-pub async fn auth_send_sign_in_code(email: String) -> Result<(), AuthError> {
-  blocking(move || match call(Method::Post, "otp", None, &json!({ "email": clean_email(&email), "create_user": false })) {
-    Ok(_) => Ok(()),
-    Err(error) if matches!(error.code.as_str(), "otp_disabled" | "signup_disabled" | "user_not_found") => Err(AuthError::new(
-      "user_not_found",
-      "Облікового запису з такою поштою немає. Перевірте адресу або зареєструйтеся.",
-    )),
-    Err(error) => Err(error),
-  })
-  .await
-}
-
-/// Код із листа — і вхід без пароля.
-#[tauri::command]
-pub async fn auth_sign_in_with_code(app: AppHandle, email: String, code: String, remember: bool) -> Result<AuthState, AuthError> {
-  blocking(move || {
-    let reply = call(Method::Post, "verify", None, &json!({ "type": "email", "email": clean_email(&email), "token": code.trim() }))?;
-    let session = session_or_error(&reply, remember)?;
-    Ok(signed_in(&app, session, false))
-  })
-  .await
-}
-
-/// Куди Supabase повертає після входу через Google. Адресу перехоплює сам застосунок — у вікні вона не відкривається,
-/// але має бути в Supabase серед дозволених (Authentication → URL Configuration → Redirect URLs).
-pub const OAUTH_REDIRECT: &str = "http://localhost/astra-auth-callback";
-/// Скільки чекати, поки людина ввійде в Google.
-const OAUTH_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-
-/// PKCE: випадковий `code_verifier` і `code_challenge` до нього (SHA-256, base64url без вирівнювання).
-fn pkce() -> (String, String) {
-  use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-  use sha2::{Digest, Sha256};
-  let verifier = secure::random_hex(32);
-  let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-  (verifier, challenge)
-}
-
-/// Код з адреси, на яку Supabase повернув після входу (`?code=…`), чи помилка (`?error_description=…`).
-fn oauth_result(url: &tauri::Url) -> Result<String, AuthError> {
-  let value = |key: &str| url.query_pairs().find(|(name, _)| name == key).map(|(_, value)| value.into_owned());
-  match value("code") {
-    Some(code) if !code.is_empty() => Ok(code),
-    _ => Err(AuthError::new(
-      "oauth_failed",
-      &value("error_description").map_or_else(|| "Не вдалося ввійти через Google.".to_string(), |text| format!("Не вдалося ввійти через Google: {text}")),
-    )),
-  }
-}
-
-/// Чи обліковий запис щойно створено цим входом (Google-користувач уперше): створено й увійшли майже одночасно.
-fn just_created(user: &Value) -> bool {
-  let seconds = |key: &str| text(user, key).and_then(unix_seconds);
-  matches!((seconds("created_at"), seconds("last_sign_in_at")), (Some(created), Some(signed)) if (signed - created).abs() < 120)
-}
-
-/// Секунди Unix з часу ISO 8601 від Supabase («2026-10-10T12:34:56.789Z»), без часових поясів (Supabase — UTC).
-fn unix_seconds(text: &str) -> Option<i64> {
-  let number = |range: std::ops::Range<usize>| text.get(range)?.parse::<i64>().ok();
-  let (year, month, day) = (number(0..4)?, number(5..7)?, number(8..10)?);
-  let (hour, minute, second) = (number(11..13)?, number(14..16)?, number(17..19)?);
-  // Дні від 1970-01-01 за григоріанським календарем (алгоритм days_from_civil).
-  let year = if month <= 2 { year - 1 } else { year };
-  let era = year.div_euclid(400);
-  let year_of_era = year - era * 400;
-  let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
-  let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-  let days = era * 146_097 + day_of_era - 719_468;
-  Some(days * 86_400 + hour * 3_600 + minute * 60 + second)
-}
-
-/// Вхід через Google: вікно зі сторінкою входу Google (через Supabase, OAuth з PKCE), а коли Supabase поверне
-/// на [`OAUTH_REDIRECT`] з кодом — обмін коду на сеанс. Закрили вікно — вхід скасовано.
-#[tauri::command]
-pub async fn auth_google(app: AppHandle, remember: bool) -> Result<AuthState, AuthError> {
-  let settings = blocking(|| call(Method::Get, "settings", None, &Value::Null)).await?;
-  if settings.pointer("/external/google").and_then(Value::as_bool) != Some(true) {
-    return Err(AuthError::new("provider_disabled", "Вхід через Google ще не налаштовано на сервері."));
-  }
-  let (verifier, challenge) = pkce();
-  let mut url = tauri::Url::parse(&format!("{SUPABASE_URL}/auth/v1/authorize")).map_err(|_| unexpected())?;
-  url
-    .query_pairs_mut()
-    .append_pair("provider", "google")
-    .append_pair("redirect_to", OAUTH_REDIRECT)
-    .append_pair("code_challenge", &challenge)
-    .append_pair("code_challenge_method", "s256");
-
-  let (sender, receiver) = std::sync::mpsc::channel::<Result<String, AuthError>>();
-  let closed = sender.clone();
-  // Кожна спроба — своє вікно (попереднє, якщо лишилося, закриваємо).
-  if let Some(previous) = app.get_webview_window("google-sign-in") {
-    let _ = previous.destroy();
-  }
-  let window = tauri::WebviewWindowBuilder::new(&app, "google-sign-in", tauri::WebviewUrl::External(url))
-    .additional_browser_args(crate::BROWSER_ARGS)
-    .title("Вхід через Google — Astra Browser")
-    .inner_size(520.0, 720.0)
-    .center()
-    // Без cookies браузера: вхід у Google лише для цього разу.
-    .incognito(true)
-    .on_navigation(move |url| {
-      if url.as_str().starts_with(OAUTH_REDIRECT) {
-        let _ = sender.send(oauth_result(url));
-        false
-      } else {
-        true
-      }
-    })
-    .build()
-    .map_err(|_| AuthError::new("internal", "Не вдалося відкрити вікно входу через Google."))?;
-  window.on_window_event(move |event| {
-    if matches!(event, tauri::WindowEvent::Destroyed) {
-      let _ = closed.send(Err(AuthError::new("cancelled", "Вхід через Google скасовано.")));
-    }
-  });
-
-  let code = blocking(move || receiver.recv_timeout(OAUTH_TIMEOUT).map_err(|_| AuthError::new("cancelled", "Вхід через Google скасовано."))?)
-    .await;
-  let _ = window.destroy();
-  let code = code?;
-  blocking(move || {
-    let reply = call(Method::Post, "token?grant_type=pkce", None, &json!({ "auth_code": code, "code_verifier": verifier }))?;
-    let session = session_or_error(&reply, remember)?;
-    let created = reply.get("user").is_some_and(just_created);
-    Ok(signed_in(&app, session, created))
-  })
-  .await
-}
-
-#[tauri::command]
+#[specta::specta]
 pub async fn auth_sign_up(app: AppHandle, name: String, email: String, password: String) -> Result<SignUpResult, AuthError> {
   blocking(move || {
     let reply = call(
@@ -717,6 +591,7 @@ pub async fn auth_sign_up(app: AppHandle, name: String, email: String, password:
 
 /// Код із листа «Підтвердіть пошту» — і вхід.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_verify(app: AppHandle, email: String, code: String) -> Result<AuthState, AuthError> {
   blocking(move || {
     let email = clean_email(&email);
@@ -736,12 +611,14 @@ pub async fn auth_verify(app: AppHandle, email: String, code: String) -> Result<
 
 /// Новий лист із кодом підтвердження пошти.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_resend(email: String) -> Result<(), AuthError> {
   blocking(move || call(Method::Post, "resend", None, &json!({ "type": "signup", "email": clean_email(&email) })).map(drop)).await
 }
 
 /// Лист із кодом відновлення пароля. Supabase відповідає однаково, є така пошта чи ні.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_recover(email: String) -> Result<(), AuthError> {
   blocking(move || call(Method::Post, "recover", None, &json!({ "email": clean_email(&email) })).map(drop)).await
 }
@@ -749,6 +626,7 @@ pub async fn auth_recover(email: String) -> Result<(), AuthError> {
 /// Код відновлення й новий пароль — і вхід. Якщо пароль не прийняли (наприклад, заслабкий), код уже використано,
 /// тож його сеанс чекає наступної спроби з тією самою поштою.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_reset_password(app: AppHandle, email: String, code: String, password: String) -> Result<AuthState, AuthError> {
   blocking(move || {
     let email = clean_email(&email);
@@ -776,6 +654,7 @@ pub async fn auth_reset_password(app: AppHandle, email: String, code: String, pa
 
 /// Новий пароль для того, хто вже ввійшов. Ключ синхронізації теж новий: паролі сайтів перешифруються ним.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_set_password(app: AppHandle, password: String) -> Result<(), AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -790,6 +669,7 @@ pub async fn auth_set_password(app: AppHandle, password: String) -> Result<(), A
 /// Пароль облікового запису ще раз — щоб отримати ключ синхронізації паролів (сеанс давніший за синхронізацію
 /// чи пароль змінили на іншому комп'ютері).
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_unlock_sync(app: AppHandle, password: String) -> Result<AuthState, AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -807,6 +687,7 @@ pub async fn auth_unlock_sync(app: AppHandle, password: String) -> Result<AuthSt
 
 /// Нове ім'я — в обліковий запис Supabase (user_metadata.name), звідки його візьмуть інші комп'ютери.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_update_name(app: AppHandle, name: String) -> Result<AuthState, AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -820,6 +701,7 @@ pub async fn auth_update_name(app: AppHandle, name: String) -> Result<AuthState,
 
 /// Свіжі дані облікового запису з сервера (ім'я могли змінити на іншому комп'ютері).
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_reload_user(app: AppHandle) -> Result<AuthState, AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -842,6 +724,7 @@ pub async fn auth_reload_user(app: AppHandle) -> Result<AuthState, AuthError> {
 /// Нова пошта облікового запису: Supabase надсилає на неї лист із кодом, а з «Secure email change» — ще й на
 /// поточну. Пошта зміниться, коли коди введуть (auth_confirm_email_change). Повторний виклик — нові листи (і коди).
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_change_email(app: AppHandle, email: String) -> Result<(), AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -864,6 +747,7 @@ pub async fn auth_change_email(app: AppHandle, email: String) -> Result<(), Auth
 /// Код із листа про зміну пошти на `email`. Код міг прийти на нову пошту чи (з «Secure email change») на поточну —
 /// пробуємо обидві. Якщо Supabase чекає ще й другий код, `waiting` — адреса, на яку він прийшов.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_confirm_email_change(app: AppHandle, email: String, code: String) -> Result<EmailChange, AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -900,6 +784,7 @@ pub async fn auth_confirm_email_change(app: AppHandle, email: String, code: Stri
 /// Сеанс лишається, поки інтерфейс не прибере дані облікового запису на цьому комп'ютері й не вийде (auth_sign_out),
 /// але запитів від імені видаленого облікового запису вже немає.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_delete_account(app: AppHandle, password: String) -> Result<(), AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -948,6 +833,7 @@ fn unexpected() -> AuthError {
 /// Вихід: сеанс забувається одразу, а Supabase повідомляємо, як вийде (без інтернету — ні). Після видалення
 /// облікового запису повідомляти нема кому — натомість прибираємо його теки на цьому комп'ютері.
 #[tauri::command]
+#[specta::specta]
 pub async fn auth_sign_out(app: AppHandle) -> Result<(), AuthError> {
   blocking(move || {
     let auth = app.state::<Auth>();
@@ -990,27 +876,6 @@ mod tests {
     assert_eq!(rest_error(404, &json!({ "code": "PGRST205", "message": "Could not find the table" })).code, "sync_not_configured");
     assert_eq!(rest_error(401, &json!({ "code": "PGRST303" })).code, "session_expired");
     assert_eq!(rest_error(502, &Value::Null).code, "server");
-  }
-
-  #[test]
-  fn reads_supabase_times_and_tells_new_accounts() {
-    assert_eq!(unix_seconds("1970-01-01T00:00:00Z"), Some(0));
-    assert_eq!(unix_seconds("2026-10-10T12:34:56.789Z"), Some(1_791_635_696));
-    assert_eq!(unix_seconds("2024-02-29T00:00:00Z"), Some(1_709_164_800));
-    assert_eq!(unix_seconds("не дата"), None);
-    assert!(just_created(&json!({ "created_at": "2026-10-10T12:00:00Z", "last_sign_in_at": "2026-10-10T12:00:01.5Z" })));
-    assert!(!just_created(&json!({ "created_at": "2026-01-01T12:00:00Z", "last_sign_in_at": "2026-10-10T12:00:00Z" })));
-  }
-
-  #[test]
-  fn takes_the_code_or_the_error_from_the_oauth_redirect() {
-    let url = |text: &str| tauri::Url::parse(text).expect("url");
-    assert_eq!(oauth_result(&url("http://localhost/astra-auth-callback?code=abc-123")).ok().as_deref(), Some("abc-123"));
-    let error = oauth_result(&url("http://localhost/astra-auth-callback?error=access_denied&error_description=User+cancelled")).unwrap_err();
-    assert_eq!(error.message, "Не вдалося ввійти через Google: User cancelled");
-    let (verifier, challenge) = pkce();
-    assert_eq!(verifier.len(), 64);
-    assert_eq!(challenge.len(), 43);
   }
 
   #[test]

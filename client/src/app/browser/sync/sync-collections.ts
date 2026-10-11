@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { Envelope, commands } from '../../bindings';
 import { SettingsStore } from '../../shared/settings/settings';
 import { accountKey, storedSignalFor } from '../../shared/storage/stored-signal';
 
@@ -217,13 +217,14 @@ export class PasswordsCollection implements SyncCollection {
   snapshot: PasswordsSnapshot | null = null;
 
   async read(): Promise<SyncItems> {
-    this.snapshot = await invoke<PasswordsSnapshot>('passwords_sync_items');
+    this.snapshot = await commands.passwordsSyncItems();
     return new Map(Object.entries(this.snapshot.items));
   }
 
   async write(changes: SyncItems): Promise<readonly string[]> {
-    const list = [...changes].map(([id, data]) => ({ id, data }));
-    const result = await invoke<{ readonly unreadable: readonly string[] }>('passwords_sync_apply', { changes: list });
+    // Записи колекції паролів — конверти, які зашифрував server/src/passwords.rs.
+    const list = [...changes].map(([id, data]) => ({ id, data: data as Envelope | null }));
+    const result = await commands.passwordsSyncApply(list);
     return result.unreadable;
   }
 

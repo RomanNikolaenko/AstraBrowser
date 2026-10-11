@@ -1,16 +1,22 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { PasswordPromptRequest, PasswordsStore } from '../data/passwords';
+import {
+  PasswordCommand,
+  PasswordCommandArgs,
+  PasswordCommandResult,
+  PasswordPromptRequest,
+  PasswordsStore,
+} from '../data/passwords';
 import { PasswordPrompt } from './password-prompt';
 
 /** Без Rust: відповіді лише записуються. */
 class FakePasswords extends PasswordsStore {
-  readonly calls: [string, Record<string, unknown> | undefined][] = [];
+  readonly calls: [PasswordCommand, readonly unknown[]][] = [];
 
-  protected override call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  protected override call<K extends PasswordCommand>(command: K, ...args: PasswordCommandArgs<K>): PasswordCommandResult<K> {
     this.calls.push([command, args]);
-    return Promise.resolve((command === 'passwords_state' ? null : undefined) as T);
+    return Promise.resolve(command === 'passwordsState' ? null : undefined) as PasswordCommandResult<K>;
   }
 }
 
@@ -34,7 +40,7 @@ describe('PasswordPrompt', () => {
     };
     const button = (label: string) =>
       [...element.querySelectorAll<HTMLButtonElement>('button')].find((node) => node.textContent?.trim() === label);
-    const answers = () => store.calls.filter(([command]) => command === 'password_prompt_answer').map(([, args]) => args);
+    const answers = () => store.calls.filter(([command]) => command === 'passwordPromptAnswer').map(([, args]) => args);
     return { element, store, stable, ask, button, answers };
   };
 
@@ -60,7 +66,7 @@ describe('PasswordPrompt', () => {
     }
     button('Зберегти')?.click();
     await stable();
-    expect(answers()).toEqual([{ id: 7, choice: 'save', username: 'mona', password: 'hub-secret' }]);
+    expect(answers()).toEqual([[7, 'save', 'mona', 'hub-secret']]);
     expect(store.prompts()).toEqual([]);
     expect(element.querySelector('.password-prompt__panel')).toBeNull();
   });
@@ -74,8 +80,8 @@ describe('PasswordPrompt', () => {
     button('Не зараз')?.click();
 
     expect(answers()).toEqual([
-      { id: 7, choice: 'never', username: undefined, password: undefined },
-      { id: 8, choice: 'dismiss', username: undefined, password: undefined },
+      [7, 'never', null, null],
+      [8, 'dismiss', null, null],
     ]);
   });
 

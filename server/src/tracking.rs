@@ -37,7 +37,7 @@ use tauri::{AppHandle, Manager, Url};
 use crate::adblock::{covers, download_all};
 
 /// Що саме заблоковано: так елементи групуються в панелі захисту.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Category {
   /// Аналітика й рекламні мітки, що стежать за вами з сайту на сайт.
@@ -87,7 +87,7 @@ const TRACKING_PARAMS: &[&str] = &[
 ];
 
 /// Рівень захисту.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Level {
   /// Відомі елементи стеження й криптомайнери; сайти працюють як звичайно.
@@ -99,7 +99,7 @@ pub enum Level {
 }
 
 /// Правила вікна: їх задає інтерфейс вікна (tracking_set_rules). У приватного вікна свої налаштування.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Rules {
   pub level: Level,
@@ -221,7 +221,7 @@ impl Tracking {
           *updated_at = Some(now_ms());
         }
       }
-      Err(message) => eprintln!("tracking: не вдалося оновити списки: {message}"),
+      Err(message) => log::warn!("tracking: не вдалося оновити списки: {message}"),
     }
     self.updating.store(false, Ordering::SeqCst);
   }
@@ -299,6 +299,7 @@ pub fn start(app: &AppHandle) {
 /// і скрипту GPC — для всіх сторінок вікна.
 #[cfg(windows)]
 #[tauri::command]
+#[specta::specta]
 pub fn tracking_set_rules(window: tauri::Window, rules: Rules) -> Result<(), String> {
   let tracking = window.state::<Tracking>();
   let (level, gpc, smart_screen) = (rules.level, rules.gpc, rules.smart_screen);

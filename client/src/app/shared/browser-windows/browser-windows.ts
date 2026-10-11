@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
@@ -100,7 +101,7 @@ export class BrowserWindows {
   /** Починає перетягування вікна за курсором (кнопка миші натиснута); поза Tauri — нічого. */
   async startDragging(): Promise<void> {
     if (isTauri()) {
-      await invoke('window_start_drag');
+      await commands.windowStartDrag();
     }
   }
 
@@ -128,7 +129,7 @@ export class BrowserWindows {
       await window.setFullscreen(fullscreen);
       if (fullscreen) {
         // Поки сторінка сайту сама на весь екран (відео), tao не встигає розтягнути вікно — server/src/fullscreen.rs.
-        await invoke('window_fill_monitor');
+        await commands.windowFillMonitor();
       } else if (this.restoreMaximized) {
         this.restoreMaximized = false;
         await window.maximize();

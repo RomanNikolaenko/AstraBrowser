@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
+import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
 
 /** Стан блокувальника реклами (server/src/adblock.rs, Status). */
@@ -40,7 +41,7 @@ export class AdBlockStore {
   constructor() {
     if (this.available) {
       void listen<AdBlockStatus>('adblock://status', ({ payload }) => this.state.set(payload));
-      invoke<AdBlockStatus>('adblock_status').then(
+      commands.adblockStatus().then(
         (status) => this.state.set(status),
         () => this.failure.set(true)
       );
@@ -58,17 +59,17 @@ export class AdBlockStore {
     return !!this.state()?.enabled && !this.isSiteDisabled(host);
   }
 
-  setEnabled(enabled: boolean): Promise<void> {
-    return invoke('adblock_set_enabled', { enabled });
+  async setEnabled(enabled: boolean): Promise<void> {
+    await commands.adblockSetEnabled(enabled);
   }
 
   /** Відкриті сторінки сайту побачать зміну після перезавантаження. */
-  setSiteEnabled(host: string, enabled: boolean): Promise<void> {
-    return invoke('adblock_set_site_enabled', { site: adBlockSite(host), enabled });
+  async setSiteEnabled(host: string, enabled: boolean): Promise<void> {
+    await commands.adblockSetSiteEnabled(adBlockSite(host), enabled);
   }
 
   /** Завантажує свіжі списки фільтрів зараз, не чекаючи планового оновлення. */
-  update(): Promise<void> {
-    return invoke('adblock_update');
+  async update(): Promise<void> {
+    await commands.adblockUpdate();
   }
 }
