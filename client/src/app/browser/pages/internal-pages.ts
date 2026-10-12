@@ -44,15 +44,15 @@ export const SHORTCUTS: readonly { readonly keys: readonly string[]; readonly ac
   { keys: ['Ctrl', 'F'], action: tr('Знайти на сторінці') },
   { keys: ['Ctrl', 'Shift', ']'], action: tr('Картинка в картинці (відео YouTube)') },
   { keys: ['Ctrl', 'Shift', 'S'], action: tr('Скріншот сторінки') },
-  { keys: ['Ctrl', '+'], action: tr('Збільшити масштаб (і Ctrl + коліщатко вгору)') },
-  { keys: ['Ctrl', '−'], action: tr('Зменшити масштаб (і Ctrl + коліщатко вниз)') },
+  { keys: ['Ctrl', '+'], action: tr('Збільшити масштаб (Ctrl + коліщатко вгору)') },
+  { keys: ['Ctrl', '−'], action: tr('Зменшити масштаб (Ctrl + коліщатко вниз)') },
   { keys: ['Ctrl', '0'], action: tr('Масштаб 100%') },
   { keys: ['Enter'], action: tr('Наступний збіг у пошуку на сторінці') },
   { keys: ['Shift', 'Enter'], action: tr('Попередній збіг у пошуку на сторінці') },
   { keys: ['Esc'], action: tr('Закрити пошук або меню') },
   { keys: ['Ctrl', 'P'], action: tr('Друк') },
   { keys: ['Ctrl', 'U'], action: tr('Переглянути джерело сторінки') },
-  { keys: ['F12'], action: tr('Інструменти розробника (і Ctrl + Shift + I)') },
+  { keys: ['F12'], action: tr('Інструменти розробника (Ctrl + Shift + I)') },
 ];
 
 const DAY = 24 * 60 * 60 * 1000;

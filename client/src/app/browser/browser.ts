@@ -1438,11 +1438,7 @@ export class Browser {
       this.pageViews
         .open(label, url, { x: 0, y: 0, width: 0, height: 0 }, { background, autoplay })
         .then(() => {
-          if (this.visiblePage() === label) {
-            this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
-            this.ignore(this.pageViews.setVisible(label, true));
-            this.scheduleClip();
-          } else {
+          if (!this.onPageCreated(label)) {
             this.ignore(this.pageViews.setBackground(label, true));
           }
         })
@@ -1450,7 +1446,30 @@ export class Browser {
       return;
     }
     this.activeTabId.set(tab.id);
-    this.ignore(this.pageViews.open(label, url, this.pageBounds(), { autoplay }));
+    this.openPageView(label, url);
+  }
+
+  /** Webview сайту на місці області вмісту. */
+  private openPageView(label: string, url: string): void {
+    this.pageViews
+      .open(label, url, this.pageBounds(), { autoplay: this.autoplay.rules() })
+      .then(() => this.onPageCreated(label))
+      .catch(() => undefined);
+  }
+
+  /**
+   * Webview щойно створено. Поки він створювався, межі, показ і отвори до нього не доходили, а розкладка вікна могла
+   * змінитися (скажімо, під час запуску з відновленими вкладками) — тож усе це ще раз, як зараз. Повертає, чи його
+   * зараз видно.
+   */
+  private onPageCreated(label: string): boolean {
+    if (this.visiblePage() !== label) {
+      return false;
+    }
+    this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+    this.ignore(this.pageViews.setVisible(label, true));
+    this.scheduleClip();
+    return true;
   }
 
   /**
@@ -1575,7 +1594,7 @@ export class Browser {
       return;
     }
     this.updateSite(tab.id, (current) => ({ ...current, pending: false, loading: true }));
-    this.ignore(this.pageViews.open(site.label, site.url, this.pageBounds(), { autoplay: this.autoplay.rules() }));
+    this.openPageView(site.label, site.url);
   }
 
   private onPageLoad({ label, url, loading }: PageLoadEvent): void {
@@ -1990,16 +2009,23 @@ export class Browser {
     if (!label) {
       return;
     }
+    // Отвори — там, де панелі у вікні; від справжнього місця webview їх відраховує Rust (webview2::set_clip).
     const bounds = this.pageBounds();
     const holes = [...document.querySelectorAll<HTMLElement>(':popover-open')]
       .map((popover) => ({
-        x: popover.offsetLeft - bounds.x,
-        y: popover.offsetTop - bounds.y,
+        x: popover.offsetLeft,
+        y: popover.offsetTop,
         width: popover.offsetWidth,
         height: popover.offsetHeight,
         radius: parseFloat(getComputedStyle(popover).borderTopLeftRadius) || 0,
       }))
-      .filter((hole) => hole.x < bounds.width && hole.y < bounds.height && hole.x + hole.width > 0 && hole.y + hole.height > 0);
+      .filter(
+        (hole) =>
+          hole.x < bounds.x + bounds.width &&
+          hole.y < bounds.y + bounds.height &&
+          hole.x + hole.width > bounds.x &&
+          hole.y + hole.height > bounds.y
+      );
     if (holes.length || this.clippedPage === label) {
       this.ignore(this.pageViews.setClip(label, holes));
       this.clippedPage = holes.length ? label : null;

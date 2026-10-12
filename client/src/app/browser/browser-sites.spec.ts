@@ -440,6 +440,10 @@ describe('Browser with sites', () => {
     expect(titles()).toEqual(['Angular', 'GitHub', 'Історія']);
     expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('GitHub');
     expect(pages.called('open')).toEqual([[label(3), 'https://github.com/']]);
+    // Поки webview створювався, межі до нього не доходили (а розкладка під час запуску ще змінюється) — тож ще раз.
+    const calls = pages.calls.map(([name, page]) => `${name} ${String(page)}`);
+    expect(calls.lastIndexOf(`bounds ${label(3)}`)).toBeGreaterThan(calls.indexOf(`open ${label(3)}`));
+    expect(calls.lastIndexOf(`visible ${label(3)}`)).toBeGreaterThan(calls.indexOf(`open ${label(3)}`));
 
     [...element.querySelectorAll<HTMLElement>('.tab__select')].find((tab) => tab.textContent?.includes('Angular'))?.click();
     await stable();

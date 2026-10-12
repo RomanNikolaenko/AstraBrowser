@@ -85,7 +85,7 @@ pub(crate) fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreW
 }
 
 /// Отвір у сторінці під панель інтерфейсу: прямокутник із заокругленими кутами, у логічних пікселях від лівого
-/// верхнього кута сторінки.
+/// верхнього кута вікна (там, де панель в інтерфейсі).
 #[derive(serde::Deserialize, specta::Type)]
 pub struct Hole {
   x: f64,
@@ -98,7 +98,11 @@ pub struct Hole {
 /// Отвори в сайті під відкриті панелі інтерфейсу. Webview сайту малюється поверх HTML інтерфейсу, тож панель над ним
 /// видно лише крізь вирізаний у ньому отвір (регіон вікна Windows), — а сам сайт лишається живим: відео грає далі.
 /// Клік в отворі дістається панелі. Порожній `holes` — сторінка знову ціла.
-pub fn set_clip(webview: &Webview, holes: Vec<Hole>, scale: f64) -> tauri::Result<()> {
+///
+/// Отвори відраховуються від справжнього місця webview у вікні (`origin`, фізичні пікселі), а не від того, де його
+/// вважає інтерфейс: інакше після розбіжності (скажімо, межі змінилися, поки webview створювався) отвір зсунувся б
+/// відносно панелі й частину її закрив би сайт.
+pub fn set_clip(webview: &Webview, holes: Vec<Hole>, scale: f64, origin: (i32, i32)) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let apply = || -> windows_core::Result<()> {
       let mut window = HWND::default();
@@ -114,8 +118,8 @@ pub fn set_clip(webview: &Webview, holes: Vec<Hole>, scale: f64) -> tauri::Resul
         let region = CreateRectRgn(0, 0, size.right, size.bottom);
         for hole in &holes {
           let diameter = pixels(hole.radius * 2.0);
-          let (left, top) = (pixels(hole.x), pixels(hole.y));
-          let (right, bottom) = (pixels(hole.x + hole.width), pixels(hole.y + hole.height));
+          let (left, top) = (pixels(hole.x) - origin.0, pixels(hole.y) - origin.1);
+          let (right, bottom) = (pixels(hole.x + hole.width) - origin.0, pixels(hole.y + hole.height) - origin.1);
           // У CreateRoundRectRgn правий і нижній край не входять у регіон — тому +1.
           let cut = CreateRoundRectRgn(left, top, right + 1, bottom + 1, diameter, diameter);
           CombineRgn(Some(region), Some(region), Some(cut), RGN_DIFF);

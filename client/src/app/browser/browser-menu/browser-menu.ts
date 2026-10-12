@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, model, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, model, output } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UpdateStore } from '../data/updates';
 import { InternalPage } from '../pages/internal-pages';
@@ -12,11 +12,9 @@ interface MenuItem {
   readonly shortcut?: string;
   /** Для aria-keyshortcuts — лише ті скорочення, що справді працюють. */
   readonly keys?: string;
-  readonly action?: 'new-tab' | 'new-window' | 'private-window' | 'find' | 'print' | 'view-source' | 'devtools';
+  readonly action?: 'new-tab' | 'new-window' | 'private-window' | 'find' | 'print';
   /** Внутрішня сторінка, яку відкриває пункт. */
   readonly page?: InternalPage;
-  /** Лише для сайту: на внутрішніх сторінках пункт вимкнений. */
-  readonly site?: true;
 }
 
 /**
@@ -32,16 +30,12 @@ interface MenuItem {
 })
 export class BrowserMenu {
   readonly zoom = model(100);
-  /** В активній вкладці сайт: є код сторінки й інструменти розробника. */
-  readonly siteOpen = input(false);
   readonly newTab = output();
   readonly newWindow = output();
   readonly privateWindow = output();
   readonly openPage = output<InternalPage>();
   readonly find = output();
   readonly print = output();
-  readonly viewSource = output();
-  readonly devTools = output();
   readonly fullscreen = output();
 
   protected readonly sections: readonly (readonly MenuItem[])[] = [
@@ -64,17 +58,6 @@ export class BrowserMenu {
     [
       { label: tr('Знайти на сторінці'), icon: 'search', shortcut: 'Ctrl+F', keys: 'Control+F', action: 'find' },
       { label: tr('Друк'), icon: 'print', shortcut: 'Ctrl+P', keys: 'Control+P', action: 'print' },
-    ],
-    [
-      {
-        label: tr('Переглянути джерело сторінки'),
-        icon: 'code',
-        shortcut: 'Ctrl+U',
-        keys: 'Control+U',
-        action: 'view-source',
-        site: true,
-      },
-      { label: tr('Інструменти розробника'), icon: 'devtools', shortcut: 'F12', keys: 'F12', action: 'devtools', site: true },
     ],
     [
       { label: tr('Розширення'), icon: 'puzzle', page: 'extensions' },
@@ -139,12 +122,6 @@ export class BrowserMenu {
         break;
       case 'print':
         this.print.emit();
-        break;
-      case 'view-source':
-        this.viewSource.emit();
-        break;
-      case 'devtools':
-        this.devTools.emit();
         break;
     }
   }

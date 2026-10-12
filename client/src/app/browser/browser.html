@@ -278,15 +278,12 @@
       </button>
       <app-browser-menu
         [(zoom)]="zoom"
-        [siteOpen]="!!activeTab().site"
         (newTab)="openNewTab()"
         (newWindow)="openWindow()"
         (privateWindow)="openWindow(true)"
         (openPage)="openPage($event)"
         (find)="openFind()"
         (print)="print()"
-        (viewSource)="viewSource()"
-        (devTools)="openDevTools()"
         (fullscreen)="toggleFullscreen()" />
     </div>
   </div>

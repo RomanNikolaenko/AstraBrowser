@@ -552,15 +552,14 @@ export const EN: Readonly<Record<string, string>> = {
   'Відновити закриту вкладку': 'Reopen closed tab',
   'Картинка в картинці (відео YouTube)': 'Picture in picture (YouTube videos)',
   'Скріншот сторінки': 'Page screenshot',
-  'Збільшити масштаб (і Ctrl + коліщатко вгору)': 'Zoom in (also Ctrl + scroll up)',
-  'Зменшити масштаб (і Ctrl + коліщатко вниз)': 'Zoom out (also Ctrl + scroll down)',
+  'Збільшити масштаб (Ctrl + коліщатко вгору)': 'Zoom in (Ctrl + scroll up)',
+  'Зменшити масштаб (Ctrl + коліщатко вниз)': 'Zoom out (Ctrl + scroll down)',
   'Масштаб 100%': 'Reset zoom to 100%',
   'Наступний збіг у пошуку на сторінці': 'Next match when finding on page',
   'Попередній збіг у пошуку на сторінці': 'Previous match when finding on page',
   'Закрити пошук або меню': 'Close find or a menu',
   'Переглянути джерело сторінки': 'View page source',
-  'Інструменти розробника': 'Developer tools',
-  'Інструменти розробника (і Ctrl + Shift + I)': 'Developer tools (also Ctrl + Shift + I)',
+  'Інструменти розробника (Ctrl + Shift + I)': 'Developer tools (Ctrl + Shift + I)',
 
   // Історія
   'Пошук в історії': 'Search history',

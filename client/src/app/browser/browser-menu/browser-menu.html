@@ -46,7 +46,6 @@
             popovertarget="browser-menu"
             popovertargetaction="hide"
             [attr.aria-keyshortcuts]="item.keys ?? null"
-            [disabled]="item.site && !siteOpen()"
             (click)="run(item)">
             <app-icon class="menu__icon" [icon]="item.icon" />
             <span class="menu__label">{{ item.label | t }}</span>

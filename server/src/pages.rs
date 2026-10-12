@@ -580,7 +580,8 @@ pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<
 pub fn page_set_clip(window: Window, label: String, holes: Vec<webview2::Hole>) -> Result<(), String> {
   let webview = page(&window, &label)?;
   let scale = window.scale_factor().map_err(|error| error.to_string())?;
-  webview2::set_clip(&webview, holes, scale).map_err(|error| error.to_string())
+  let origin = webview.position().map_err(|error| error.to_string())?;
+  webview2::set_clip(&webview, holes, scale, (origin.x, origin.y)).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
