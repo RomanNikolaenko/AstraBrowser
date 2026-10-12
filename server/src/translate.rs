@@ -1,14 +1,11 @@
 //! Переклад виділеного на сайті тексту: скрипт сторінки (selection-translate.js) показує біля виділення значок,
-//! а натиснули його — просить переклад тут. Перекладає Google — той самий сервіс, яким перекладає виділене його
-//! розширення для Chrome; мова — та, що вибрана в «Перекладачі» браузера.
+//! а натиснули його — віконце з двома мовами (оригінал — типово «визначити», переклад — типово мова інтерфейсу) і
+//! перекладом, який робиться тут. Перекладає Google — той самий сервіс, яким перекладає виділене його розширення
+//! для Chrome.
 //!
 //! Текст іде в Google лише після натискання значка. Відповідь сторінці — без токена: його бачили б і скрипти сайту.
 
-use std::{
-  sync::{Mutex, OnceLock},
-  thread,
-  time::Duration,
-};
+use std::{sync::OnceLock, thread, time::Duration};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
@@ -17,9 +14,8 @@ const ENDPOINT: &str = "https://clients5.google.com/translate_a/t";
 /// Найдовший текст, який перекладаємо за раз.
 const MAX_TEXT: usize = 5000;
 const PAGE_SCRIPT: &str = include_str!("selection-translate.js");
-
-/// Мова перекладу — її задає інтерфейс (translate_set_language).
-static LANGUAGE: Mutex<String> = Mutex::new(String::new());
+/// Мова оригіналу, яку Google визначає сам.
+const AUTO: &str = "auto";
 
 fn agent() -> &'static ureq::Agent {
   static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
@@ -33,29 +29,21 @@ fn agent() -> &'static ureq::Agent {
   })
 }
 
-/// Код мови Google: uk, en, zh-CN…
+/// Код мови Google: uk, en, zh-CN… (і `auto`).
 fn is_language(code: &str) -> bool {
   (2..=10).contains(&code.len()) && code.chars().all(|char| char.is_ascii_alphanumeric() || char == '-')
 }
 
-fn language() -> String {
-  LANGUAGE.lock().ok().map(|language| language.clone()).filter(|language| !language.is_empty()).unwrap_or_else(|| "uk".into())
+/// Мови з прохання сторінки: оригінал (без нього — визначити) і переклад (без нього — мова інтерфейсу).
+fn languages(message: &Value) -> (String, String) {
+  let pick = |key: &str| message.get(key).and_then(Value::as_str).filter(|code| is_language(code)).map(str::to_string);
+  let target = pick("target").filter(|code| code != AUTO).unwrap_or_else(|| crate::i18n::code().to_string());
+  (pick("source").unwrap_or_else(|| AUTO.to_string()), target)
 }
 
-/// Мова, на яку перекладати виділене, — та, що вибрана в «Перекладачі».
-#[tauri::command]
-#[specta::specta]
-pub fn translate_set_language(language: String) -> Result<(), String> {
-  if !is_language(&language) {
-    return Err(crate::i18n::text("Некоректна мова", "Invalid language").into());
-  }
-  *LANGUAGE.lock().map_err(|error| error.to_string())? = language;
-  Ok(())
-}
-
-/// Скрипт сторінки зі значком перекладу (selection-translate.js) з токеном сторінки.
+/// Скрипт сторінки зі значком перекладу (selection-translate.js) з токеном сторінки й мовою інтерфейсу.
 pub fn page_script(token: &str) -> String {
-  format!("({PAGE_SCRIPT})({});", Value::from(token))
+  format!("({PAGE_SCRIPT})({}, {});", Value::from(token), Value::from(crate::i18n::code()))
 }
 
 /// Переклад і мова оригіналу.
@@ -78,12 +66,12 @@ fn parse(reply: &Value) -> Option<Translation> {
   }
 }
 
-fn translate(text: &str, target: &str) -> Result<Translation, String> {
+fn translate(text: &str, source: &str, target: &str) -> Result<Translation, String> {
   let offline = crate::i18n::text("Не вдалося перекласти: немає з'єднання з Google Перекладачем.", "Couldn't translate: no connection to Google Translate.");
   let mut response = agent()
     .post(ENDPOINT)
     .query("client", "dict-chrome-ex")
-    .query("sl", "auto")
+    .query("sl", source)
     .query("tl", target)
     .send_form([("q", text)])
     .map_err(|_| offline.to_string())?;
@@ -95,24 +83,28 @@ fn translate(text: &str, target: &str) -> Result<Translation, String> {
 }
 
 /// Прохання скрипта сторінки `label` перекласти виділене: переклад іде у фоні, а відповідь — тій сторінці.
+/// У відповіді й мова інтерфейсу: нею віконце підписує себе й назви мов.
 pub fn on_page_message(app: &AppHandle, label: &str, message: &Value) -> Option<Value> {
   let id = message.get("id")?.as_u64()?;
   let text: String = message.get("text")?.as_str()?.trim().chars().take(MAX_TEXT).collect();
   if text.is_empty() {
     return None;
   }
+  let (source, target) = languages(message);
   let (app, label) = (app.clone(), label.to_string());
   thread::spawn(move || {
-    let target = language();
-    let reply = match translate(&text, &target) {
+    let ui = crate::i18n::code();
+    let reply = match translate(&text, &source, &target) {
       Ok(translation) => json!({
         "astra": "translate",
         "id": id,
         "text": translation.text,
-        "source": translation.source,
+        // Мову оригіналу задали — Google її не повертає.
+        "source": if translation.source.is_empty() && source != AUTO { source } else { translation.source },
         "target": target,
+        "ui": ui,
       }),
-      Err(error) => json!({ "astra": "translate", "id": id, "error": error }),
+      Err(error) => json!({ "astra": "translate", "id": id, "error": error, "ui": ui }),
     };
     if let Some(webview) = app.get_webview(&label) {
       let _ = crate::webview2::post_page_message(&webview, &reply);
@@ -141,5 +133,14 @@ mod tests {
     assert!(is_language("zh-CN"));
     assert!(!is_language("uk&q=1"));
     assert!(!is_language(""));
+  }
+
+  #[test]
+  fn detects_the_source_and_translates_to_the_interface_language_unless_asked_otherwise() {
+    let interface = crate::i18n::code().to_string();
+    assert_eq!(languages(&json!({ "text": "hi" })), (AUTO.to_string(), interface.clone()));
+    assert_eq!(languages(&json!({ "source": "de", "target": "pl" })), ("de".to_string(), "pl".to_string()));
+    // Чуже чи «визначити» як мова перекладу — мова інтерфейсу.
+    assert_eq!(languages(&json!({ "source": "en&x", "target": "auto" })), (AUTO.to_string(), interface));
   }
 }

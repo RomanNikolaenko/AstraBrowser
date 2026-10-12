@@ -13,7 +13,7 @@ export function suggestionId(index: number): string {
 /**
  * Список підказок під адресним рядком. Фокус лишається в рядку (стрілки, Enter, Esc обробляє Browser), а список
  * лише показує їх і повідомляє про клік. Це popover="manual": його показ і сховування — від Browser, а над сайтом
- * у webview під нього вирізається отвір, як і під інші панелі.
+ * він, як і інші панелі, ловить мишу (Browser, updateInputRegion).
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,

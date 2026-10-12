@@ -133,8 +133,6 @@ export const commands = {
 	passwordsSetSettings: (offer: boolean, autofill: boolean) => __TAURI_INVOKE<null>("passwords_set_settings", { offer, autofill }),
 	windowFillMonitor: () => __TAURI_INVOKE<null>("window_fill_monitor"),
 	windowStartDrag: () => __TAURI_INVOKE<null>("window_start_drag"),
-	/**  Мова, на яку перекладати виділене, — та, що вибрана в «Перекладачі». */
-	translateSetLanguage: (language: string) => __TAURI_INVOKE<null>("translate_set_language", { language }),
 	/**  Значок сайту з адресою `url` (беремо його головну сторінку); `None` — не знайшли. */
 	faviconFind: (url: string) => __TAURI_INVOKE<string | null>("favicon_find", { url }),
 	browsingDataSizes: () => __TAURI_INVOKE<BrowsingDataSizes>("browsing_data_sizes"),
@@ -143,8 +141,16 @@ export const commands = {
 	 *  профілі, спільному з інтерфейсом, їхній localStorage чиститься окремо (webview2::clear_browsing_data).
 	 */
 	browsingDataClear: (kinds: ClearKinds, since: number | null, origins: string[]) => __TAURI_INVOKE<null>("browsing_data_clear", { kinds, since, origins }),
-	/**  Отвори в сайті під відкриті панелі інтерфейсу (webview2::set_clip); порожній список — сайт знову цілий. */
-	pageSetClip: (label: string, holes: Hole[]) => __TAURI_INVOKE<null>("page_set_clip", { label, holes }),
+	/**
+	 *  Де інтерфейс вікна ловить мишу (webview2::set_input_region): поза сторінкою, а над нею — лише відкриті панелі й
+	 *  вікна. `page: None` — увесь інтерфейс.
+	 */
+	interfaceSetInputRegion: (page: {
+	x: number | null,
+	y: number | null,
+	width: number | null,
+	height: number | null,
+} | null, keep: Area[]) => __TAURI_INVOKE<null>("interface_set_input_region", { page, keep }),
 	/**  Особливе оновлення з меню кнопки «Оновити»: без кешу, з очищенням даних чи cookies сайту. */
 	pageReloadWith: (label: string, mode: ReloadMode) => __TAURI_INVOKE<null>("page_reload_with", { label, mode }),
 	/**  «Картинка в картинці» для відео на сторінці. */
@@ -204,6 +210,14 @@ export const commands = {
 };
 
 /* Types */
+/**  Прямокутник у логічних пікселях від лівого верхнього кута вікна. */
+export type Area = {
+	x: number | null,
+	y: number | null,
+	width: number | null,
+	height: number | null,
+};
+
 /**  Помилка для інтерфейсу: код Supabase (чи власний: offline, server) і повідомлення українською. */
 export type AuthError = {
 	code: string,
@@ -308,18 +322,6 @@ export type Envelope = {
 	n: string,
 	c: string,
 	h: string,
-};
-
-/**
- *  Отвір у сторінці під панель інтерфейсу: прямокутник із заокругленими кутами, у логічних пікселях від лівого
- *  верхнього кута вікна (там, де панель в інтерфейсі).
- */
-export type Hole = {
-	x: number | null,
-	y: number | null,
-	width: number | null,
-	height: number | null,
-	radius: number | null,
 };
 
 /**  Рівень захисту. */

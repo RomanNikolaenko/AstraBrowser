@@ -96,8 +96,22 @@ export class SyncService {
   private again = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private runs = 0;
+  /**
+   * Колекції, змінені тут після того, як їх востаннє надіслали: лише їх читають, порівнюють із сервером і надсилають.
+   * Інакше кожен прохід (щохвилини й щоразу, як вікно отримує фокус) перебирав би всю історію й закладки. Спершу —
+   * усі. Паролі — завжди: їх відбитки готові з Rust, а зміни приходять подією.
+   */
+  private readonly changed = new Set(this.collections.map((collection) => collection.name));
 
   constructor() {
+    const changedKeys = onStoredChange((key) => {
+      for (const collection of this.collections) {
+        if (collection.keys.includes(key)) {
+          this.changed.add(collection.name);
+        }
+      }
+    });
+    this.destroyRef.onDestroy(changedKeys);
     effect(() => {
       this.request();
       untracked(() => {
@@ -183,8 +197,16 @@ export class SyncService {
       }
       const passwords = await this.preparePasswords(state);
       for (const collection of this.collections) {
-        if (collection !== this.passwords || passwords === 'ok') {
-          await this.push(state, collection, passwords);
+        const due = collection === this.passwords ? passwords === 'ok' : this.changed.has(collection.name);
+        if (due) {
+          // Позначка знімається до читання: зміна посеред надсилання позначить колекцію наново.
+          this.changed.delete(collection.name);
+          try {
+            await this.push(state, collection, passwords);
+          } catch (error) {
+            this.changed.add(collection.name);
+            throw error;
+          }
         }
       }
       await this.pull(state, { passwords });

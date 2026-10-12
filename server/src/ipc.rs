@@ -8,7 +8,7 @@
 
 use tauri::{ipc::Invoke, Wry};
 
-use crate::{adblock, auth, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, translate, updates, window_drag};
+use crate::{adblock, auth, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, updates, window_drag};
 
 /// Прив'язки для інтерфейсу (оновлюються під час розробки й перевіряються тестом).
 #[cfg(any(debug_assertions, test))]
@@ -78,11 +78,10 @@ fn specta() -> tauri_specta::Builder<Wry> {
       passwords::passwords_set_settings,
       fullscreen::window_fill_monitor,
       window_drag::window_start_drag,
-      translate::translate_set_language,
       favicons::favicon_find,
       browsing_data::browsing_data_sizes,
       browsing_data::browsing_data_clear,
-      pages::page_set_clip,
+      pages::interface_set_input_region,
       pages::page_reload_with,
       pages::page_picture_in_picture,
       pages::page_set_audio_rules,
@@ -126,9 +125,9 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
   }
   let typed = builder.invoke_handler();
   let binary: Box<dyn Fn(Invoke<Wry>) -> bool + Send + Sync> =
-    Box::new(tauri::generate_handler![pages::page_capture, pages::page_screenshot, screenshots::file_save]);
+    Box::new(tauri::generate_handler![pages::page_screenshot, screenshots::file_save]);
   move |invoke| match invoke.message.command() {
-    "page_capture" | "page_screenshot" | "file_save" => binary(invoke),
+    "page_screenshot" | "file_save" => binary(invoke),
     _ => typed(invoke),
   }
 }

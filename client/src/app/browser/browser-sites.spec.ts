@@ -39,9 +39,6 @@ class FakePageViews {
     this.calls.push(['autoplay', label, options.autoplay ?? { allow: [], blockAudio: [] }]);
     return this.record('open', label, url);
   }
-  capture() {
-    return Promise.resolve(new ArrayBuffer(8));
-  }
   setAudioRules(rules: AutoplayRules) {
     return this.record('audio-rules', rules);
   }
@@ -106,8 +103,8 @@ class FakePageViews {
   setVisible(label: string, visible: boolean) {
     return this.record('visible', label, visible);
   }
-  setClip(label: string, holes: unknown) {
-    return this.record('clip', label, holes);
+  setInputRegion(page: unknown, keep: unknown) {
+    return this.record('input-region', page, keep);
   }
   screenshot(label: string, full: boolean) {
     this.calls.push(['screenshot', label, full]);
@@ -1348,23 +1345,47 @@ describe('Browser with sites', () => {
       await stable();
     };
 
-    it('should keep the site playing under an open panel and hide it only under a modal window', async () => {
-      const covering = () => document.documentElement.classList.contains('page-covering');
+    it('should keep the site under panels and modal windows and let a modal window catch the mouse', async () => {
+      // Регіон інтерфейсу: [сторінка, яку з нього вирізано (null — увесь інтерфейс), панелі над нею].
+      const region = () => pages.called('input-region').at(-1) ?? [];
       await typeInOmnibox('www.twitch.tv');
+      await stable();
+      // Сайт видно крізь прозорий інтерфейс, і мишу над сторінкою ловить він сам.
+      expect(document.documentElement.classList).toContain('site-visible');
+      expect(region()[0]).not.toBeNull();
       const shown = pages.called('visible').length;
 
-      // Панель над сайтом: сайт не ховається й не знімається — у ньому вирізається отвір під панель.
-      panel().dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
-      expect(covering()).toBe(false);
+      // Панель над сайтом: сайт не ховається й не знімається.
       await openPanel();
       expect(pages.called('visible').slice(shown)).not.toContainEqual([label(1), false]);
 
-      // Модальне вікно затемнює все, тож сайт під ним, як і раніше, ховається — ще до першого кадру вікна.
+      // Модальне вікно — на весь інтерфейс: затемнення лягає на живий сайт, і клік повз вікно до сайту не доходить.
+      // jsdom не відкриває модальних вікон (немає showModal, :modal не збігається) — модальність підміняємо.
       const dialog = element.querySelector('dialog.download-prompt') as HTMLDialogElement;
-      dialog.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
-      expect(covering()).toBe(true);
+      let modal = true;
+      const matches = dialog.matches.bind(dialog);
+      const find = document.querySelector.bind(document);
+      const spies = [
+        vi.spyOn(dialog, 'matches').mockImplementation((selector) => (selector === ':modal' ? modal : matches(selector))),
+        vi
+          .spyOn(document, 'querySelector')
+          .mockImplementation((selector: string) => (selector === 'dialog:modal' ? (modal ? dialog : null) : find(selector))),
+      ];
+      dialog.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
+      await stable();
+      expect(region()[0]).toBeNull();
+
+      // Закрили — вікно ще згасає, тож сайт знову ловить мишу лише після анімації.
+      dialog.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'closed' }));
+      modal = false;
       dialog.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
-      expect(covering()).toBe(false);
+      await stable();
+      expect(region()[0]).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(region()[0]).not.toBeNull();
+      expect(document.documentElement.classList).toContain('site-visible');
+      expect(pages.called('visible').slice(shown)).not.toContainEqual([label(1), false]);
+      spies.forEach((spy) => spy.mockRestore());
     });
 
     it('should replace the logo with the permissions button on sites only', async () => {

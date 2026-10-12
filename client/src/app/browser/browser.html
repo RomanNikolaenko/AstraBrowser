@@ -299,7 +299,8 @@
 </div>
 
 <!--
-  Область сторінки. Сайт (page === 'web') — це нативний webview поверх неї, тож тут для нього нічого не рендериться.
+  Область сторінки. Сайт (page === 'web') — це нативний webview під нею, видний крізь прозорий інтерфейс, тож тут для
+  нього нічого не рендериться.
   Пошук на сторінці плаває над вмістом; для сайту смуга пошуку відсуває webview вниз (viewport--docked).
 -->
 <div
@@ -307,9 +308,6 @@
   #viewport
   [class.viewport--docked]="findOpen() && activeTab().page === 'web'"
   (wheel)="onViewportWheel($event)">
-  @if (pageCover(); as cover) {
-    <img class="viewport__cover" [src]="cover.url" alt="" [width]="cover.width" [height]="cover.height" />
-  }
   <div class="content" #content [style.zoom]="zoom() / 100">
     @switch (activeTab().page) {
       @case ('web') {

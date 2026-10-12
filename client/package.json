@@ -14,6 +14,7 @@
     "lint:styles": "stylelint \"src/**/*.scss\"",
     "lint:styles:fix": "stylelint \"src/**/*.scss\" --fix",
     "i18n:check": "node scripts/i18n-check.mjs",
+    "icons": "node scripts/icons.mjs",
     "tauri:dev": "cd ../server && tauri dev --config tauri.dev.conf.json",
     "tauri:build": "cd ../server && tauri build",
     "release": "node scripts/release.mjs"

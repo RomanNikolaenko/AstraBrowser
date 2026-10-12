@@ -361,16 +361,27 @@ export class Browser {
   private reloadMenuPage: string | null = null;
 
   /**
-   * Відкрите модальне вікно (підтвердження, «Зберегти файл?»). Нативний webview сайту малюється поверх HTML
-   * інтерфейсу й закрив би його разом із затемненням, тож поки вікно відкрите, сторінка тимчасово ховається.
-   * Меню й панелі (popover) сайт не ховають: у ньому вирізається отвір під панель (updateClip).
+   * Сайт — окреме вікно під інтерфейсом, а інтерфейс над ним прозорий (клас site-visible на <html>, styles.scss): меню,
+   * вікна й тіні малюються просто над живою сторінкою. Мишу ж WebView2 інтерфейсу ловить на всій своїй площі, тож із
+   * його регіону вирізається сторінка — над нею лишаються лише панелі (updateInputRegion).
    */
-  private readonly overlayOpen = signal(false);
-  /** Сайт, у якому зараз вирізано отвори під панелі. */
-  private clippedPage: string | null = null;
-  private clipFrame = 0;
-  /** Панель змінила розмір — отвір під неї теж. */
-  private readonly clipObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.scheduleClip());
+  private siteUnder: string | null = null;
+  /** Покази сайтів — по черзі: кожен чекає, доки попередній справді з'явиться чи сховається. */
+  private pageShow = Promise.resolve();
+  private regionFrame = 0;
+  /** Що востаннє надіслано: той самий регіон удруге не надсилається. */
+  private sentRegion = '';
+  /**
+   * Панелі й вікна, що згасають після закриття, і місце, яке вони займали (null — усе вікно: модальне вікно). Доки вони
+   * згасають, це місце лишається в регіоні — інакше їхню частину над сайтом обрізало б одразу.
+   */
+  private readonly closingLayers = new Map<
+    HTMLElement,
+    { readonly area: PageBounds | null; readonly timer: ReturnType<typeof setTimeout> }
+  >();
+  /** Панель змінила розмір — регіон теж. */
+  private readonly layerObserver =
+    typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.scheduleInputRegion());
 
   /** Webview сайту, який зараз має бути видно. */
   /** Webview сайту в активній вкладці: для нього панель дозволів сайту. */
@@ -384,16 +395,8 @@ export class Browser {
   private readonly visiblePage = computed(() => {
     const tab = this.activeTab();
     // Сторінка, що впала чи не відповідає, ховається — на її місці екран з кнопкою «Перезавантажити».
-    return tab.page === 'web' && !this.overlayOpen() && !tab.site?.crashed ? this.pageLabel(tab) : null;
+    return tab.page === 'web' && !tab.site?.crashed ? this.pageLabel(tab) : null;
   });
-
-  /**
-   * Знімок сторінки на місці її webview, поки відкрита панель: сам webview малюється поверх HTML,
-   * тож під панеллю його доводиться ховати, а сторінка при цьому не має зникати.
-   */
-  protected readonly pageCover = signal<{ readonly url: string; readonly width: number; readonly height: number } | null>(null);
-  /** Номер останньої зміни панелей: відповідь на застарілий запит знімка відкидається. */
-  private overlayChange = 0;
 
   /** Сайт, що показує відео на весь екран: його webview накриває все вікно разом із панелями. */
   private readonly fullscreenPage = signal<string | null>(null);
@@ -484,21 +487,10 @@ export class Browser {
 
     effect(() => {
       const label = this.visiblePage();
-      untracked(() => {
-        if (this.shownPage && this.shownPage !== label) {
-          this.ignore(this.pageViews.setVisible(this.shownPage, false));
-        }
-        if (label) {
-          this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
-          this.ignore(this.pageViews.setVisible(label, true));
-        }
-        this.shownPage = label;
-        // Інша сторінка — отвори під відкриті панелі тепер у ній.
-        this.scheduleClip();
-      });
+      untracked(() => this.queuePageShow(label));
     });
 
-    // Інша вкладка чи відкрита панель — повноекранне відео попередньої сторінки згортається.
+    // Інша вкладка — повноекранне відео попередньої сторінки згортається.
     effect(() => {
       const label = this.visiblePage();
       untracked(() =>
@@ -518,30 +510,33 @@ export class Browser {
       }
     });
 
-    // Popover-и й вікна не спливають подій toggle, тож ловимо їх на фазі перехоплення.
-    // beforetoggle приходить ще до першого кадру з модальним вікном: ховаємо його, поки сайт не знято (setPageCovering).
+    // Popover-и й вікна не спливають подій toggle, тож ловимо їх на фазі перехоплення. beforetoggle приходить, поки шар
+    // ще відкритий: тоді й запам'ятовуємо його місце, щоб тримати його в регіоні, доки шар згасає.
     const onBeforeToggle = (event: Event) => {
-      if (
-        event.target instanceof HTMLDialogElement &&
-        (event as ToggleEvent).newState === 'open' &&
-        !this.overlayOpen() &&
-        this.activeTab().page === 'web' &&
-        this.pageViews.available
-      ) {
-        this.setPageCovering(true);
+      if (event.target instanceof HTMLElement) {
+        if ((event as ToggleEvent).newState === 'open') {
+          this.forgetClosing(event.target);
+        } else {
+          this.keepWhileClosing(event.target);
+        }
       }
     };
     const onToggle = (event: Event) => {
       const target = event.target;
-      if (target instanceof HTMLElement && !(target instanceof HTMLDialogElement)) {
-        if ((event as ToggleEvent).newState === 'open') {
-          this.clipObserver?.observe(target);
-        } else {
-          this.clipObserver?.unobserve(target);
-        }
-        this.scheduleClip();
+      if (!(target instanceof HTMLElement)) {
+        return;
       }
-      void this.onOverlayToggle();
+      if ((event as ToggleEvent).newState === 'open') {
+        this.layerObserver?.observe(target);
+        // Модальне вікно над повноекранним відео: відео згортається, бо вікно лягає на весь інтерфейс.
+        if (target instanceof HTMLDialogElement && target.matches(':modal') && this.fullscreenPage()) {
+          this.queueFullscreen(() => this.exitPageFullscreen());
+        }
+      } else {
+        this.layerObserver?.unobserve(target);
+      }
+      // Одразу, а не наступним кадром: що раніше панель потрапить у регіон, то раніше її видно над сайтом.
+      void this.updateInputRegion();
     };
     // Клік по сайту — фокус іде в його webview, і HTML інтерфейсу кліку не бачить. Тоді відкриті меню закриваються
     // самі, як і від кліку повз них в інтерфейсі.
@@ -561,9 +556,10 @@ export class Browser {
       document.removeEventListener('beforetoggle', onBeforeToggle, true);
       document.removeEventListener('toggle', onToggle, true);
       window.removeEventListener('blur', onBlur);
-      this.clipObserver?.disconnect();
-      cancelAnimationFrame(this.clipFrame);
-      this.setPageCovering(false);
+      this.layerObserver?.disconnect();
+      cancelAnimationFrame(this.regionFrame);
+      this.closingLayers.forEach(({ timer }) => clearTimeout(timer));
+      document.documentElement.classList.remove('site-visible');
     });
 
     if (this.pageViews.available) {
@@ -603,8 +599,8 @@ export class Browser {
           if (label) {
             this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
           }
-          // Панелі прив'язані до кнопок вікна: інший розмір — і отвори під ними деінде.
-          this.scheduleClip();
+          // Інший розмір — і сайт, і панелі над ним деінде.
+          this.scheduleInputRegion();
         });
         observer.observe(this.viewport().nativeElement);
         destroyRef.onDestroy(() => observer.disconnect());
@@ -1458,17 +1454,14 @@ export class Browser {
   }
 
   /**
-   * Webview щойно створено. Поки він створювався, межі, показ і отвори до нього не доходили, а розкладка вікна могла
-   * змінитися (скажімо, під час запуску з відновленими вкладками) — тож усе це ще раз, як зараз. Повертає, чи його
-   * зараз видно.
+   * Webview щойно створено. Поки він створювався, межі й показ до нього не доходили, а розкладка вікна могла змінитися
+   * (скажімо, під час запуску з відновленими вкладками) — тож показуємо ще раз, як зараз. Повертає, чи його зараз видно.
    */
   private onPageCreated(label: string): boolean {
     if (this.visiblePage() !== label) {
       return false;
     }
-    this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
-    this.ignore(this.pageViews.setVisible(label, true));
-    this.scheduleClip();
+    this.queuePageShow(label);
     return true;
   }
 
@@ -1938,115 +1931,88 @@ export class Browser {
     await this.windows.setFullscreen(true);
     // Якщо вікно вже було на весь екран, розмір не зміниться, тож межі — одразу.
     this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+    // Інтерфейс над відео не ловить мишу (і не видно його) — лише панелі, якщо відкриються.
+    void this.updateInputRegion();
   }
 
   /**
-   * Відкрилося чи закрилося модальне вікно. Перед тим як сховати сайт під ним, знімаємо його
-   * й кладемо знімок на те саме місце; після закриття знімок зникає, щойно webview знову на місці.
+   * Показує сайт `label` (чи жоден) під інтерфейсом — по черзі з попередніми показами. Спершу з'являється новий сайт,
+   * тоді інтерфейс над ним стає прозорим і пропускає до нього мишу, а старий сайт ховається вже під ним: так між ними
+   * на мить не проглядає порожнє вікно.
    */
-  private async onOverlayToggle(): Promise<void> {
-    const open = !!document.querySelector('dialog:modal');
-    const change = ++this.overlayChange;
-
-    if (!open) {
-      this.setPageCovering(false);
-      // Сайт повертається, коли панель уже згасла: інакше webview обірвав би її анімацію.
-      await delay(POPOVER_MOTION_MS);
-      if (change === this.overlayChange) {
-        this.overlayOpen.set(false);
-        // А знімок прибираємо, коли webview точно знову на місці.
-        await delay(150);
-        if (change === this.overlayChange) {
-          this.setPageCover(null);
-        }
-      }
-      return;
-    }
-    if (this.overlayOpen()) {
-      return;
-    }
-
-    const tab = this.activeTab();
-    if (tab.page === 'web' && this.pageViews.available) {
-      this.setPageCovering(true);
-      const bounds = this.pageBounds();
-      const image = await Promise.race([
-        this.pageViews.capture(this.pageLabel(tab)).catch(() => null),
-        delay(400).then(() => null),
-      ]);
-      if (image && change === this.overlayChange) {
-        const url = URL.createObjectURL(new Blob([image], { type: 'image/jpeg' }));
-        // Знімок має бути вже розкодований і намальований, коли webview зникне, — інакше блимне порожнеча.
-        await decodeImage(url);
-        this.setPageCover({ url, width: Math.round(bounds.width), height: Math.round(bounds.height) });
-        await nextFrame();
-        await nextFrame();
-      }
-      if (change !== this.overlayChange) {
-        return;
-      }
-    }
-    this.overlayOpen.set(true);
-    this.setPageCovering(false);
+  private queuePageShow(label: string | null): void {
+    this.pageShow = this.pageShow.then(() => this.showPage(label)).catch(() => undefined);
   }
 
-  /** Отвори оновлюються раз на кадр: панель, що з'являється, змінюється кілька разів поспіль. */
-  private scheduleClip(): void {
-    cancelAnimationFrame(this.clipFrame);
-    this.clipFrame = requestAnimationFrame(() => this.updateClip());
-  }
-
-  /**
-   * Меню й панелі над сайтом: сайт не ховається (відео грає далі), а в його webview вирізаються отвори точно під
-   * відкриті панелі — крізь них і видно панель. Розміри — без анімації появи (offset*), тобто такі, як після неї.
-   */
-  private updateClip(): void {
-    const label = this.visiblePage();
-    if (this.clippedPage && this.clippedPage !== label) {
-      this.ignore(this.pageViews.setClip(this.clippedPage, []));
-      this.clippedPage = null;
-    }
-    if (!label) {
-      return;
-    }
-    // Отвори — там, де панелі у вікні; від справжнього місця webview їх відраховує Rust (webview2::set_clip).
-    const bounds = this.pageBounds();
-    const holes = [...document.querySelectorAll<HTMLElement>(':popover-open')]
-      .map((popover) => ({
-        x: popover.offsetLeft,
-        y: popover.offsetTop,
-        width: popover.offsetWidth,
-        height: popover.offsetHeight,
-        radius: parseFloat(getComputedStyle(popover).borderTopLeftRadius) || 0,
-      }))
-      .filter(
-        (hole) =>
-          hole.x < bounds.x + bounds.width &&
-          hole.y < bounds.y + bounds.height &&
-          hole.x + hole.width > bounds.x &&
-          hole.y + hole.height > bounds.y
+  private async showPage(label: string | null): Promise<void> {
+    const previous = this.shownPage;
+    this.shownPage = label;
+    let shown = false;
+    if (label) {
+      this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+      // Webview ще створюється — інтерфейс лишається непрозорим, а покаже сайт onPageCreated.
+      shown = await this.pageViews.setVisible(label, true).then(
+        () => true,
+        () => false
       );
-    if (holes.length || this.clippedPage === label) {
-      this.ignore(this.pageViews.setClip(label, holes));
-      this.clippedPage = holes.length ? label : null;
     }
+    this.siteUnder = shown ? label : null;
+    document.documentElement.classList.toggle('site-visible', shown);
+    await this.updateInputRegion();
+    if (previous && previous !== label) {
+      await this.pageViews.setVisible(previous, false).catch(() => undefined);
+    }
+  }
+
+  /** Регіон — раз на кадр: панель, що з'являється, змінюється кілька разів поспіль. */
+  private scheduleInputRegion(): void {
+    cancelAnimationFrame(this.regionFrame);
+    this.regionFrame = requestAnimationFrame(() => void this.updateInputRegion());
   }
 
   /**
-   * Поки сайт знімається, модальне вікно невидиме (клас page-covering на <html>, styles.scss): інакше його
-   * частину над сайтом на мить закривав би його webview. Клас ставиться одразу, а не через effect —
-   * той спрацьовує вже після кадру, і панель встигала б показатися, зникнути й показатися знову.
+   * Де інтерфейс ловить мишу: усюди, крім сайту під ним, а над сайтом — лише відкриті й ще не згаслі панелі (разом із
+   * тінню). Модальне вікно — усе вікно: затемнення лягає на живу сторінку, і клік повз вікно до сайту не доходить.
    */
-  private setPageCovering(covering: boolean): void {
-    document.documentElement.classList.toggle('page-covering', covering);
+  private updateInputRegion(): Promise<void> {
+    cancelAnimationFrame(this.regionFrame);
+    if (!this.pageViews.available) {
+      return Promise.resolve();
+    }
+    const closing = [...this.closingLayers.values()];
+    const modal = !!document.querySelector('dialog:modal') || closing.some(({ area }) => !area);
+    const page = this.siteUnder && !modal ? this.pageBounds() : null;
+    const keep = page
+      ? [
+          ...[...document.querySelectorAll(':popover-open, dialog[open]:not(:modal)')].map(layerArea),
+          ...closing.flatMap(({ area }) => (area ? [area] : [])),
+        ]
+      : [];
+    const region = JSON.stringify([page, keep]);
+    if (region === this.sentRegion) {
+      return Promise.resolve();
+    }
+    this.sentRegion = region;
+    return this.pageViews.setInputRegion(page, keep).catch(() => undefined);
   }
 
-  private setPageCover(cover: { url: string; width: number; height: number } | null): void {
-    const previous = this.pageCover();
-    if (previous) {
-      URL.revokeObjectURL(previous.url);
+  /** Панель чи вікно закривається, але ще згасає: його місце лишається в регіоні до кінця анімації. */
+  private keepWhileClosing(layer: HTMLElement): void {
+    this.forgetClosing(layer);
+    if (!this.siteUnder) {
+      return;
     }
-    this.pageCover.set(cover);
+    const area = layer instanceof HTMLDialogElement && layer.matches(':modal') ? null : layerArea(layer);
+    const timer = setTimeout(() => {
+      this.closingLayers.delete(layer);
+      void this.updateInputRegion();
+    }, POPOVER_MOTION_MS + LAYER_FADE_SLACK_MS);
+    this.closingLayers.set(layer, { area, timer });
+  }
+
+  private forgetClosing(layer: HTMLElement): void {
+    clearTimeout(this.closingLayers.get(layer)?.timer);
+    this.closingLayers.delete(layer);
   }
 
   private queueFullscreen(change: () => Promise<void>): void {
@@ -2062,6 +2028,7 @@ export class Browser {
     if (label) {
       this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
     }
+    void this.updateInputRegion();
   }
 
   private onPageFavicon({ label, url, icon }: PageFaviconEvent): void {
@@ -2174,6 +2141,21 @@ function emptySite(label: string, url: string): Site {
 
 /** Тривалість появи й зникнення панелей ($motion у _mixins.scss). */
 const POPOVER_MOTION_MS = 180;
+/** Запас після анімації зникнення, перш ніж місце шару піде з регіону: таймер і кадр не збігаються точно. */
+const LAYER_FADE_SLACK_MS = 40;
+/** Запас довкола панелі в регіоні інтерфейсу, px: її тінь (--browser-popover-shadow) і зсув під час появи. */
+const LAYER_MARGIN = 56;
+
+/** Місце панелі чи вікна в регіоні інтерфейсу — разом із тінню. */
+function layerArea(layer: Element): PageBounds {
+  const rect = layer.getBoundingClientRect();
+  return {
+    x: Math.floor(rect.left - LAYER_MARGIN),
+    y: Math.floor(rect.top - LAYER_MARGIN),
+    width: Math.ceil(rect.width + LAYER_MARGIN * 2),
+    height: Math.ceil(rect.height + LAYER_MARGIN * 2),
+  };
+}
 
 /** Сторінка відео на YouTube (зокрема Shorts, трансляції й вбудований плеєр). */
 function isYouTubeVideo(url: string): boolean {
@@ -2187,21 +2169,3 @@ function isYouTubeVideo(url: string): boolean {
 
 /** Скільки тримати кнопку «Оновити», щоб відкрилося меню оновлення. */
 const RELOAD_HOLD_MS = 500;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-async function decodeImage(url: string): Promise<void> {
-  const image = new Image();
-  image.src = url;
-  try {
-    await image.decode();
-  } catch {
-    // Не розкодувався — покажемо як є, браузер домалює.
-  }
-}

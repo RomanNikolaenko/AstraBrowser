@@ -1,6 +1,26 @@
 import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, input } from '@angular/core';
-import { IconRegistry } from './icon-registry';
+import { ICONS } from './icons';
 
+/** Невідомі назви, про які вже повідомлено, — щоб не засмічувати журнал. */
+const reported = new Set<string>();
+
+/** Розмітка іконки з src/assets/icons за назвою файлу; невідома — порожньо (і помилка в журналі). */
+export function iconMarkup(name: string | undefined): string {
+  if (!name) {
+    return '';
+  }
+  const svg = ICONS[name];
+  if (svg === undefined && !reported.has(name)) {
+    reported.add(name);
+    console.error(`Unknown icon: ${name}`);
+  }
+  return svg ?? '';
+}
+
+/**
+ * Іконка `<app-icon icon="назва" />`. Іконки вбудовані в збірку (icons.ts, npm run icons), тож малюються разом з
+ * усім іншим — без окремого запиту на кожну й без миготіння під час запуску.
+ */
 @Component({
   selector: 'app-icon',
   template: '',
@@ -13,22 +33,11 @@ import { IconRegistry } from './icon-registry';
 export class UiIcon {
   readonly icon = input<string>();
 
-  private readonly icons = inject(IconRegistry);
   private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
 
   constructor() {
-    effect((onCleanup) => {
-      const iconName = this.icon();
-      if (!iconName) {
-        this.el.nativeElement.innerHTML = '';
-        return;
-      }
-
-      // Відписка і при зміні назви, і при знищенні: відповідь для старої назви не перезапише нову.
-      const subscription = this.icons.get(iconName).subscribe((svg) => {
-        this.el.nativeElement.innerHTML = svg;
-      });
-      onCleanup(() => subscription.unsubscribe());
+    effect(() => {
+      this.el.nativeElement.innerHTML = iconMarkup(this.icon());
     });
   }
 }

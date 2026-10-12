@@ -44,14 +44,23 @@ const notesHere = () =>
     (item) => `${item.id}:${item.text}`
   );
 
+/** Зміна тут — як із вікна застосунку: значення в localStorage і подія storage. */
+function changeHere(key: string, value: unknown): void {
+  localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new StorageEvent('storage', { key, newValue: JSON.stringify(value) }));
+}
+
 describe('SyncService', () => {
   let server: FakeServer;
   let sync: SyncService;
+  let calls: string[];
 
   beforeEach(() => {
     localStorage.clear();
     server = new FakeServer();
+    calls = [];
     mockIPC((command, args) => {
+      calls.push(command);
       const payload = args as { after: number; collection: string | null; items: SyncRow[] };
       switch (command) {
         case 'sync_pull':
@@ -135,12 +144,33 @@ describe('SyncService', () => {
     await sync.sync();
 
     // Тут видалили n1 і змінили n2, а на іншому комп'ютері n2 змінили пізніше.
-    localStorage.setItem('astra.notes', JSON.stringify([note('n2', 'Друга (тут)')]));
+    changeHere('astra.notes', [note('n2', 'Друга (тут)')]);
     server.write('notes', 'n2', note('n2', 'Друга (там, пізніше)'), Date.now() + 60_000);
     await sync.sync();
 
     expect(server.item('notes', 'n1')?.deleted).toBe(true);
     expect(notesHere()).toEqual(['n2:Друга (там, пізніше)']);
+  });
+
+  it('should read and send only what changed here since the last run', async () => {
+    localStorage.setItem('astra.notes', JSON.stringify([note('n1', 'Перша')]));
+    await sync.sync();
+    const pushes = () => calls.filter((command) => command === 'sync_push').length;
+    const read = vi.spyOn(Storage.prototype, 'getItem');
+    const notesRead = () => read.mock.calls.filter(([key]) => key === 'astra.notes').length;
+    const before = pushes();
+
+    // Нічого не змінилося — прохід лише питає сервер: нотатки навіть не читаються.
+    await sync.sync();
+    expect(notesRead()).toBe(0);
+    expect(pushes()).toBe(before);
+
+    changeHere('astra.notes', [note('n1', 'Перша (змінена)')]);
+    read.mockClear();
+    await sync.sync();
+    expect(notesRead()).toBeGreaterThan(0);
+    expect(pushes()).toBe(before + 1);
+    expect(server.item('notes', 'n1')?.data).toEqual(note('n1', 'Перша (змінена)'));
   });
 
   it('should say when the server is not set up for sync', async () => {

@@ -47,6 +47,10 @@ jobs:
       - name: Переклад
         run: npm run i18n:check
 
+      # Іконки вбудовані в збірку: src/app/shared/ui-icon/icons.ts має відповідати src/assets/icons.
+      - name: Іконки
+        run: npm run icons -- --check
+
       - name: Тести
         run: npx ng test --watch=false
 

@@ -15,15 +15,6 @@ export interface PageBounds {
   readonly height: number;
 }
 
-/** Отвір у сайті під панель: у логічних пікселях від лівого верхнього кута сторінки, з радіусом кутів панелі. */
-export interface PageHole {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly radius: number;
-}
-
 export interface PageLoadEvent {
   readonly label: string;
   readonly url: string;
@@ -261,9 +252,12 @@ export class PageViews {
     await commands.pageSetVisible(label, visible);
   }
 
-  /** Отвори в сайті під панелі інтерфейсу (server/src/webview2.rs, set_clip); порожній список — сайт знову цілий. */
-  async setClip(label: string, holes: readonly PageHole[]): Promise<void> {
-    await commands.pageSetClip(label, [...holes]);
+  /**
+   * Де інтерфейс вікна ловить мишу (server/src/webview2.rs, set_input_region): поза сторінкою `page`, а над нею — лише
+   * в `keep` (панелі над сайтом). `page` null — увесь інтерфейс.
+   */
+  async setInputRegion(page: PageBounds | null, keep: readonly PageBounds[]): Promise<void> {
+    await commands.interfaceSetInputRegion(page, [...keep]);
   }
 
   async setZoom(label: string, scale: number): Promise<void> {
@@ -299,11 +293,6 @@ export class PageViews {
 
   async setMuted(label: string, muted: boolean): Promise<void> {
     await commands.pageSetMuted(label, muted);
-  }
-
-  /** Знімок того, що показує сторінка (JPEG): лежить на місці webview, поки той прихований під панеллю. */
-  capture(label: string): Promise<ArrayBuffer> {
-    return invoke('page_capture', { label });
   }
 
   /** Скріншот сторінки (PNG): видима частина чи вся сторінка з прокруткою (`full`). */

@@ -22,20 +22,19 @@ use std::{
 use tauri::{webview::PlatformWebview, AppHandle, Manager, Url, Webview};
 use webview2_com::{
   take_pwstr, AcceleratorKeyPressedEventHandler, AddScriptToExecuteOnDocumentCreatedCompletedHandler, BytesReceivedChangedEventHandler, CallDevToolsProtocolMethodCompletedHandler,
-  CapturePreviewCompletedHandler, ClearBrowsingDataCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
+  ClearBrowsingDataCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
   GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
   IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
   NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
   WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
 };
 use windows::Win32::{
-  Foundation::{E_OUTOFMEMORY, HWND, RECT},
-  Graphics::Gdi::{CombineRgn, CreateRectRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, RGN_DIFF},
-  System::Com::{IStream, STREAM_SEEK_SET},
+  Foundation::{E_OUTOFMEMORY, HWND},
+  Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_DIFF, RGN_OR},
   UI::{
     Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT, VK_TAB},
     Shell::SHCreateMemStream,
-    WindowsAndMessaging::GetClientRect,
+    WindowsAndMessaging::{SetWindowPos, HWND_BOTTOM, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE},
   },
 };
 use windows_core::{w, IUnknown, Interface, BOOL, HSTRING, PWSTR};
@@ -84,53 +83,60 @@ pub(crate) fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreW
   unsafe { core(platform)?.cast::<ICoreWebView2_13>()?.Profile()?.cast() }
 }
 
-/// Отвір у сторінці під панель інтерфейсу: прямокутник із заокругленими кутами, у логічних пікселях від лівого
-/// верхнього кута вікна (там, де панель в інтерфейсі).
+/// Прямокутник у логічних пікселях від лівого верхнього кута вікна.
 #[derive(serde::Deserialize, specta::Type)]
-pub struct Hole {
+pub struct Area {
   x: f64,
   y: f64,
   width: f64,
   height: f64,
-  radius: f64,
 }
 
-/// Отвори в сайті під відкриті панелі інтерфейсу. Webview сайту малюється поверх HTML інтерфейсу, тож панель над ним
-/// видно лише крізь вирізаний у ньому отвір (регіон вікна Windows), — а сам сайт лишається живим: відео грає далі.
-/// Клік в отворі дістається панелі. Порожній `holes` — сторінка знову ціла.
+/// Сайт — під інтерфейсом. Там, де сторінка, інтерфейс прозорий (pages.rs), тож меню, вікна й тіні малюються просто
+/// над живою сторінкою. Новий webview Windows кладе нагору, тому сайт одразу опускається вниз.
+pub fn send_to_back(webview: &Webview) -> tauri::Result<()> {
+  webview.with_webview(|platform| {
+    let mut window = HWND::default();
+    if unsafe { platform.controller().ParentWindow(&mut window) }.is_ok() {
+      let _ = unsafe { SetWindowPos(window, Some(HWND_BOTTOM), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+    }
+  })
+}
+
+/// Де інтерфейс ловить мишу. Над сайтом він прозорий, але WebView2 забирає кліки на всій своїй площі, тож із регіону
+/// його вікна вирізається сторінка (`page`), а лишаються відкриті над нею панелі й вікна (`keep`). `page: None` —
+/// увесь інтерфейс (сайту не видно чи над ним модальне вікно).
 ///
-/// Отвори відраховуються від справжнього місця webview у вікні (`origin`, фізичні пікселі), а не від того, де його
-/// вважає інтерфейс: інакше після розбіжності (скажімо, межі змінилися, поки webview створювався) отвір зсунувся б
-/// відносно панелі й частину її закрив би сайт.
-pub fn set_clip(webview: &Webview, holes: Vec<Hole>, scale: f64, origin: (i32, i32)) -> tauri::Result<()> {
+/// Регіон — із запасом довкола вікна: коли вікно росте, нова частина інтерфейсу не обрізається, доки той не надішле
+/// новий регіон.
+pub fn set_input_region(webview: &Webview, page: Option<Area>, keep: Vec<Area>, scale: f64) -> tauri::Result<()> {
+  const OUTSIDE: i32 = 1 << 20;
   webview.with_webview(move |platform| {
-    let apply = || -> windows_core::Result<()> {
-      let mut window = HWND::default();
-      unsafe { platform.controller().ParentWindow(&mut window)? };
-      if holes.is_empty() {
-        unsafe { SetWindowRgn(window, None, true) };
-        return Ok(());
-      }
-      let mut size = RECT::default();
-      unsafe { GetClientRect(window, &mut size)? };
-      let pixels = |value: f64| (value * scale).round() as i32;
-      unsafe {
-        let region = CreateRectRgn(0, 0, size.right, size.bottom);
-        for hole in &holes {
-          let diameter = pixels(hole.radius * 2.0);
-          let (left, top) = (pixels(hole.x) - origin.0, pixels(hole.y) - origin.1);
-          let (right, bottom) = (pixels(hole.x + hole.width) - origin.0, pixels(hole.y + hole.height) - origin.1);
-          // У CreateRoundRectRgn правий і нижній край не входять у регіон — тому +1.
-          let cut = CreateRoundRectRgn(left, top, right + 1, bottom + 1, diameter, diameter);
-          CombineRgn(Some(region), Some(region), Some(cut), RGN_DIFF);
-          let _ = DeleteObject(cut.into());
-        }
-        // Після SetWindowRgn регіоном володіє вікно — видаляти його самим не треба.
-        SetWindowRgn(window, Some(region), true);
-      }
-      Ok(())
+    let mut window = HWND::default();
+    if unsafe { platform.controller().ParentWindow(&mut window) }.is_err() {
+      return;
+    }
+    let Some(page) = page else {
+      unsafe { SetWindowRgn(window, None, true) };
+      return;
     };
-    let _ = apply();
+    let pixels = |value: f64| (value * scale).round() as i32;
+    let rect = |area: &Area| unsafe {
+      CreateRectRgn(pixels(area.x), pixels(area.y), pixels(area.x + area.width), pixels(area.y + area.height))
+    };
+    unsafe {
+      let region = CreateRectRgn(-OUTSIDE, -OUTSIDE, OUTSIDE, OUTSIDE);
+      let hole = rect(&page);
+      CombineRgn(Some(region), Some(region), Some(hole), RGN_DIFF);
+      let _ = DeleteObject(hole.into());
+      for area in &keep {
+        let part = rect(area);
+        CombineRgn(Some(region), Some(region), Some(part), RGN_OR);
+        let _ = DeleteObject(part.into());
+      }
+      // Після SetWindowRgn регіоном володіє вікно — видаляти його самим не треба.
+      SetWindowRgn(window, Some(region), true);
+    }
   })
 }
 
@@ -332,40 +338,6 @@ pub fn set_tracking_prevention(webview: &Webview, level: tracking::Level) -> tau
       log::warn!("tracking: не вдалося задати рівень захисту WebView2: {error}");
     }
   })
-}
-
-/// Знімок того, що зараз показує сторінка (JPEG). Поки відкрита панель інтерфейсу, сам webview
-/// доводиться ховати (він малюється поверх HTML), і на його місці показується цей знімок.
-pub fn capture(webview: &Webview, reply: Reply<Vec<u8>>) -> tauri::Result<()> {
-  webview.with_webview(move |platform| {
-    let failed = reply.clone();
-    let request = || -> windows_core::Result<()> {
-      let stream = unsafe { SHCreateMemStream(None) }.ok_or_else(|| windows_core::Error::from(E_OUTOFMEMORY))?;
-      let image = stream.clone();
-      let handler = CapturePreviewCompletedHandler::create(Box::new(move |result| {
-        let bytes = result.and_then(|()| read_stream(&image));
-        let _ = reply.send(bytes.map_err(|error| error.to_string()));
-        Ok(())
-      }));
-      unsafe { core(&platform)?.CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG, &stream, &handler) }
-    };
-    if let Err(error) = request() {
-      let _ = failed.send(Err(error.to_string()));
-    }
-  })
-}
-
-fn read_stream(stream: &IStream) -> windows_core::Result<Vec<u8>> {
-  unsafe { stream.Seek(0, STREAM_SEEK_SET, None)? };
-  let (mut bytes, mut chunk) = (Vec::new(), vec![0u8; 256 * 1024]);
-  loop {
-    let mut read = 0u32;
-    unsafe { stream.Read(chunk.as_mut_ptr().cast(), chunk.len() as u32, Some(&mut read)).ok()? };
-    if read == 0 {
-      return Ok(bytes);
-    }
-    bytes.extend_from_slice(&chunk[..read as usize]);
-  }
 }
 
 /// Повідомляє `report(url, can_go_back, can_go_forward)` на кожну зміну адреси чи історії вкладки —

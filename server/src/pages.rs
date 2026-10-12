@@ -346,6 +346,15 @@ pub async fn page_open(
   let webview = window
     .add_child(builder, LogicalPosition::new(bounds.x, bounds.y), LogicalSize::new(bounds.width, bounds.height))
     .map_err(|error| error.to_string())?;
+  // Сайт — під інтерфейсом, а інтерфейс над ним прозорий: меню й вікна малюються просто над сторінкою
+  // (webview2::send_to_back, interface_set_input_region).
+  #[cfg(windows)]
+  {
+    let _ = webview2::send_to_back(&webview);
+    if let Some(interface) = window.get_webview(&ui) {
+      let _ = interface.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+    }
+  }
 
   // Найпершим — блокувальник реклами й захист від стеження: перший перехід Tauri вже почав, і фільтр має стати
   // раніше, ніж підуть запити сторінки. `report` — що заблоковано на сторінці, для інтерфейсу.
@@ -573,15 +582,14 @@ pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<
   if visible { webview.show() } else { webview.hide() }.map_err(|error| error.to_string())
 }
 
-/// Отвори в сайті під відкриті панелі інтерфейсу (webview2::set_clip); порожній список — сайт знову цілий.
+/// Де інтерфейс вікна ловить мишу (webview2::set_input_region): поза сторінкою, а над нею — лише відкриті панелі й
+/// вікна. `page: None` — увесь інтерфейс.
 #[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
-pub fn page_set_clip(window: Window, label: String, holes: Vec<webview2::Hole>) -> Result<(), String> {
-  let webview = page(&window, &label)?;
-  let scale = window.scale_factor().map_err(|error| error.to_string())?;
-  let origin = webview.position().map_err(|error| error.to_string())?;
-  webview2::set_clip(&webview, holes, scale, (origin.x, origin.y)).map_err(|error| error.to_string())
+pub fn interface_set_input_region(webview: Webview, page: Option<webview2::Area>, keep: Vec<webview2::Area>) -> Result<(), String> {
+  let scale = webview.window().scale_factor().map_err(|error| error.to_string())?;
+  webview2::set_input_region(&webview, page, keep, scale).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -696,15 +704,6 @@ pub async fn page_set_muted(window: Window, label: String, muted: bool) -> Resul
   let (reply, receiver) = mpsc::channel();
   webview2::set_muted(&page(&window, &label)?, muted, reply).map_err(|error| error.to_string())?;
   receive(receiver).await?
-}
-
-/// Знімок сторінки (JPEG) — його показує інтерфейс, поки webview прихований під відкритою панеллю.
-#[cfg(windows)]
-#[tauri::command]
-pub async fn page_capture(window: Window, label: String) -> Result<tauri::ipc::Response, String> {
-  let (reply, receiver) = mpsc::channel();
-  webview2::capture(&page(&window, &label)?, reply).map_err(|error| error.to_string())?;
-  Ok(tauri::ipc::Response::new(receive(receiver).await??))
 }
 
 /// Скріншот сторінки PNG: видима частина чи вся сторінка з прокруткою (`full`). Уся сторінка знімається довше,
