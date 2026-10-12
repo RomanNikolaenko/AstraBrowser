@@ -1,20 +1,22 @@
 <app-popover class="permission-prompt" popoverId="permission-prompt" align="start" caret (closed)="onClosed()">
   @if (request(); as request) {
     @if (info(); as info) {
-      <h2 class="permission-prompt__title">{{ site() }} хоче:</h2>
+      <h2 class="permission-prompt__title">{{ '{0} хоче:' | t: [site()] }}</h2>
       <p class="permission-prompt__ask">
         <app-icon class="permission-prompt__icon" [icon]="info.icon" />
-        <span>{{ info.asks }}</span>
+        <span>{{ info.asks | t }}</span>
       </p>
       <div class="permission-prompt__actions">
         <button
           class="permission-prompt__button permission-prompt__button--primary"
           type="button"
           (click)="answer('allow', true)">
-          Дозволяти на цьому сайті
+          {{ 'Дозволяти на цьому сайті' | t }}
         </button>
-        <button class="permission-prompt__button" type="button" (click)="answer('allow', false)">Дозволити цього разу</button>
-        <button class="permission-prompt__button" type="button" (click)="answer('deny', true)">Не дозволяти</button>
+        <button class="permission-prompt__button" type="button" (click)="answer('allow', false)">
+          {{ 'Дозволити цього разу' | t }}
+        </button>
+        <button class="permission-prompt__button" type="button" (click)="answer('deny', true)">{{ 'Не дозволяти' | t }}</button>
       </div>
     }
   }

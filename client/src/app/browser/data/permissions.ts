@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { accountSignal } from '../../shared/storage/stored-signal';
+import { tr } from '../../shared/i18n/i18n';
 
 /** Дозвіл сайту, про який питає браузер (server/src/page_events.rs, PERMISSIONS). */
 export type PermissionKind =
@@ -22,17 +23,17 @@ export type PermissionState = 'allow' | 'deny' | 'ask';
 export const PERMISSION_INFO: Readonly<
   Record<PermissionKind, { readonly icon: string; readonly label: string; readonly asks: string }>
 > = {
-  camera: { icon: 'camera', label: 'Камера', asks: 'Використовувати камеру' },
-  microphone: { icon: 'microphone', label: 'Мікрофон', asks: 'Використовувати мікрофон' },
-  location: { icon: 'location', label: 'Геолокація', asks: 'Знати, де ви перебуваєте' },
-  notifications: { icon: 'bell', label: 'Сповіщення', asks: 'Показувати сповіщення' },
-  clipboard: { icon: 'clipboard', label: 'Буфер обміну', asks: 'Бачити текст і зображення, які ви копіюєте' },
-  sensors: { icon: 'monitor', label: 'Датчики руху', asks: 'Використовувати датчики руху й освітлення' },
-  downloads: { icon: 'download', label: 'Автоматичні завантаження', asks: 'Завантажувати кілька файлів поспіль' },
-  files: { icon: 'file', label: 'Файли', asks: 'Змінювати файли й теки на вашому комп’ютері' },
-  fonts: { icon: 'edit', label: 'Шрифти', asks: 'Використовувати шрифти, встановлені на комп’ютері' },
-  midi: { icon: 'volume', label: 'MIDI-пристрої', asks: 'Повністю керувати MIDI-пристроями' },
-  windows: { icon: 'window', label: 'Вікна', asks: 'Відкривати й розташовувати вікна на всіх екранах' },
+  camera: { icon: 'camera', label: tr('Камера'), asks: tr('Використовувати камеру') },
+  microphone: { icon: 'microphone', label: tr('Мікрофон'), asks: tr('Використовувати мікрофон') },
+  location: { icon: 'location', label: tr('Геолокація'), asks: tr('Знати, де ви перебуваєте') },
+  notifications: { icon: 'bell', label: tr('Сповіщення'), asks: tr('Показувати сповіщення') },
+  clipboard: { icon: 'clipboard', label: tr('Буфер обміну'), asks: tr('Бачити текст і зображення, які ви копіюєте') },
+  sensors: { icon: 'monitor', label: tr('Датчики руху'), asks: tr('Використовувати датчики руху й освітлення') },
+  downloads: { icon: 'download', label: tr('Автоматичні завантаження'), asks: tr('Завантажувати кілька файлів поспіль') },
+  files: { icon: 'file', label: tr('Файли'), asks: tr('Змінювати файли й теки на вашому комп’ютері') },
+  fonts: { icon: 'edit', label: tr('Шрифти'), asks: tr('Використовувати шрифти, встановлені на комп’ютері') },
+  midi: { icon: 'volume', label: tr('MIDI-пристрої'), asks: tr('Повністю керувати MIDI-пристроями') },
+  windows: { icon: 'window', label: tr('Вікна'), asks: tr('Відкривати й розташовувати вікна на всіх екранах') },
 };
 
 /** Сайт просить дозвіл: який, хто й у якій вкладці (мітка webview сторінки). */

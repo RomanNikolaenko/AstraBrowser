@@ -16,6 +16,7 @@ mod external;
 mod favicons;
 #[cfg(windows)]
 mod fullscreen;
+mod i18n;
 mod ipc;
 mod launch;
 mod logging;
@@ -51,6 +52,8 @@ mod window_drag;
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI";
 
 fn main() {
+	// Мова повідомлень Rust — як у Windows, доки інтерфейс не скаже свою (i18n.rs).
+	i18n::init();
 	let context = tauri::generate_context!();
 	let builder = tauri::Builder::default();
 	// Повторний запуск і посилання з інших програм — у вже запущений браузер (launch.rs); цей плагін — першим.
@@ -62,6 +65,18 @@ fn main() {
 	// Плагіном одразу після single-instance: повторний запуск завершується, не чекаючи тут.
 	#[cfg(windows)]
 	let builder = builder.plugin(dns::plugin());
+	// Інструменти розробника (feature devtools) — сайтам; інтерфейс самого браузера в релізі їх не відкриває,
+	// як у Chrome. У `tauri dev` вони лишаються й для інтерфейсу.
+	#[cfg(all(windows, not(debug_assertions)))]
+	let builder = builder.plugin(
+		tauri::plugin::Builder::<tauri::Wry>::new("ui-devtools")
+			.on_webview_ready(|webview| {
+				if !webview.label().starts_with(pages::PAGE_PREFIX) {
+					let _ = webview2::disable_devtools(&webview);
+				}
+			})
+			.build(),
+	);
 	builder
 		.manage(audio::RulesScripts::default())
 		.manage(adblock::AdBlock::default())

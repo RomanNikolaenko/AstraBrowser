@@ -1,23 +1,23 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Розширення</h1>
+    <h1 class="page__title">{{ 'Розширення' | t }}</h1>
   </header>
 
-  <h2 class="page__group">Вбудовані</h2>
+  <h2 class="page__group">{{ 'Вбудовані' | t }}</h2>
   <article class="page__list extension" aria-labelledby="extension-adblock">
     <div class="extension__main">
       <span class="extension__icon"><app-icon icon="shield" /></span>
       <div class="extension__text">
-        <h3 class="extension__name" id="extension-adblock">Блокувальник реклами</h3>
-        <span class="extension__description"> Прибирає рекламу, банери й трекери на сайтах. </span>
-        <span class="page__meta" [class.page__meta--error]="listsState().error" [title]="listsState().text" role="status">{{
-          listsState().text
+        <h3 class="extension__name" id="extension-adblock">{{ 'Блокувальник реклами' | t }}</h3>
+        <span class="extension__description"> {{ 'Прибирає рекламу, банери й трекери на сайтах.' | t }} </span>
+        <span class="page__meta" [class.page__meta--error]="listsState().error" [title]="listsState().text | t" role="status">{{
+          listsState().text | t
         }}</span>
       </div>
       <app-switch
         class="extension__switch"
         inputName="adblock-enabled"
-        ariaLabel="Блокувальник реклами"
+        [ariaLabel]="'Блокувальник реклами' | t"
         [checked]="adblock.status()?.enabled ?? false"
         [disabled]="!adblock.status()"
         (checkedChange)="setEnabled($event)" />
@@ -26,11 +26,13 @@
     @if (adblock.status(); as status) {
       <!-- Списки потрібні рідко (оновлюються самі), тож згорнуті, доки їх не розкриють. -->
       <div class="extension__section extension__section--accordion">
-        <app-accordion class="extension__accordion" heading="Списки фільтрів" [badge]="status.lists.length">
+        <app-accordion class="extension__accordion" [heading]="'Списки фільтрів' | t" [badge]="status.lists.length">
           <div class="extension__lists-body">
             <p class="extension__hint">
-              Правила, за якими блокувальник вирішує, що прибрати. Оновлюються самі раз на 4 дні — оновіть вручну, якщо реклама на
-              якомусь сайті повернулася.
+              {{
+                'Правила, за якими блокувальник вирішує, що прибрати. Оновлюються самі раз на 4 дні — оновіть вручну, якщо реклама на якомусь сайті повернулася.'
+                  | t
+              }}
             </p>
             <ul class="extension__lists">
               @for (list of status.lists; track list) {
@@ -39,14 +41,14 @@
             </ul>
             <button class="page__button extension__update" type="button" [disabled]="status.updating" (click)="update()">
               <app-icon icon="reload" />
-              Оновити списки
+              {{ 'Оновити списки' | t }}
             </button>
           </div>
         </app-accordion>
       </div>
 
       <div class="extension__section">
-        <h4 class="extension__subtitle">Сайти без блокування</h4>
+        <h4 class="extension__subtitle">{{ 'Сайти без блокування' | t }}</h4>
         @if (status.disabledSites.length) {
           <ul class="extension__sites">
             @for (site of status.disabledSites; track site) {
@@ -54,13 +56,13 @@
                 <app-site-icon class="page__favicon" [url]="'https://' + site" [size]="22" />
                 <span class="page__text">
                   <span class="page__name">{{ site }}</span>
-                  <span class="page__meta">Разом із піддоменами</span>
+                  <span class="page__meta">{{ 'Разом із піддоменами' | t }}</span>
                 </span>
                 <button
                   class="page__remove"
                   type="button"
-                  [attr.aria-label]="'Знову блокувати рекламу на ' + site"
-                  title="Знову блокувати рекламу"
+                  [attr.aria-label]="('Знову блокувати рекламу на ' | t) + site"
+                  [title]="'Знову блокувати рекламу' | t"
                   (click)="enableSite(site)">
                   <app-icon icon="close" />
                 </button>
@@ -69,8 +71,8 @@
           </ul>
         } @else {
           <p class="extension__hint">
-            Немає. Вимкнути блокування для сайту можна в меню розширень <app-icon class="extension__hint-icon" icon="puzzle" /> на
-            панелі інструментів.
+            {{ 'Немає. Вимкнути блокування для сайту можна в меню розширень' | t }}
+            <app-icon class="extension__hint-icon" icon="puzzle" /> {{ 'на панелі інструментів.' | t }}
           </p>
         }
       </div>

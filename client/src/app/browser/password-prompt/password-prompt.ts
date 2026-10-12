@@ -14,6 +14,7 @@ import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
 import { PasswordPromptChoice, PasswordPromptRequest, PasswordsStore } from '../data/passwords';
 import { hostname } from '../pages/internal-pages';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * «Зберегти пароль?» після входу на сайт (чи «Оновити пароль?», якщо для цього імені збережено інший).
@@ -22,7 +23,7 @@ import { hostname } from '../pages/internal-pages';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon, UiInput],
+  imports: [TranslatePipe, UiIcon, UiInput],
   selector: 'app-password-prompt',
   styleUrl: './password-prompt.scss',
   templateUrl: './password-prompt.html',

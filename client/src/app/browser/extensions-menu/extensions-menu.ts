@@ -4,6 +4,7 @@ import { AdBlockPanel } from '../adblock-panel/adblock-panel';
 import { AdBlockStore } from '../data/adblock';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
+import { translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Меню розширень з кнопки-пазла на панелі інструментів, як у Chrome: список розширень (поки — блокувальник
@@ -12,7 +13,7 @@ import { Popover } from '../popover/popover';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AdBlockPanel, Popover, UiIcon],
+  imports: [TranslatePipe, AdBlockPanel, Popover, UiIcon],
   selector: 'app-extensions-menu',
   styleUrl: './extensions-menu.scss',
   templateUrl: './extensions-menu.html',
@@ -53,21 +54,23 @@ export class ExtensionsMenu {
   protected readonly state = computed(() => {
     const status = this.adblock.status();
     if (!status) {
-      return 'Працює лише в застосунку Astra Browser';
+      return translate('Працює лише в застосунку Astra Browser');
     }
     if (!status.enabled) {
-      return 'Вимкнено';
+      return translate('Вимкнено');
     }
     if (!status.ready) {
-      return status.updating ? 'Завантаження списків фільтрів…' : 'Списки фільтрів ще не завантажено';
+      return status.updating ? translate('Завантаження списків фільтрів…') : translate('Списки фільтрів ще не завантажено');
     }
     if (!this.host()) {
-      return 'Прибирає рекламу й трекери на сайтах';
+      return translate('Прибирає рекламу й трекери на сайтах');
     }
     if (!this.active()) {
-      return 'Вимкнено на цьому сайті';
+      return translate('Вимкнено на цьому сайті');
     }
-    return this.blocked() ? `Заблоковано на цій сторінці: ${this.blocked()}` : 'Блокує рекламу на цьому сайті';
+    return this.blocked()
+      ? translate('Заблоковано на цій сторінці: {0}', [this.blocked()])
+      : translate('Блокує рекламу на цьому сайті');
   });
 
   protected openAdBlock(): void {

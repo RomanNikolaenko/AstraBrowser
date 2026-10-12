@@ -324,9 +324,10 @@ pub struct ContextAction {
 /// поділитися, знімок Edge й QR-код Edge, яких тут немає.
 const REMOVED_ITEMS: &[&str] = &["openLinkInNewWindow", "share", "webCapture", "createQrCode", "openImageInNewWindow"];
 
-/// Що є там, де клацнули: посилання, зображення, виділений текст.
+/// Що є там, де клацнули: посилання, зображення, виділений текст; адреса самої сторінки, якщо це сайт.
 #[derive(Default, Debug, PartialEq)]
 struct MenuTarget {
+  page: Option<String>,
   link: Option<String>,
   image: Option<String>,
   selection: Option<String>,
@@ -341,28 +342,33 @@ fn custom_items(target: &MenuTarget) -> (MenuItems, MenuItems) {
   let mut top = Vec::new();
   let mut bottom = Vec::new();
   if let Some(link) = &target.link {
-    top.push(("open-link-tab", "Відкрити посилання в новій вкладці".to_string(), Some(link.clone())));
-    top.push(("open-link-window", "Відкрити посилання в новому вікні".to_string(), Some(link.clone())));
-    top.push(("open-link-private", "Відкрити посилання в приватному вікні".to_string(), Some(link.clone())));
+    top.push(("open-link-tab", crate::i18n::text("Відкрити посилання в новій вкладці", "Open link in new tab").to_string(), Some(link.clone())));
+    top.push(("open-link-window", crate::i18n::text("Відкрити посилання в новому вікні", "Open link in new window").to_string(), Some(link.clone())));
+    top.push(("open-link-private", crate::i18n::text("Відкрити посилання в приватному вікні", "Open link in private window").to_string(), Some(link.clone())));
     top.push(("", String::new(), None));
   }
   if let Some(image) = &target.image {
-    top.push(("open-image-tab", "Відкрити зображення в новій вкладці".to_string(), Some(image.clone())));
+    top.push(("open-image-tab", crate::i18n::text("Відкрити зображення в новій вкладці", "Open image in new tab").to_string(), Some(image.clone())));
     top.push(("", String::new(), None));
   }
   if let Some(text) = &target.selection {
     let short = shorten(text);
-    top.push(("search", format!("Шукати в інтернеті «{short}»"), Some(text.clone())));
+    top.push(("search", crate::i18n::text("Шукати в інтернеті «{0}»", "Search the web for “{0}”").replace("{0}", &short), Some(text.clone())));
     if !target.editable {
-      top.push(("translate-text", format!("Перекласти «{short}»"), Some(text.clone())));
+      top.push(("translate-text", crate::i18n::text("Перекласти «{0}»", "Translate “{0}”").replace("{0}", &short), Some(text.clone())));
     }
     top.push(("", String::new(), None));
   }
   // Меню самої сторінки — не на посиланні, зображенні, виділенні й не в полі вводу.
   if target.link.is_none() && target.image.is_none() && target.selection.is_none() && !target.editable {
     bottom.push(("", String::new(), None));
-    bottom.push(("translate-page", "Перекласти сторінку".to_string(), None));
-    bottom.push(("screenshot", "Знімок екрана".to_string(), None));
+    bottom.push(("translate-page", crate::i18n::text("Перекласти сторінку", "Translate page").to_string(), None));
+    bottom.push(("screenshot", crate::i18n::text("Знімок екрана", "Screenshot").to_string(), None));
+    // Для розробки: код сторінки (як Ctrl+U) — перед «Перевірити» самого WebView2.
+    if let Some(page) = &target.page {
+      bottom.push(("", String::new(), None));
+      bottom.push(("view-source", crate::i18n::text("Переглянути джерело сторінки", "View page source").to_string(), Some(page.clone())));
+    }
   }
   (top, bottom)
 }
@@ -391,6 +397,7 @@ pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) 
         let items = unsafe { args.MenuItems()? };
         remove_items(&items)?;
         let (top, bottom) = custom_items(&target);
+        let source = bottom.iter().any(|(action, _, _)| *action == "view-source");
         for (index, (action, label, value)) in (0u32..).zip(top) {
           unsafe { items.InsertValueAtIndex(index, &menu_item(&environment, action, &label, value, report.clone())?)? };
         }
@@ -399,6 +406,9 @@ pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) 
         for (action, label, value) in bottom {
           unsafe { items.InsertValueAtIndex(count, &menu_item(&environment, action, &label, value, report.clone())?)? };
           count += 1;
+        }
+        if source {
+          move_to_end(&items, INSPECT_ITEM)?;
         }
         Ok(())
       }));
@@ -428,6 +438,7 @@ fn read_target(target: &ICoreWebView2ContextMenuTarget) -> windows_core::Result<
   };
   let web = |url: String| Some(url).filter(|url| url.starts_with("http://") || url.starts_with("https://"));
   Ok(MenuTarget {
+    page: web(text(ICoreWebView2ContextMenuTarget::PageUri)?),
     link: if has_link.as_bool() { web(text(ICoreWebView2ContextMenuTarget::LinkUri)?) } else { None },
     image: if has_source.as_bool() && kind == COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND_IMAGE {
       web(text(ICoreWebView2ContextMenuTarget::SourceUri)?)
@@ -441,6 +452,28 @@ fn read_target(target: &ICoreWebView2ContextMenuTarget) -> windows_core::Result<
     },
     editable: editable.as_bool(),
   })
+}
+
+/// Пункт WebView2 «Перевірити» (інструменти розробника на елементі).
+const INSPECT_ITEM: &str = "inspectElement";
+
+/// Пункт WebView2 з назвою `name` — у кінець меню (якщо він є).
+fn move_to_end(items: &ICoreWebView2ContextMenuItemCollection, name: &str) -> windows_core::Result<()> {
+  let mut count = 0;
+  unsafe { items.Count(&mut count)? };
+  for index in 0..count {
+    let item = unsafe { items.GetValueAtIndex(index)? };
+    let mut found = PWSTR::null();
+    unsafe { item.Name(&mut found)? };
+    if take_pwstr(found) == name {
+      unsafe {
+        items.RemoveValueAtIndex(index)?;
+        items.InsertValueAtIndex(count - 1, &item)?;
+      }
+      break;
+    }
+  }
+  Ok(())
 }
 
 fn remove_items(items: &ICoreWebView2ContextMenuItemCollection) -> windows_core::Result<()> {
@@ -506,6 +539,13 @@ mod tests {
     assert_eq!(actions(&field), ["search"]);
 
     assert_eq!(actions(&MenuTarget::default()), ["translate-page", "screenshot"]);
+    // На сайті — ще й його код; на посиланні — ні.
+    let page = MenuTarget { page: Some("https://example.com/".into()), ..MenuTarget::default() };
+    assert_eq!(actions(&page), ["translate-page", "screenshot", "view-source"]);
+    let (_, bottom) = custom_items(&page);
+    assert_eq!(bottom.last().and_then(|(_, _, url)| url.as_deref()), Some("https://example.com/"));
+    let link_on_page = MenuTarget { link: Some("https://example.com/a".into()), ..page };
+    assert_eq!(actions(&link_on_page), ["open-link-tab", "open-link-window", "open-link-private"]);
   }
 
   #[test]

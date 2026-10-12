@@ -1,4 +1,5 @@
 <section class="auth">
+  <app-language-switch class="auth__language" />
   <div class="auth__layout">
     <div class="auth__intro">
       <div class="auth__brand">
@@ -10,30 +11,30 @@
           @if (!$first) {
             <br />
           }
-          {{ line }}
+          {{ line | t }}
         }
       </h1>
-      <p class="auth__description">{{ description() }}</p>
+      <p class="auth__description">{{ description() | t }}</p>
       <ul class="auth__benefits">
         <li class="auth__benefit">
           <span class="auth__benefit-icon"><app-icon icon="cloud" /></span>
           <span
-            ><strong class="auth__benefit-title">Синхронізація на всіх пристроях</strong
-            ><span class="auth__benefit-description">Закладки, паролі, налаштування — завжди з вами.</span></span
+            ><strong class="auth__benefit-title">{{ 'Синхронізація на всіх пристроях' | t }}</strong
+            ><span class="auth__benefit-description">{{ 'Закладки, паролі, налаштування — завжди з вами.' | t }}</span></span
           >
         </li>
         <li class="auth__benefit">
           <span class="auth__benefit-icon"><app-icon icon="shield-check" /></span>
           <span
-            ><strong class="auth__benefit-title">Безпечний і приватний перегляд</strong
-            ><span class="auth__benefit-description">Сучасні технології захисту ваших даних.</span></span
+            ><strong class="auth__benefit-title">{{ 'Безпечний і приватний перегляд' | t }}</strong
+            ><span class="auth__benefit-description">{{ 'Сучасні технології захисту ваших даних.' | t }}</span></span
           >
         </li>
         <li class="auth__benefit">
           <span class="auth__benefit-icon"><app-icon icon="sparkle" /></span>
           <span
-            ><strong class="auth__benefit-title">Доступ до ексклюзивних функцій</strong
-            ><span class="auth__benefit-description">Більше можливостей разом з Astra.</span></span
+            ><strong class="auth__benefit-title">{{ 'Доступ до ексклюзивних функцій' | t }}</strong
+            ><span class="auth__benefit-description">{{ 'Більше можливостей разом з Astra.' | t }}</span></span
           >
         </li>
       </ul>

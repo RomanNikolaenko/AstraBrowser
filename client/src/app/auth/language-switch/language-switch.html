@@ -1,0 +1,18 @@
+<div class="language-switch" role="radiogroup" [attr.aria-label]="'Мова інтерфейсу' | t">
+  <app-icon class="language-switch__icon" icon="globe" aria-hidden="true" />
+  <div class="language-switch__track">
+    @for (language of languages; track language) {
+      <label class="language-switch__option" [attr.lang]="language" [title]="names[language]">
+        <input
+          class="language-switch__input"
+          type="radio"
+          name="auth-language"
+          [value]="language"
+          [attr.aria-label]="names[language]"
+          [checked]="i18n.language() === language"
+          (change)="i18n.preference.set(language)" />
+        <span aria-hidden="true">{{ codes[language] }}</span>
+      </label>
+    }
+  </div>
+</div>

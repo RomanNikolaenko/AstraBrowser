@@ -71,7 +71,7 @@
         role="none"
         [class.bookmark-folder-menu__empty--drop]="drag.before(folder().id, 0)"
         (dragover)="drag.overEnd($event, folder().id, 0)">
-        Порожньо
+        {{ 'Порожньо' | t }}
       </li>
     }
   </ul>
@@ -85,7 +85,7 @@
         popovertargetaction="hide"
         (click)="actions.openAllOf(bookmarks())">
         <app-icon class="bookmark-folder-menu__icon" icon="tab-plus" />
-        <span class="bookmark-folder-menu__label">Відкрити всі ({{ bookmarks().length }})</span>
+        <span class="bookmark-folder-menu__label">{{ 'Відкрити всі ({0})' | t: [bookmarks().length] }}</span>
       </button>
     </div>
   }

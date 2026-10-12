@@ -3,6 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../bindings';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { tr, translate } from '../i18n/i18n';
 
 // Мітки вікон: за ними capabilities дають новим вікнам ті самі дозволи, що й головному,
 // а приватне вікно впізнає себе без жодних параметрів в URL.
@@ -26,8 +27,8 @@ export type WindowKind = 'normal' | 'private' | 'guest';
 
 const WINDOWS: Readonly<Record<WindowKind, { readonly prefix: string; readonly title: string }>> = {
   normal: { prefix: WINDOW_PREFIX, title: 'Astra Browser' },
-  private: { prefix: PRIVATE_PREFIX, title: 'Astra Browser — приватне вікно' },
-  guest: { prefix: GUEST_PREFIX, title: 'Astra Browser — гість' },
+  private: { prefix: PRIVATE_PREFIX, title: tr('Astra Browser — приватне вікно') },
+  guest: { prefix: GUEST_PREFIX, title: tr('Astra Browser — гість') },
 };
 
 /** Відкриває нові вікна браузера й знає, чи поточне вікно приватне чи гостьове. */
@@ -79,7 +80,7 @@ export class BrowserWindows {
     const options: WindowOptions = {
       // ?session= — продовжити вкладки вікна з минулого запуску, ?url= — одразу відкрити сайт (посилання з меню сайту).
       url: session ? `/home?session=${encodeURIComponent(session)}` : url ? `/home?url=${encodeURIComponent(url)}` : '/home',
-      title,
+      title: translate(title),
       width: 1280,
       height: 600,
       minWidth: 800,

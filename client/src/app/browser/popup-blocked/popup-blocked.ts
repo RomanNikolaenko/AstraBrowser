@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output, vi
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { PermissionsStore } from '../data/permissions';
 import { Popover } from '../popover/popover';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * «Спливне вікно заблоковано» — панель з кнопки в адресному рядку, як у Chrome: які вікна сайт хотів відкрити без
@@ -9,7 +10,7 @@ import { Popover } from '../popover/popover';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [TranslatePipe, Popover, UiIcon],
   selector: 'app-popup-blocked',
   styleUrl: './popup-blocked.scss',
   templateUrl: './popup-blocked.html',

@@ -5,6 +5,7 @@ import { UiSelect, UiSelectOption } from '../../shared/ui-select/ui-select';
 import { Bookmark, BookmarksStore } from '../data/bookmarks';
 import { internalPageFor } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
+import { tr, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 // Як urlFormat, але приймає й адреси внутрішніх сторінок (astra://history тощо).
 export const siteOrInternalPage =
@@ -24,7 +25,7 @@ export function bookmarkUrl(raw: string): string | null {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiInput, UiSelect],
+  imports: [TranslatePipe, Popover, UiInput, UiSelect],
   selector: 'app-bookmark-editor',
   styleUrl: './bookmark-editor.scss',
   templateUrl: './bookmark-editor.html',
@@ -39,12 +40,12 @@ export class BookmarkEditor {
   /** Закладка поточної сторінки на момент відкриття панелі: тоді панель її редагує. */
   protected readonly existing = signal<Bookmark | undefined>(undefined);
 
-  protected readonly title = new FormField([required('Введіть назву')]);
-  protected readonly url = new FormField([required('Введіть адресу'), siteOrInternalPage('Некоректна адреса сайту')]);
+  protected readonly title = new FormField([required(tr('Введіть назву'))]);
+  protected readonly url = new FormField([required(tr('Введіть адресу')), siteOrInternalPage(tr('Некоректна адреса сайту'))]);
   /** Тека закладки; '' — сама панель закладок. */
   protected readonly folder = signal('');
   protected readonly folderOptions = computed<readonly UiSelectOption[]>(() => [
-    { value: '', label: 'Панель закладок' },
+    { value: '', label: translate('Панель закладок') },
     ...this.bookmarks.folders().map(({ id, path }) => ({ value: id, label: path })),
   ]);
 

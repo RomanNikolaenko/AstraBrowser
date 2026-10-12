@@ -1,6 +1,6 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Завантаження</h1>
+    <h1 class="page__title">{{ 'Завантаження' | t }}</h1>
     @if (downloads.entries().length) {
       <app-input
         class="page__search"
@@ -8,24 +8,26 @@
         icon="search"
         inputId="downloads-search"
         inputName="downloads-search"
-        ariaLabel="Пошук у завантаженнях"
-        placeholder="Пошук у завантаженнях"
+        [ariaLabel]="'Пошук у завантаженнях' | t"
+        [placeholder]="'Пошук у завантаженнях' | t"
         autocomplete="off"
         [(value)]="query" />
-      <button class="page__button page__button--danger" type="button" (click)="confirmClear.show()">Очистити все</button>
+      <button class="page__button page__button--danger" type="button" (click)="confirmClear.show()">
+        {{ 'Очистити все' | t }}
+      </button>
     }
   </header>
 
   <app-confirm-dialog
     #confirmClear
-    heading="Очистити список завантажень?"
-    message="Записи зникнуть зі списку, а самі файли лишаться на диску."
-    confirmLabel="Очистити"
+    [heading]="'Очистити список завантажень?' | t"
+    [message]="'Записи зникнуть зі списку, а самі файли лишаться на диску.' | t"
+    [confirmLabel]="'Очистити' | t"
     danger
     (confirmed)="downloads.clear()" />
 
   @if (downloads.active().length) {
-    <h2 class="page__group">Зараз завантажується</h2>
+    <h2 class="page__group">{{ 'Зараз завантажується' | t }}</h2>
     <ul class="page__list">
       @for (download of downloads.active(); track download.id) {
         <li class="page__row">
@@ -35,7 +37,7 @@
             <span class="page__meta">
               {{
                 download.total
-                  ? formatSize(download.received) + ' з ' + formatSize(download.total)
+                  ? formatSize(download.received) + (' з ' | t) + formatSize(download.total)
                   : formatSize(download.received)
               }}
               · {{ hostname(download.url) }}
@@ -47,16 +49,16 @@
           <button
             class="page__remove"
             type="button"
-            [attr.aria-label]="'Показати «' + download.fileName + '» у теці'"
-            title="Показати в теці"
+            [attr.aria-label]="'Показати «{0}» у теці' | t: [download.fileName]"
+            [title]="'Показати в теці' | t"
             (click)="showPath(download.path)">
             <app-icon icon="folder" />
           </button>
           <button
             class="page__remove"
             type="button"
-            [attr.aria-label]="'Скасувати завантаження «' + download.fileName + '»'"
-            title="Скасувати"
+            [attr.aria-label]="'Скасувати завантаження «{0}»' | t: [download.fileName]"
+            [title]="'Скасувати' | t"
             (click)="cancel(download.id)">
             <app-icon icon="close" />
           </button>
@@ -68,14 +70,14 @@
   @if (!downloads.entries().length && !downloads.active().length) {
     <div class="page__empty">
       <span class="page__empty-icon"><app-icon icon="download" /></span>
-      <h2 class="page__empty-title">Завантажень ще немає</h2>
-      <p>Тут з'являться файли, які ви завантажите.</p>
+      <h2 class="page__empty-title">{{ 'Завантажень ще немає' | t }}</h2>
+      <p>{{ "Тут з'являться файли, які ви завантажите." | t }}</p>
     </div>
   } @else if (downloads.entries().length && !groups().length) {
-    <p class="page__no-results">Нічого не знайдено за запитом «{{ query() }}».</p>
+    <p class="page__no-results">{{ 'Нічого не знайдено за запитом «{0}».' | t: [query()] }}</p>
   } @else {
     @for (group of groups(); track group.label) {
-      <h2 class="page__group">{{ group.label }}</h2>
+      <h2 class="page__group">{{ group.label | t }}</h2>
       <ul class="page__list">
         @for (entry of group.items; track entry.id) {
           <li class="page__row">
@@ -83,7 +85,7 @@
             <app-icon class="page__favicon" [icon]="entry.status === 'failed' ? 'alert' : 'file'" />
             <span class="page__text">
               @if (entry.status === 'completed' && entry.path) {
-                <button class="page__name page__link" type="button" title="Відкрити" (click)="open(entry)">
+                <button class="page__name page__link" type="button" [title]="'Відкрити' | t" (click)="open(entry)">
                   {{ entry.fileName }}
                 </button>
               } @else {
@@ -96,8 +98,8 @@
               <button
                 class="page__remove"
                 type="button"
-                [attr.aria-label]="'Показати «' + entry.fileName + '» у теці'"
-                title="Показати в теці"
+                [attr.aria-label]="'Показати «{0}» у теці' | t: [entry.fileName]"
+                [title]="'Показати в теці' | t"
                 (click)="showPath(entry.path)">
                 <app-icon icon="folder" />
               </button>
@@ -105,8 +107,8 @@
             <button
               class="page__remove"
               type="button"
-              [attr.aria-label]="'Прибрати «' + entry.fileName + '» зі списку'"
-              title="Прибрати зі списку"
+              [attr.aria-label]="'Прибрати «{0}» зі списку' | t: [entry.fileName]"
+              [title]="'Прибрати зі списку' | t"
               (click)="downloads.remove(entry.id)">
               <app-icon icon="close" />
             </button>

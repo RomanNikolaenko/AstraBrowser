@@ -17,9 +17,7 @@ import { ConfirmDialog } from '../confirm-dialog/confirm-dialog';
 import { BlockedTracker, TRACKER_CATEGORIES, TrackingStore } from '../data/tracking';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
-
-const plural = new Intl.PluralRules('uk');
-const ELEMENTS: Record<string, string> = { one: 'елемент', few: 'елементи', many: 'елементів', other: 'елемента' };
+import { plural, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Панель «Захист від стеження» з кнопки-щита на початку адресного рядка, як у Firefox: чи захищене з'єднання,
@@ -28,7 +26,7 @@ const ELEMENTS: Record<string, string> = { one: 'елемент', few: 'елем
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfirmDialog, Popover, UiIcon, UiSwitch],
+  imports: [TranslatePipe, ConfirmDialog, Popover, UiIcon, UiSwitch],
   selector: 'app-tracking-panel',
   styleUrl: './tracking-panel.scss',
   templateUrl: './tracking-panel.html',
@@ -69,8 +67,16 @@ export class TrackingPanel {
   protected readonly count = computed(() => {
     const count = this.trackers().length;
     return count
-      ? `${count} ${ELEMENTS[plural.select(count)]} стеження заблоковано на цьому сайті`
-      : 'Елементів стеження на цьому сайті не знайдено';
+      ? plural(
+          count,
+          [
+            '{0} елемент стеження заблоковано на цьому сайті',
+            '{0} елементи стеження заблоковано на цьому сайті',
+            '{0} елементів стеження заблоковано на цьому сайті',
+          ],
+          ['{0} tracker blocked on this site', '{0} trackers blocked on this site']
+        )
+      : translate('Елементів стеження на цьому сайті не знайдено');
   });
 
   constructor() {

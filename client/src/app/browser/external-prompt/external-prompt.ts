@@ -14,14 +14,15 @@ import {
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { ExternalAppsStore, ExternalLinkRequest } from '../data/external-apps';
 import { PageViews } from '../page-views/page-views';
+import { tr, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Що відкриє посилання — для тексту запитання. */
 const APPS: Readonly<Record<string, string>> = {
-  mailto: 'поштовій програмі',
-  tel: 'програмі для дзвінків',
-  callto: 'програмі для дзвінків',
-  sms: 'програмі для повідомлень',
-  magnet: 'торрент-клієнті',
+  mailto: tr('поштовій програмі'),
+  tel: tr('програмі для дзвінків'),
+  callto: tr('програмі для дзвінків'),
+  sms: tr('програмі для повідомлень'),
+  magnet: tr('торрент-клієнті'),
 };
 
 /**
@@ -31,7 +32,7 @@ const APPS: Readonly<Record<string, string>> = {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-external-prompt',
   styleUrl: './external-prompt.scss',
   templateUrl: './external-prompt.html',
@@ -58,7 +59,11 @@ export class ExternalPrompt {
   /** Пошта й дзвінки — загальною назвою (Windows може запропонувати вибрати програму), решта — назвою програми. */
   protected readonly app = computed(() => {
     const request = this.request();
-    return APPS[request?.scheme ?? ''] ?? (request?.app ? `програмі «${request.app}»` : 'програмі на вашому комп’ютері');
+    const app = APPS[request?.scheme ?? ''];
+    if (app) {
+      return translate(app);
+    }
+    return request?.app ? translate('програмі «{0}»', [request.app]) : translate('програмі на вашому комп’ютері');
   });
   /** Посилання як його побачить людина: адреса пошти чи номер — без «mailto:», довге — скорочене. */
   protected readonly target = computed(() => {
@@ -116,7 +121,7 @@ export class ExternalPrompt {
       }
       this.finish(request);
     } catch (error) {
-      this.error.set(typeof error === 'string' ? error : 'Не вдалося відкрити посилання.');
+      this.error.set(typeof error === 'string' ? error : translate('Не вдалося відкрити посилання.'));
       this.busy.set(false);
     }
   }

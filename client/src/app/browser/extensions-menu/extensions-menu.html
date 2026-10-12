@@ -1,5 +1,5 @@
 <app-popover #menu class="extensions-menu" popoverId="extensions-menu" caret>
-  <h2 class="extensions-menu__title">Розширення</h2>
+  <h2 class="extensions-menu__title">{{ 'Розширення' | t }}</h2>
 
   <ul class="extensions-menu__list">
     <li class="extensions-menu__extension">
@@ -8,36 +8,38 @@
           <app-icon [icon]="active() ? 'shield-check' : 'shield-off'" />
         </span>
         <span class="extensions-menu__text">
-          <span class="extensions-menu__name">Блокувальник реклами</span>
+          <span class="extensions-menu__name">{{ 'Блокувальник реклами' | t }}</span>
           <span class="extensions-menu__state">{{ state() }}</span>
         </span>
       </button>
       <button
         class="extensions-menu__more"
         type="button"
-        aria-label="Дії з блокувальником реклами"
-        title="Дії"
+        [attr.aria-label]="'Дії з блокувальником реклами' | t"
+        [title]="'Дії' | t"
         popovertarget="extension-actions">
         <app-icon icon="more" />
       </button>
       <app-popover class="extension-actions" popoverId="extension-actions">
-        <ul class="extension-actions__list" role="menu" aria-label="Блокувальник реклами">
+        <ul class="extension-actions__list" role="menu" [attr.aria-label]="'Блокувальник реклами' | t">
           @if (adblock.status(); as status) {
             @if (host() && status.enabled) {
               <li role="none">
                 <button class="extension-actions__item" type="button" role="menuitem" (click)="toggleSite()">
-                  {{ active() ? 'Вимкнути на цьому сайті' : 'Увімкнути на цьому сайті' }}
+                  {{ active() ? ('Вимкнути на цьому сайті' | t) : ('Увімкнути на цьому сайті' | t) }}
                 </button>
               </li>
             }
             <li role="none">
               <button class="extension-actions__item" type="button" role="menuitem" (click)="toggleEnabled()">
-                {{ status.enabled ? 'Вимкнути розширення' : 'Увімкнути розширення' }}
+                {{ status.enabled ? ('Вимкнути розширення' | t) : ('Увімкнути розширення' | t) }}
               </button>
             </li>
           }
           <li role="none">
-            <button class="extension-actions__item" type="button" role="menuitem" (click)="manage()">Керувати розширенням</button>
+            <button class="extension-actions__item" type="button" role="menuitem" (click)="manage()">
+              {{ 'Керувати розширенням' | t }}
+            </button>
           </li>
         </ul>
       </app-popover>
@@ -47,7 +49,7 @@
   <div class="extensions-menu__footer">
     <button class="extensions-menu__manage" type="button" (click)="manage()">
       <app-icon class="extensions-menu__manage-icon" icon="settings" />
-      Керувати розширеннями
+      {{ 'Керувати розширеннями' | t }}
     </button>
   </div>
 </app-popover>

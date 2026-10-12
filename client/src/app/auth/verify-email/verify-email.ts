@@ -15,6 +15,7 @@ import { FormField, required, validateFields } from '../../shared/form-field/for
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
 import { Cooldown, codeFormat, normalizeCode } from '../auth-forms';
+import { tr, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Крок «Підтвердіть пошту»: код із листа Supabase — і вхід у браузер. Код можна надіслати ще раз (не частіше,
@@ -23,7 +24,7 @@ import { Cooldown, codeFormat, normalizeCode } from '../auth-forms';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon, UiInput],
+  imports: [TranslatePipe, UiIcon, UiInput],
   selector: 'app-verify-email',
   styleUrl: '../auth.scss',
   templateUrl: './verify-email.html',
@@ -40,7 +41,7 @@ export class VerifyEmail implements OnInit {
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
 
-  protected readonly code = new FormField([required('Введіть код із листа'), codeFormat]);
+  protected readonly code = new FormField([required(tr('Введіть код із листа')), codeFormat]);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
@@ -82,7 +83,7 @@ export class VerifyEmail implements OnInit {
     this.cooldown.start();
     try {
       await this.auth.resend(this.email());
-      this.notice.set('Новий лист надіслано. Перевірте й папку «Спам».');
+      this.notice.set(translate('Новий лист надіслано. Перевірте й папку «Спам».'));
     } catch (error) {
       this.error.set(authErrorMessage(error));
     }

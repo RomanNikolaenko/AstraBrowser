@@ -1,5 +1,5 @@
 <app-popover class="bookmark-editor" popoverId="bookmark-editor" caret (opened)="onOpened()">
-  <h2 class="bookmark-editor__title">{{ existing() ? 'Редагувати закладку' : 'Додати закладку' }}</h2>
+  <h2 class="bookmark-editor__title">{{ existing() ? ('Редагувати закладку' | t) : ('Додати закладку' | t) }}</h2>
   <form class="bookmark-editor__form" novalidate (submit)="save($event)">
     <app-input
       #titleInput
@@ -7,8 +7,8 @@
       icon="star"
       inputId="bookmark-editor-title"
       inputName="title"
-      ariaLabel="Назва закладки"
-      placeholder="Назва"
+      [ariaLabel]="'Назва закладки' | t"
+      [placeholder]="'Назва' | t"
       autocomplete="off"
       [(value)]="title.value"
       [(touched)]="title.touched"
@@ -19,7 +19,7 @@
       inputId="bookmark-editor-url"
       inputName="url"
       type="url"
-      ariaLabel="Адреса сайту"
+      [ariaLabel]="'Адреса сайту' | t"
       placeholder="example.com"
       autocomplete="url"
       [spellcheck]="false"
@@ -28,7 +28,7 @@
       [error]="url.visibleError()" />
     @if (folderOptions().length > 1) {
       <div class="bookmark-editor__folder">
-        <span class="bookmark-editor__label" id="bookmark-editor-folder-label">Тека</span>
+        <span class="bookmark-editor__label" id="bookmark-editor-folder-label">{{ 'Тека' | t }}</span>
         <app-select
           class="bookmark-editor__select"
           selectId="bookmark-editor-folder"
@@ -44,13 +44,13 @@
           class="bookmark-editor__button bookmark-editor__button--danger bookmark-editor__remove"
           type="button"
           (click)="remove()">
-          Видалити
+          {{ 'Видалити' | t }}
         </button>
       }
       <button class="bookmark-editor__button" type="button" popovertarget="bookmark-editor" popovertargetaction="hide">
-        Скасувати
+        {{ 'Скасувати' | t }}
       </button>
-      <button class="bookmark-editor__button bookmark-editor__button--primary" type="submit">Зберегти</button>
+      <button class="bookmark-editor__button bookmark-editor__button--primary" type="submit">{{ 'Зберегти' | t }}</button>
     </div>
   </form>
 </app-popover>

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, effect, input, output, 
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { SiteIcon } from '../site-icon/site-icon';
 import { Suggestion } from './suggestions';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /** id списку й пунктів — для aria-controls і aria-activedescendant адресного рядка. */
 export const SUGGESTIONS_ID = 'omnibox-suggestions';
@@ -16,7 +17,7 @@ export function suggestionId(index: number): string {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SiteIcon, UiIcon],
+  imports: [TranslatePipe, SiteIcon, UiIcon],
   selector: 'app-omnibox-suggestions',
   styleUrl: './omnibox-suggestions.scss',
   templateUrl: './omnibox-suggestions.html',

@@ -1,23 +1,25 @@
 <app-auth-layout
-  [heading]="['Ласкаво просимо', 'до Astra Browser']"
-  description="Увійдіть у свій акаунт або створіть новий, щоб продовжити користування браузером.">
+  [heading]="['Ласкаво просимо' | t, 'до Astra Browser' | t]"
+  [description]="'Увійдіть у свій акаунт або створіть новий, щоб продовжити користування браузером.' | t">
   @if (verifying()) {
     <app-verify-email [email]="email.value().trim()" (back)="backToForm()" (confirmed)="backToForm()" />
   } @else {
-    <nav class="auth__tabs" aria-label="Авторизація">
-      <a class="auth__tab auth__tab--active" [routerLink]="'/sign-in'">Увійти</a>
-      <a class="auth__tab" [routerLink]="'/sign-up'">Зареєструватися</a>
+    <nav class="auth__tabs" [attr.aria-label]="'Авторизація' | t">
+      <a class="auth__tab auth__tab--active" [routerLink]="'/sign-in'">{{ 'Увійти' | t }}</a>
+      <a class="auth__tab" [routerLink]="'/sign-up'">{{ 'Зареєструватися' | t }}</a>
     </nav>
 
     @if (error(); as message) {
-      <p class="auth__alert auth__alert--error" role="alert"><app-icon icon="alert" />{{ message }}</p>
+      <p class="auth__alert auth__alert--error" role="alert"><app-icon icon="alert" />{{ message | t }}</p>
     } @else if (deletedEmail(); as email) {
-      <p class="auth__alert" role="status"><app-icon icon="check" />Обліковий запис {{ email }} видалено разом з його даними.</p>
+      <p class="auth__alert" role="status">
+        <app-icon icon="check" />{{ 'Обліковий запис {0} видалено разом з його даними.' | t: [email] }}
+      </p>
     }
 
     <form class="auth__fields" id="sign-in-form" novalidate (submit)="submit($event)">
       <div class="auth__field-label">
-        <span class="auth__field-name">Електронна пошта</span>
+        <span class="auth__field-name">{{ 'Електронна пошта' | t }}</span>
         <app-input
           class="auth__input"
           icon="email"
@@ -27,12 +29,12 @@
           [(value)]="email.value"
           [(touched)]="email.touched"
           [error]="email.visibleError()"
-          ariaLabel="Електронна пошта"
+          [ariaLabel]="'Електронна пошта' | t"
           autocomplete="username"
           placeholder="example@domain.com" />
       </div>
       <div class="auth__field-label">
-        <span class="auth__field-name">Пароль</span>
+        <span class="auth__field-name">{{ 'Пароль' | t }}</span>
         <app-input
           class="auth__input"
           icon="lock"
@@ -42,14 +44,14 @@
           [(touched)]="password.touched"
           [error]="password.visibleError()"
           [type]="passwordVisible() ? 'text' : 'password'"
-          ariaLabel="Пароль"
+          [ariaLabel]="'Пароль' | t"
           autocomplete="current-password"
-          placeholder="Введіть пароль">
+          [placeholder]="'Введіть пароль' | t">
           <button
             class="auth__password-toggle"
             type="button"
-            [attr.aria-label]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'"
-            [attr.title]="passwordVisible() ? 'Приховати пароль' : 'Показати пароль'"
+            [attr.aria-label]="passwordVisible() ? ('Приховати пароль' | t) : ('Показати пароль' | t)"
+            [attr.title]="passwordVisible() ? ('Приховати пароль' | t) : ('Показати пароль' | t)"
             (click)="togglePasswordVisibility()">
             @if (passwordVisible()) {
               <app-icon icon="eye" />
@@ -61,17 +63,19 @@
       </div>
     </form>
     <div class="auth__inline-actions">
-      <app-checkbox inputName="remember" [(checked)]="remember">Запам’ятати мене</app-checkbox>
-      <a class="auth__link" [routerLink]="'/forgot-password'" [state]="{ email: email.value().trim() }">Забули пароль?</a>
+      <app-checkbox inputName="remember" [(checked)]="remember">{{ 'Запам’ятати мене' | t }}</app-checkbox>
+      <a class="auth__link" [routerLink]="'/forgot-password'" [state]="{ email: email.value().trim() }">{{
+        'Забули пароль?' | t
+      }}</a>
     </div>
     <button class="auth__submit" type="submit" form="sign-in-form" [disabled]="busy()">
-      {{ busy() ? 'Входимо…' : 'Увійти' }} <app-icon icon="arrow-right" />
+      {{ busy() ? ('Входимо…' | t) : ('Увійти' | t) }} <app-icon icon="arrow-right" />
     </button>
     <div class="auth__notice">
-      <app-icon icon="lock" /><span
-        >Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ
-        до можливостей Astra Browser.</span
-      >
+      <app-icon icon="lock" /><span>{{
+        'Без авторизації користування браузером недоступне. Увійдіть, щоб безпечно синхронізувати дані та отримати повний доступ до можливостей Astra Browser.'
+          | t
+      }}</span>
     </div>
   }
 </app-auth-layout>

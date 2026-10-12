@@ -8,6 +8,7 @@ import { UiInput } from '../../shared/ui-input/ui-input';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { emailFromNavigation } from '../auth-forms';
 import { VerifyEmail } from '../verify-email/verify-email';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Вхід в обліковий запис. «Запам'ятати мене» — сеанс переживе перезапуск (server/src/auth.rs). Якщо пошту ще
@@ -15,7 +16,7 @@ import { VerifyEmail } from '../verify-email/verify-email';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AuthLayout, RouterLink, UiCheckbox, UiIcon, UiInput, VerifyEmail],
+  imports: [TranslatePipe, AuthLayout, RouterLink, UiCheckbox, UiIcon, UiInput, VerifyEmail],
   selector: 'app-sign-in',
   styleUrl: '../auth.scss',
   templateUrl: './sign-in.html',
@@ -35,10 +36,10 @@ export class SignIn {
   protected readonly verifying = signal(false);
 
   protected readonly email = new FormField([
-    required('Введіть електронну пошту'),
-    emailFormat('Некоректна адреса електронної пошти'),
+    required(tr('Введіть електронну пошту')),
+    emailFormat(tr('Некоректна адреса електронної пошти')),
   ]);
-  protected readonly password = new FormField([required('Введіть пароль')]);
+  protected readonly password = new FormField([required(tr('Введіть пароль'))]);
 
   constructor() {
     this.email.value.set(emailFromNavigation());

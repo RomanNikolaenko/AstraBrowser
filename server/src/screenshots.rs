@@ -36,18 +36,18 @@ fn decode_component(text: &str) -> String {
 #[tauri::command]
 pub async fn file_save(app: AppHandle, window: Window, request: Request<'_>) -> Result<Option<String>, String> {
   let InvokeBody::Raw(content) = request.body() else {
-    return Err("Немає вмісту файла".into());
+    return Err(crate::i18n::text("Немає вмісту файла", "No file content").into());
   };
   let content = content.clone();
   let header = |name: &str| request.headers().get(name).and_then(|value| value.to_str().ok()).map(decode_component);
   let html = header("x-file-kind").as_deref() == Some("html");
   let name = header("x-file-name")
     .filter(|name| !name.trim().is_empty())
-    .unwrap_or_else(|| if html { "Закладки.html".into() } else { "Скріншот.png".into() });
+    .unwrap_or_else(|| if html { crate::i18n::text("Закладки.html", "Bookmarks.html").into() } else { crate::i18n::text("Скріншот.png", "Screenshot.png").into() });
   let (title, filter, extension) = if html {
-    ("Зберегти закладки", "Закладки HTML", "html")
+    (crate::i18n::text("Зберегти закладки", "Save bookmarks"), crate::i18n::text("Закладки HTML", "HTML bookmarks"), "html")
   } else {
-    ("Зберегти скріншот", "Зображення PNG", "png")
+    (crate::i18n::text("Зберегти скріншот", "Save screenshot"), crate::i18n::text("Зображення PNG", "PNG image"), "png")
   };
   let mut dialog = app.dialog().file().set_parent(&window).set_title(title).set_file_name(name).add_filter(filter, &[extension]);
   let folder = if html { app.path().document_dir() } else { app.path().picture_dir() };

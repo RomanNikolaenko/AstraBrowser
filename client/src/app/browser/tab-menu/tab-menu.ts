@@ -11,6 +11,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { Popover } from '../popover/popover';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Дія з меню вкладки. */
 export type TabMenuAction =
@@ -43,7 +44,7 @@ export interface TabMenuTarget {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover],
+  imports: [TranslatePipe, Popover],
   selector: 'app-tab-menu',
   styleUrl: './tab-menu.scss',
   templateUrl: './tab-menu.html',

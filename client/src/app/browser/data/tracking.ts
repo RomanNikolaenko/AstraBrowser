@@ -1,6 +1,7 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { SettingsStore } from '../../shared/settings/settings';
 import { accountSignal } from '../../shared/storage/stored-signal';
+import { tr } from '../../shared/i18n/i18n';
 
 /** Що саме заблоковано (server/src/tracking.rs, Category). */
 export type TrackerCategory = 'tracking' | 'social' | 'cryptomining';
@@ -30,20 +31,20 @@ export const TRACKER_CATEGORIES: readonly {
   {
     category: 'tracking',
     icon: 'eye',
-    label: 'Елементи стеження',
-    hint: 'Аналітика й рекламні мітки, що впізнають вас на різних сайтах',
+    label: tr('Елементи стеження'),
+    hint: tr('Аналітика й рекламні мітки, що впізнають вас на різних сайтах'),
   },
   {
     category: 'social',
     icon: 'user',
-    label: 'Елементи стеження соцмереж',
-    hint: 'Кнопки «Поділитися», вбудовані дописи й пікселі соцмереж',
+    label: tr('Елементи стеження соцмереж'),
+    hint: tr('Кнопки «Поділитися», вбудовані дописи й пікселі соцмереж'),
   },
   {
     category: 'cryptomining',
     icon: 'bolt',
-    label: 'Криптомайнери',
-    hint: 'Скрипти, що добувають криптовалюту коштом вашого комп’ютера',
+    label: tr('Криптомайнери'),
+    hint: tr('Скрипти, що добувають криптовалюту коштом вашого комп’ютера'),
   },
 ];
 

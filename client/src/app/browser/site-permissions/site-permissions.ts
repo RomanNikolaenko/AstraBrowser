@@ -5,6 +5,7 @@ import { AutoplayChoice, AutoplayStore } from '../data/autoplay';
 import { PERMISSION_INFO, PermissionKind, PermissionState, PermissionsStore } from '../data/permissions';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Дозволи, які видно на панелі (решту сайт попросить, коли знадобиться, — тоді й з'явиться запитання). */
 const SHOWN: readonly PermissionKind[] = ['camera', 'microphone', 'location', 'notifications', 'clipboard'];
@@ -16,7 +17,7 @@ const SHOWN: readonly PermissionKind[] = ['camera', 'microphone', 'location', 'n
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon, UiSelect],
+  imports: [TranslatePipe, Popover, UiIcon, UiSelect],
   selector: 'app-site-permissions',
   styleUrl: './site-permissions.scss',
   templateUrl: './site-permissions.html',
@@ -55,19 +56,19 @@ export class SitePermissions {
   protected readonly changed = signal(false);
 
   protected readonly states: readonly UiSelectOption<PermissionState>[] = [
-    { value: 'ask', label: 'Питати' },
-    { value: 'allow', label: 'Дозволити' },
-    { value: 'deny', label: 'Блокувати' },
+    { value: 'ask', label: tr('Питати') },
+    { value: 'allow', label: tr('Дозволити') },
+    { value: 'deny', label: tr('Блокувати') },
   ];
   protected readonly popupChoices: readonly UiSelectOption<'allow' | 'deny'>[] = [
-    { value: 'deny', label: 'Блокувати' },
-    { value: 'allow', label: 'Дозволити' },
+    { value: 'deny', label: tr('Блокувати') },
+    { value: 'allow', label: tr('Дозволити') },
   ];
   // Обидві заборони — наш скрипт сторінки (server/src/audio.rs); «Блокувати аудіо та відео» ще й забороняє WebView2.
   protected readonly choices: readonly UiSelectOption<AutoplayChoice>[] = [
-    { value: 'allow', label: 'Дозволити аудіо та відео' },
-    { value: 'block-audio', label: 'Блокувати аудіо' },
-    { value: 'block', label: 'Блокувати аудіо та відео' },
+    { value: 'allow', label: tr('Дозволити аудіо та відео') },
+    { value: 'block-audio', label: tr('Блокувати аудіо') },
+    { value: 'block', label: tr('Блокувати аудіо та відео') },
   ];
 
   private readonly popover = viewChild.required(Popover);

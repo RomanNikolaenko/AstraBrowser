@@ -32,12 +32,12 @@
 
 <!-- Панель завжди в розмітці: якби вона зникала разом із кнопкою, браузер не дізнався б, що її закрито. -->
 <app-popover class="downloads-menu" popoverId="downloads-menu" caret>
-  <h2 class="downloads-menu__title">Завантаження</h2>
+  <h2 class="downloads-menu__title">{{ 'Завантаження' | t }}</h2>
   <ul class="downloads-menu__list">
     @for (row of rows(); track row.key) {
       <li class="downloads-menu__row">
         @if (row.status === 'completed' && row.path) {
-          <button class="downloads-menu__file" type="button" title="Відкрити" (click)="open(row)">
+          <button class="downloads-menu__file" type="button" [title]="'Відкрити' | t" (click)="open(row)">
             <span class="downloads-menu__icon"><app-icon icon="file" /></span>
             <span class="downloads-menu__text">
               <span class="downloads-menu__name">{{ row.fileName }}</span>
@@ -66,8 +66,8 @@
           <button
             class="downloads-menu__action"
             type="button"
-            title="Показати в теці"
-            [attr.aria-label]="'Показати «' + row.fileName + '» у теці'"
+            [title]="'Показати в теці' | t"
+            [attr.aria-label]="'Показати «{0}» у теці' | t: [row.fileName]"
             (click)="show(row)">
             <app-icon icon="folder" />
           </button>
@@ -77,8 +77,8 @@
             <button
               class="downloads-menu__action"
               type="button"
-              title="Скасувати"
-              [attr.aria-label]="'Скасувати завантаження «' + row.fileName + '»'"
+              [title]="'Скасувати' | t"
+              [attr.aria-label]="'Скасувати завантаження «{0}»' | t: [row.fileName]"
               (click)="cancel(row)">
               <app-icon icon="close" />
             </button>
@@ -87,8 +87,8 @@
             <button
               class="downloads-menu__action"
               type="button"
-              title="Прибрати зі списку"
-              [attr.aria-label]="'Прибрати «' + row.fileName + '» зі списку'"
+              [title]="'Прибрати зі списку' | t"
+              [attr.aria-label]="'Прибрати «{0}» зі списку' | t: [row.fileName]"
               (click)="remove(row)">
               <app-icon icon="close" />
             </button>
@@ -97,8 +97,8 @@
             <button
               class="downloads-menu__action"
               type="button"
-              title="Прибрати зі списку"
-              [attr.aria-label]="'Прибрати «' + row.fileName + '» зі списку'"
+              [title]="'Прибрати зі списку' | t"
+              [attr.aria-label]="'Прибрати «{0}» зі списку' | t: [row.fileName]"
               (click)="remove(row)">
               <app-icon icon="close" />
             </button>
@@ -111,18 +111,18 @@
     @if (downloadSettings.settings()) {
       <button class="downloads-menu__all" type="button" (click)="openFolder()">
         <app-icon class="downloads-menu__all-icon" icon="folder" />
-        Відкрити теку завантажень
+        {{ 'Відкрити теку завантажень' | t }}
       </button>
     }
     @if (downloads.recent().length) {
       <button class="downloads-menu__all" type="button" (click)="clear()">
         <app-icon class="downloads-menu__all-icon" icon="trash" />
-        Очистити список
+        {{ 'Очистити список' | t }}
       </button>
     }
     <button class="downloads-menu__all" type="button" (click)="showAll()">
       <app-icon class="downloads-menu__all-icon" icon="download" />
-      Усі завантаження
+      {{ 'Усі завантаження' | t }}
     </button>
   </div>
 </app-popover>

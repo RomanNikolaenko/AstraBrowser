@@ -1,6 +1,6 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Закладки</h1>
+    <h1 class="page__title">{{ 'Закладки' | t }}</h1>
     @if (bookmarks.entries().length) {
       <app-input
         class="page__search"
@@ -8,30 +8,30 @@
         icon="search"
         inputId="bookmarks-search"
         inputName="bookmarks-search"
-        ariaLabel="Пошук у закладках"
-        placeholder="Пошук у закладках"
+        [ariaLabel]="'Пошук у закладках' | t"
+        [placeholder]="'Пошук у закладках' | t"
         autocomplete="off"
         [(value)]="query" />
     }
     @if (!adding()) {
       <button class="page__button page__button--primary" type="button" (click)="startAdding()">
         <app-icon icon="plus" />
-        Додати закладку
+        {{ 'Додати закладку' | t }}
       </button>
     }
   </header>
 
   @if (adding()) {
     <form class="bookmark-form" novalidate (submit)="save($event)">
-      <h2 class="bookmark-form__title">Нова закладка</h2>
+      <h2 class="bookmark-form__title">{{ 'Нова закладка' | t }}</h2>
       <div class="bookmark-form__fields">
         <app-input
           class="page__search bookmark-form__field"
           icon="star"
           inputId="bookmark-title"
           inputName="title"
-          ariaLabel="Назва закладки"
-          placeholder="Назва"
+          [ariaLabel]="'Назва закладки' | t"
+          [placeholder]="'Назва' | t"
           autocomplete="off"
           [(value)]="title.value"
           [(touched)]="title.touched"
@@ -42,7 +42,7 @@
           inputId="bookmark-url"
           inputName="url"
           type="url"
-          ariaLabel="Адреса сайту"
+          [ariaLabel]="'Адреса сайту' | t"
           placeholder="example.com"
           autocomplete="url"
           [spellcheck]="false"
@@ -51,8 +51,8 @@
           [error]="url.visibleError()" />
       </div>
       <div class="bookmark-form__actions">
-        <button class="page__button page__button--primary" type="submit">Зберегти</button>
-        <button class="page__button" type="button" (click)="cancel()">Скасувати</button>
+        <button class="page__button page__button--primary" type="submit">{{ 'Зберегти' | t }}</button>
+        <button class="page__button" type="button" (click)="cancel()">{{ 'Скасувати' | t }}</button>
       </div>
     </form>
   }
@@ -60,11 +60,11 @@
   @if (!bookmarks.entries().length) {
     <div class="page__empty">
       <span class="page__empty-icon"><app-icon icon="star" /></span>
-      <h2 class="page__empty-title">Закладок немає</h2>
-      <p>Додайте сайт, щоб він з'явився тут і на панелі закладок.</p>
+      <h2 class="page__empty-title">{{ 'Закладок немає' | t }}</h2>
+      <p>{{ "Додайте сайт, щоб він з'явився тут і на панелі закладок." | t }}</p>
     </div>
   } @else if (!visible().length) {
-    <p class="page__no-results">Нічого не знайдено за запитом «{{ query() }}».</p>
+    <p class="page__no-results">{{ 'Нічого не знайдено за запитом «{0}».' | t: [query()] }}</p>
   } @else {
     <ul class="page__list">
       @for (bookmark of visible(); track bookmark.id) {
@@ -82,8 +82,8 @@
           <button
             class="page__remove"
             type="button"
-            [attr.aria-label]="'Видалити закладку «' + bookmark.title + '»'"
-            title="Видалити закладку"
+            [attr.aria-label]="'Видалити закладку «{0}»' | t: [bookmark.title]"
+            [title]="'Видалити закладку' | t"
             (click)="bookmarks.remove(bookmark.id)">
             <app-icon icon="close" />
           </button>

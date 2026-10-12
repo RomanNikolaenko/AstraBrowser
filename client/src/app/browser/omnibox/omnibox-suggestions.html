@@ -1,4 +1,4 @@
-<div #list class="omnibox-suggestions" popover="manual" role="listbox" aria-label="Підказки" [id]="listId">
+<div #list class="omnibox-suggestions" popover="manual" role="listbox" [attr.aria-label]="'Підказки' | t" [id]="listId">
   @for (suggestion of suggestions(); track $index; let index = $index) {
     <!-- Пункти не беруть фокус: він лишається в адресному рядку, а вибраний пункт — aria-activedescendant. -->
     <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->

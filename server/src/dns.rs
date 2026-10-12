@@ -234,7 +234,7 @@ pub fn dns_settings(dns: State<'_, Dns>) -> DnsState {
 pub fn dns_set(dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, String> {
   let needs_provider = matches!(settings.mode, Mode::Increased | Mode::Max);
   if needs_provider && settings.template().is_none() {
-    return Err("Адреса постачальника має починатися з https://".into());
+    return Err(crate::i18n::text("Адреса постачальника має починатися з https://", "The provider address must start with https://").into());
   }
   fs::create_dir_all(&dns.root).map_err(|error| error.to_string())?;
   let text = serde_json::to_vec_pretty(&settings).map_err(|error| error.to_string())?;

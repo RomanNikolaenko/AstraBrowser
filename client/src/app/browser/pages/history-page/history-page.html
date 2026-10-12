@@ -1,6 +1,6 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Історія</h1>
+    <h1 class="page__title">{{ 'Історія' | t }}</h1>
     @if (history.entries().length) {
       <app-input
         class="page__search"
@@ -8,13 +8,15 @@
         icon="search"
         inputId="history-search"
         inputName="history-search"
-        ariaLabel="Пошук в історії"
-        placeholder="Пошук в історії"
+        [ariaLabel]="'Пошук в історії' | t"
+        [placeholder]="'Пошук в історії' | t"
         autocomplete="off"
         [(value)]="query" />
     }
     <!-- Як у Chrome: з історії — те саме очищення даних перегляду, що й у налаштуваннях. -->
-    <button class="page__button page__button--danger" type="button" (click)="clearData.show()">Очистити дані перегляду…</button>
+    <button class="page__button page__button--danger" type="button" (click)="clearData.show()">
+      {{ 'Очистити дані перегляду…' | t }}
+    </button>
   </header>
 
   <app-clear-data-dialog #clearData />
@@ -22,14 +24,14 @@
   @if (!history.entries().length) {
     <div class="page__empty">
       <span class="page__empty-icon"><app-icon icon="clock" /></span>
-      <h2 class="page__empty-title">Історія порожня</h2>
-      <p>Тут з'являться сторінки, які ви відвідаєте. У приватному вікні вона зникає, щойно вікно закрито.</p>
+      <h2 class="page__empty-title">{{ 'Історія порожня' | t }}</h2>
+      <p>{{ "Тут з'являться сторінки, які ви відвідаєте. У приватному вікні вона зникає, щойно вікно закрито." | t }}</p>
     </div>
   } @else if (!groups().length) {
-    <p class="page__no-results">Нічого не знайдено за запитом «{{ query() }}».</p>
+    <p class="page__no-results">{{ 'Нічого не знайдено за запитом «{0}».' | t: [query()] }}</p>
   } @else {
     @for (group of groups(); track group.label) {
-      <h2 class="page__group">{{ group.label }}</h2>
+      <h2 class="page__group">{{ group.label | t }}</h2>
       <ul class="page__list">
         @for (entry of group.items; track entry.id) {
           <li class="page__row">
@@ -47,8 +49,8 @@
             <button
               class="page__remove"
               type="button"
-              [attr.aria-label]="'Видалити «' + entry.title + '» з історії'"
-              title="Видалити з історії"
+              [attr.aria-label]="'Видалити «{0}» з історії' | t: [entry.title]"
+              [title]="'Видалити з історії' | t"
               (click)="history.remove(entry.id)">
               <app-icon icon="close" />
             </button>

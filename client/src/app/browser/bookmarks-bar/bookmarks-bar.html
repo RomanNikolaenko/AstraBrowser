@@ -1,7 +1,7 @@
 <nav
   #bar
   class="bookmarks"
-  aria-label="Закладки"
+  [attr.aria-label]="'Закладки' | t"
   (contextmenu)="showBarMenu($event)"
   (dragover)="drag.overEnd($event, null, bookmarks.bar().length)"
   (dragleave)="drag.leave($event, bar)"
@@ -65,25 +65,32 @@
     </ul>
   } @else {
     <p class="bookmarks__empty">
-      Щоб додати закладку, натисніть <app-icon class="bookmarks__empty-icon" icon="star" /> в адресному рядку
+      {{ 'Щоб додати закладку, натисніть' | t }} <app-icon class="bookmarks__empty-icon" icon="star" />
+      {{ 'в адресному рядку' | t }}
     </p>
   }
   <span #anchor class="bookmarks__anchor"></span>
 </nav>
 
 <app-popover #menu class="bookmarks-menu" popoverId="bookmarks-menu" align="start">
-  <ul #menuList class="bookmarks-menu__list" role="menu" aria-label="Закладки" tabindex="-1" (keydown)="onMenuKeydown($event)">
+  <ul
+    #menuList
+    class="bookmarks-menu__list"
+    role="menu"
+    [attr.aria-label]="'Закладки' | t"
+    tabindex="-1"
+    (keydown)="onMenuKeydown($event)">
     @if (target().item?.type === 'bookmark') {
       <li role="none">
         <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="openTargetInNewTab()">
-          Відкрити в новій вкладці
+          {{ 'Відкрити в новій вкладці' | t }}
         </button>
       </li>
       <li class="bookmarks-menu__separator" role="separator"></li>
     } @else if (target().item?.type !== 'separator') {
       <li role="none">
         <button class="bookmarks-menu__item" type="button" role="menuitem" [disabled]="!openAllCount()" (click)="openAll()">
-          Відкрити всі закладки
+          {{ 'Відкрити всі закладки' | t }}
         </button>
       </li>
       <li class="bookmarks-menu__separator" role="separator"></li>
@@ -91,28 +98,32 @@
     @if (target().item; as item) {
       @if (item.type !== 'separator') {
         <li role="none">
-          <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="edit()">Редагувати…</button>
+          <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="edit()">{{ 'Редагувати…' | t }}</button>
         </li>
       }
       <li role="none">
-        <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="remove()">Видалити</button>
+        <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="remove()">{{ 'Видалити' | t }}</button>
       </li>
       <li class="bookmarks-menu__separator" role="separator"></li>
     }
     <li role="none">
-      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addBookmark()">Додати закладку…</button>
+      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addBookmark()">
+        {{ 'Додати закладку…' | t }}
+      </button>
     </li>
     <li role="none">
-      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addFolder()">Додати теку…</button>
+      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addFolder()">{{ 'Додати теку…' | t }}</button>
     </li>
     <li role="none">
-      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addSeparator()">Додати роздільник</button>
+      <button class="bookmarks-menu__item" type="button" role="menuitem" (click)="addSeparator()">
+        {{ 'Додати роздільник' | t }}
+      </button>
     </li>
   </ul>
 </app-popover>
 
 <app-popover #editor class="bookmark-dialog" popoverId="bookmark-dialog" align="start">
-  <h2 class="bookmark-dialog__title">{{ dialogTitle() }}</h2>
+  <h2 class="bookmark-dialog__title">{{ dialogTitle() | t }}</h2>
   <form class="bookmark-dialog__form" novalidate (submit)="save($event)">
     <app-input
       #titleInput
@@ -120,8 +131,8 @@
       [icon]="dialog().kind === 'folder' ? 'folder' : 'star'"
       inputId="bookmark-dialog-title"
       inputName="title"
-      ariaLabel="Назва"
-      placeholder="Назва"
+      [ariaLabel]="'Назва' | t"
+      [placeholder]="'Назва' | t"
       autocomplete="off"
       [(value)]="title.value"
       [(touched)]="title.touched"
@@ -133,7 +144,7 @@
         inputId="bookmark-dialog-url"
         inputName="url"
         type="url"
-        ariaLabel="Адреса сайту"
+        [ariaLabel]="'Адреса сайту' | t"
         placeholder="example.com"
         autocomplete="url"
         [spellcheck]="false"
@@ -143,25 +154,25 @@
     }
     @if (dialog().kind === 'folder') {
       <fieldset class="bookmark-dialog__colors">
-        <legend class="bookmark-dialog__legend">Колір</legend>
-        <label class="bookmark-dialog__color bookmark-dialog__color--none" title="Без кольору">
+        <legend class="bookmark-dialog__legend">{{ 'Колір' | t }}</legend>
+        <label class="bookmark-dialog__color bookmark-dialog__color--none" [title]="'Без кольору' | t">
           <input
             class="bookmark-dialog__color-input"
             type="radio"
             name="folder-color"
             value=""
-            aria-label="Без кольору"
+            [attr.aria-label]="'Без кольору' | t"
             [checked]="!color()"
             (change)="color.set(undefined)" />
         </label>
         @for (shade of palette; track shade.color) {
-          <label class="bookmark-dialog__color" [title]="shade.label" [style.--swatch]="shade.value">
+          <label class="bookmark-dialog__color" [title]="shade.label | t" [style.--swatch]="shade.value">
             <input
               class="bookmark-dialog__color-input"
               type="radio"
               name="folder-color"
               [value]="shade.color"
-              [attr.aria-label]="shade.label"
+              [attr.aria-label]="shade.label | t"
               [checked]="color() === shade.color"
               (change)="color.set(shade.color)" />
           </label>
@@ -170,9 +181,9 @@
     }
     <div class="bookmark-dialog__actions">
       <button class="bookmark-dialog__button" type="button" popovertarget="bookmark-dialog" popovertargetaction="hide">
-        Скасувати
+        {{ 'Скасувати' | t }}
       </button>
-      <button class="bookmark-dialog__button bookmark-dialog__button--primary" type="submit">Зберегти</button>
+      <button class="bookmark-dialog__button bookmark-dialog__button--primary" type="submit">{{ 'Зберегти' | t }}</button>
     </div>
   </form>
 </app-popover>

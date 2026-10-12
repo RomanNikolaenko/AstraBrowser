@@ -85,7 +85,7 @@ describe('Browser', () => {
     expect(element.querySelectorAll('.bookmark').length).toBe(0);
     expect(element.querySelector('.bookmarks__empty')?.textContent).toContain('Щоб додати закладку');
     // На новій вкладці ні йти, ні оновлювати нікуди — кнопки неактивні.
-    for (const name of ['Назад', 'Вперед', 'Оновити']) {
+    for (const name of ['Назад', 'Вперед', 'Оновити сторінку']) {
       expect(element.querySelector<HTMLButtonElement>(`[aria-label="${name}"]`)?.disabled).toBe(true);
     }
   });

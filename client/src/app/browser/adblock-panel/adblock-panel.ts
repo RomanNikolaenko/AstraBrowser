@@ -4,9 +4,7 @@ import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { AdBlockStore } from '../data/adblock';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
-
-const plural = new Intl.PluralRules('uk');
-const REQUESTS: Record<string, string> = { one: 'запит', few: 'запити', many: 'запитів', other: 'запиту' };
+import { plural, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Панель блокувальника реклами — з меню розширень на панелі інструментів (як спливне вікно розширення в Chrome):
@@ -15,7 +13,7 @@ const REQUESTS: Record<string, string> = { one: 'запит', few: 'запити
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon, UiSwitch],
+  imports: [TranslatePipe, Popover, UiIcon, UiSwitch],
   selector: 'app-adblock-panel',
   styleUrl: './adblock-panel.scss',
   templateUrl: './adblock-panel.html',
@@ -47,7 +45,7 @@ export class AdBlockPanel {
   protected readonly active = computed(() =>
     this.host() ? this.adblock.blocksOn(this.host()) : !!this.adblock.status()?.enabled
   );
-  protected readonly requests = computed(() => REQUESTS[plural.select(this.blocked())]);
+  protected readonly requests = computed(() => plural(this.blocked(), ['запит', 'запити', 'запитів'], ['request', 'requests']));
 
   constructor() {
     // Панель про конкретну сторінку: інша вкладка чи інший сайт — закриваємо.

@@ -16,8 +16,9 @@ import {
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getAllWebviewWindows } from '@tauri-apps/api/webviewWindow';
+import { AuthStore } from '../shared/auth/auth';
 import { BrowserWindows, isNormalWindow } from '../shared/browser-windows/browser-windows';
-import { normalizeUrl } from '../shared/form-field/form-field';
+import { normalizeAddress } from '../shared/form-field/form-field';
 import { MiddleClick } from '../shared/middle-click/middle-click';
 import { SEARCH_ENGINES, SettingsStore } from '../shared/settings/settings';
 import { UiIcon } from '../shared/ui-icon/ui-icon';
@@ -78,7 +79,7 @@ import { NotesPage } from './pages/notes-page/notes-page';
 import { PersonalizationPage } from './pages/personalization-page/personalization-page';
 import { ProfilePage } from './pages/profile-page/profile-page';
 import { PasswordsPage } from './pages/passwords-page/passwords-page';
-import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor } from './pages/internal-pages';
+import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor, isPageUrl, viewSourceUrl } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
 import { PageCrashed } from './page-crashed/page-crashed';
 import { ProfileMenu } from './profile-menu/profile-menu';
@@ -98,6 +99,7 @@ import { Suggestion, inlineCompletion, localSuggestions, withSearchSuggestions }
 import { SitePermissions } from './site-permissions/site-permissions';
 import { TrackingPanel } from './tracking-panel/tracking-panel';
 import { ToolAction, ToolsMenu } from './tools-menu/tools-menu';
+import { translate, TranslatePipe } from '../shared/i18n/i18n';
 
 /** Стан вкладки із сайтом. */
 interface Site {
@@ -159,6 +161,7 @@ interface BrowserTab {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    TranslatePipe,
     BookmarkEditor,
     BookmarksBar,
     BookmarksPage,
@@ -250,6 +253,7 @@ export class Browser {
   /** Куди стане перетягнута вкладка (перед якою за номером) — там видно риску. */
   protected readonly dropIndex = signal<number | null>(null);
   private readonly session = inject(SessionStore);
+  private readonly auth = inject(AuthStore);
   private readonly injector = inject(Injector);
 
   protected readonly settings = inject(SettingsStore);
@@ -641,7 +645,7 @@ export class Browser {
   }
 
   protected tabTitle(tab: BrowserTab): string {
-    return tab.site ? tab.site.title || hostname(tab.site.url) : TAB_PAGES[tab.page as TabPage].title;
+    return tab.site ? tab.site.title || hostname(tab.site.url) : translate(TAB_PAGES[tab.page as TabPage].title);
   }
 
   protected tabFavicon(tab: BrowserTab): string {
@@ -780,7 +784,7 @@ export class Browser {
   private tabFromSaved(item: SavedTab): BrowserTab | null {
     const id = this.nextTabId++;
     const pinned = item.pinned ? { pinned: true } : {};
-    if (item.page === 'web' && item.url && /^https?:/i.test(item.url)) {
+    if (item.page === 'web' && item.url && isPageUrl(item.url)) {
       const label = this.newPageLabel({ id, page: 'web' });
       return { id, page: 'web', site: { ...emptySite(label, item.url), title: item.title ?? '', pending: true }, ...pinned };
     }
@@ -972,7 +976,7 @@ export class Browser {
       return;
     }
 
-    this.openSite(normalizeUrl(text) ?? this.settings.searchUrl(text), this.activeTab(), { back: true });
+    this.openSite(normalizeAddress(text) ?? this.settings.searchUrl(text), this.activeTab(), { back: true });
   }
 
   /**
@@ -1301,6 +1305,22 @@ export class Browser {
   protected readonly findOnPage = (query: string, backwards: boolean): Promise<boolean> =>
     this.pageViews.find(this.pageLabel(this.activeTab()), query, backwards);
 
+  /** Код сторінки сайту (Ctrl+U) — у новій вкладці, як у Chrome. */
+  protected viewSource(): void {
+    const site = this.activeTab().site;
+    if (site && isPageUrl(site.url)) {
+      this.openInNewTab(viewSourceUrl(site.url));
+    }
+  }
+
+  /** Інструменти розробника сайту (F12) — окремим вікном; на внутрішніх сторінках їх немає. */
+  protected openDevTools(): void {
+    const tab = this.activeTab();
+    if (tab.site && !tab.site.pending) {
+      this.ignore(this.pageViews.openDevTools(tab.site.label));
+    }
+  }
+
   // Сайт друкує свій webview; внутрішні сторінки — стилі @media print у styles.scss.
   protected print(): void {
     const tab = this.activeTab();
@@ -1314,6 +1334,12 @@ export class Browser {
   // event.code, а не key: з українською розкладкою клавіша T дає «е», а N — «т».
   // Коли фокус усередині сайту, клавіші отримує його webview, а не цей документ.
   protected onKeydown(event: KeyboardEvent): void {
+    // F12 з адресного рядка чи панелей — інструменти розробника сайту (у самому сайті їх відкриває WebView2).
+    if (event.code === 'F12' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && this.activeTab().site) {
+      event.preventDefault();
+      this.openDevTools();
+      return;
+    }
     if (!event.ctrlKey || event.altKey || event.metaKey) {
       return;
     }
@@ -1339,6 +1365,17 @@ export class Browser {
         break;
       case 'KeyP':
         this.print();
+        break;
+      case 'KeyU':
+        this.viewSource();
+        break;
+      case 'Shift+KeyI':
+      case 'Shift+KeyJ':
+      case 'Shift+KeyC':
+        if (!this.activeTab().site) {
+          return;
+        }
+        this.openDevTools();
         break;
       case 'Shift+BracketRight':
         this.togglePictureInPicture();
@@ -1418,7 +1455,8 @@ export class Browser {
 
   /**
    * Вкладки з минулого запуску — якщо в налаштуваннях «Продовжити, де зупинилися» чи браузер щойно перезапускали
-   * (DNS), — або вкладки іншого вікна, яке відкрили, щоб їх продовжити (?session=…).
+   * (DNS), — або вкладки іншого вікна, яке відкрили, щоб їх продовжити (?session=…). Щойно ввійшли в обліковий
+   * запис — чиста нова вкладка: вкладки й вікна з минулого разу забуваються.
    */
   private restoreSession(): void {
     if (!this.keepsSession) {
@@ -1433,9 +1471,14 @@ export class Browser {
       }
       return;
     }
+    const signedIn = this.auth.takeFreshSignIn();
     const restore = this.session.takeRestoreOnce() || this.settings.startup() === 'restore';
     // Інші вікна з минулого разу відкриває головне вікно, щойно запущене.
     const others = this.windowLabel === 'main' ? this.session.windows().filter((label) => label !== 'main') : [];
+    if (signedIn) {
+      void this.forgetSavedWindows(others);
+      return;
+    }
     if (!restore) {
       return;
     }
@@ -1461,6 +1504,20 @@ export class Browser {
     if (tabs.length) {
       this.tabs.set(tabs);
       this.activeTabId.set(tabs[Math.min(Math.max(saved.active, 0), tabs.length - 1)].id);
+    }
+  }
+
+  /** Вкладки вікон з минулого разу, яких зараз немає, — вони вже не знадобляться. */
+  private async forgetSavedWindows(labels: readonly string[]): Promise<void> {
+    const windows = await getAllWebviewWindows().catch(() => null);
+    if (!windows) {
+      return;
+    }
+    const open = new Set(windows.map((window) => window.label));
+    for (const label of labels) {
+      if (!open.has(label)) {
+        this.session.remove(label);
+      }
     }
   }
 
@@ -1524,9 +1581,14 @@ export class Browser {
   private onPageLoad({ label, url, loading }: PageLoadEvent): void {
     const tab = this.tabByLabel(label);
     // Порожній документ нового webview, поки сайт ще не відкрився, — не сайт.
-    if (tab?.site && /^https?:/i.test(url)) {
+    if (tab?.site && isPageUrl(url)) {
       // Нова сторінка — заблоковані спливні вікна попередньої вже не про неї.
-      this.updateSite(tab.id, (site) => ({ ...site, url, loading, ...(loading ? { blockedPopups: [] } : {}) }));
+      this.updateSite(tab.id, (site) => ({
+        ...site,
+        url: this.shownUrl(site, url),
+        loading,
+        ...(loading ? { blockedPopups: [] } : {}),
+      }));
     }
   }
 
@@ -1643,6 +1705,11 @@ export class Browser {
         this.activeTabId.set(tab.id);
         this.runTool('screenshot');
         break;
+      case 'view-source':
+        if (url) {
+          this.openInNewTab(viewSourceUrl(url));
+        }
+        break;
     }
   }
 
@@ -1715,11 +1782,15 @@ export class Browser {
   private onPageNavigation({ label, url, canGoBack, canGoForward }: PageNavigationEvent): void {
     const tab = this.tabByLabel(label);
     // Початкова about:blank нового webview, поки він ще не перейшов на сайт, — не перехід користувача.
-    if (!tab?.site || !/^https?:/i.test(url)) {
+    if (!tab?.site || !isPageUrl(url)) {
       return;
     }
 
     this.updateSite(tab.id, (site) => {
+      // Код сторінки — не відвідування сайту: без запису в історії.
+      if (this.shownUrl(site, url) !== url) {
+        return { ...site, canGoBack, canGoForward };
+      }
       // У приватному вікні історія не ведеться; та сама адреса (оновлення, зміна лише історії) не дублює запис.
       if (this.windows.isPrivate || site.historyEntry?.url === url) {
         return { ...site, url, canGoBack, canGoForward };
@@ -1727,6 +1798,14 @@ export class Browser {
       const id = this.history.record(url, site.title || hostname(url));
       return { ...site, url, canGoBack, canGoForward, historyEntry: { id, url } };
     });
+  }
+
+  /**
+   * Адреса вкладки після події сторінки. Код сторінки WebView2 показує за адресою самого сайту (без view-source:),
+   * тож вкладка з кодом лишається з view-source: — і в адресному рядку, і після перезапуску.
+   */
+  private shownUrl(site: Site, url: string): string {
+    return site.url === viewSourceUrl(url) ? site.url : url;
   }
 
   private onPageTitle({ label, title }: PageTitleEvent): void {
@@ -1799,6 +1878,9 @@ export class Browser {
     switch (shortcut) {
       case 'screenshot':
         this.runTool('screenshot');
+        break;
+      case 'view-source':
+        this.viewSource();
         break;
       case 'reopen-tab':
         this.reopenClosedTab();

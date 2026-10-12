@@ -1,26 +1,26 @@
-<button class="profile" type="button" aria-label="Профіль" title="Профіль" popovertarget="profile-menu">
+<button class="profile" type="button" [attr.aria-label]="'Профіль' | t" [title]="'Профіль' | t" popovertarget="profile-menu">
   <app-avatar class="profile__avatar" [guest]="guest()" />
   <app-icon class="profile__chevron" icon="chevron-down" />
 </button>
 <app-popover class="profile-menu" popoverId="profile-menu" caret>
-  <h2 class="profile-menu__title">Профіль</h2>
+  <h2 class="profile-menu__title">{{ 'Профіль' | t }}</h2>
 
   @if (guest()) {
     <app-avatar class="profile-menu__avatar" guest />
-    <p class="profile-menu__name">Гість</p>
-    <p class="profile-menu__meta">Історія, закладки й паролі цього вікна не зберігаються.</p>
+    <p class="profile-menu__name">{{ 'Гість' | t }}</p>
+    <p class="profile-menu__meta">{{ 'Історія, закладки й паролі цього вікна не зберігаються.' | t }}</p>
     <button
       class="profile-menu__sign-in"
       type="button"
       popovertarget="profile-menu"
       popovertargetaction="hide"
       (click)="closeGuest.emit()">
-      Вийти з гостьового режиму
+      {{ 'Вийти з гостьового режиму' | t }}
     </button>
   } @else {
     <app-avatar class="profile-menu__avatar" />
     <p class="profile-menu__name">{{ profile.displayName() }}</p>
-    <p class="profile-menu__meta">{{ auth.user()?.email || 'Обліковий запис Astra' }}</p>
+    <p class="profile-menu__meta">{{ auth.user()?.email || ('Обліковий запис Astra' | t) }}</p>
 
     <ul class="profile-menu__list">
       @for (item of items; track item.label) {
@@ -32,7 +32,7 @@
             popovertargetaction="hide"
             (click)="run(item)">
             <app-icon class="profile-menu__icon" [icon]="item.icon" />
-            <span class="profile-menu__label">{{ item.label }}</span>
+            <span class="profile-menu__label">{{ item.label | t }}</span>
           </button>
         </li>
       }
@@ -46,7 +46,7 @@
         popovertargetaction="hide"
         (click)="signOut()">
         <app-icon class="profile-menu__icon" icon="logout" />
-        <span class="profile-menu__label">Вийти</span>
+        <span class="profile-menu__label">{{ 'Вийти' | t }}</span>
       </button>
     </div>
   }

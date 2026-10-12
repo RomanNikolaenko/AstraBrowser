@@ -224,9 +224,10 @@ pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'stati
   })
 }
 
-/// Віртуальні коди клавіш: S, T і 0 — їхні ASCII, решта — VK_OEM_PLUS, VK_OEM_MINUS і клавіші цифрового блока.
+/// Віртуальні коди клавіш: S, T, U і 0 — їхні ASCII, решта — VK_OEM_PLUS, VK_OEM_MINUS і клавіші цифрового блока.
 const KEY_S: u32 = 0x53;
 const KEY_T: u32 = 0x54;
+const KEY_U: u32 = 0x55;
 const KEY_0: u32 = 0x30;
 const KEY_PLUS: u32 = 0xBB;
 const KEY_MINUS: u32 = 0xBD;
@@ -234,10 +235,21 @@ const KEY_NUMPAD_0: u32 = 0x60;
 const KEY_NUMPAD_PLUS: u32 = 0x6B;
 const KEY_NUMPAD_MINUS: u32 = 0x6D;
 
+/// Без інструментів розробника: F12 і «Перевірити» не відкривають DevTools цього webview (інтерфейс браузера).
+#[cfg(not(debug_assertions))]
+pub fn disable_devtools(webview: &Webview) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    if let Err(error) = core(&platform).and_then(|core| unsafe { core.Settings()?.SetAreDevToolsEnabled(false) }) {
+      log::warn!("webview: не вдалося вимкнути інструменти розробника: {error}");
+    }
+  })
+}
+
 /// Гарячі клавіші браузера, натиснуті, поки фокус у сайті: самі клавіші отримує webview сайту,
 /// тож вони перехоплюються тут (сайт їх не бачить) і передаються інтерфейсу як `report(shortcut)`.
-/// Це Ctrl+Tab (`next-tab`), Ctrl+Shift+Tab (`previous-tab`), Ctrl+Shift+T (`reopen-tab`), Ctrl+Shift+S (`screenshot`) і масштаб:
-/// Ctrl+= чи Ctrl++ (`zoom-in`), Ctrl+− (`zoom-out`), Ctrl+0 (`zoom-reset`).
+/// Це Ctrl+Tab (`next-tab`), Ctrl+Shift+Tab (`previous-tab`), Ctrl+Shift+T (`reopen-tab`), Ctrl+Shift+S (`screenshot`),
+/// Ctrl+U (`view-source`, код сторінки) і масштаб: Ctrl+= чи Ctrl++ (`zoom-in`), Ctrl+− (`zoom-out`), Ctrl+0 (`zoom-reset`).
+/// Інструменти розробника (F12, Ctrl+Shift+I/J/C) відкриває сам WebView2.
 pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
@@ -257,6 +269,7 @@ pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send +
         key if key == u32::from(VK_TAB.0) => Some(if held(VK_SHIFT) { "previous-tab" } else { "next-tab" }),
         KEY_S if held(VK_SHIFT) => Some("screenshot"),
         KEY_T if held(VK_SHIFT) => Some("reopen-tab"),
+        KEY_U if !held(VK_SHIFT) => Some("view-source"),
         KEY_PLUS | KEY_NUMPAD_PLUS => Some("zoom-in"),
         KEY_MINUS | KEY_NUMPAD_MINUS => Some("zoom-out"),
         KEY_0 | KEY_NUMPAD_0 if !held(VK_SHIFT) => Some("zoom-reset"),
@@ -563,7 +576,7 @@ fn shoot_full_page(core: ICoreWebView2, reply: Reply<Vec<u8>>) -> windows_core::
     let metrics = result.ok().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok());
     let number = |group: &str, key: &str| metrics.as_ref().and_then(|metrics| metrics.get(group)?.get(key)?.as_f64());
     let (Some(width), Some(height)) = (number("cssLayoutViewport", "clientWidth"), number("cssContentSize", "height")) else {
-      let _ = reply.send(Err("Не вдалося дізнатися розміри сторінки".into()));
+      let _ = reply.send(Err(crate::i18n::text("Не вдалося дізнатися розміри сторінки", "Couldn't get the page size").into()));
       return;
     };
     let scroll = (number("cssLayoutViewport", "pageX").unwrap_or(0.0), number("cssLayoutViewport", "pageY").unwrap_or(0.0));
@@ -607,7 +620,7 @@ fn restore_page(core: &ICoreWebView2, (x, y): (f64, f64)) {
 fn decode_screenshot(result: windows_core::Result<String>) -> Result<Vec<u8>, String> {
   let json = result.map_err(|error| error.to_string())?;
   let response = serde_json::from_str::<serde_json::Value>(&json).map_err(|error| error.to_string())?;
-  let data = response.get("data").and_then(serde_json::Value::as_str).ok_or("Порожній знімок")?;
+  let data = response.get("data").and_then(serde_json::Value::as_str).ok_or(crate::i18n::text("Порожній знімок", "Empty screenshot"))?;
   base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data).map_err(|error| error.to_string())
 }
 

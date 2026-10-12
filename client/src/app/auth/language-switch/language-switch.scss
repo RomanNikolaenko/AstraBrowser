@@ -1,0 +1,73 @@
+@use '../../../assets/styles/mixins' as *;
+
+// Скляна капсула в тон панелі входу; мови — на доріжці, як вкладки «Увійти / Зареєструватися», вибрана — як
+// активна вкладка.
+.language-switch {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.25rem;
+  padding-inline-start: 0.75rem;
+  background: var(--auth-panel);
+  border: 0.0625rem solid var(--auth-panel-border);
+  border-radius: 999px;
+  box-shadow: 0 0.5rem 1.5rem rgb(58 86 146 / 12%);
+  backdrop-filter: blur(1.25rem);
+
+  &__icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--auth-tab-text);
+  }
+
+  &__track {
+    display: flex;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    background: var(--auth-tab-track);
+    border-radius: 999px;
+  }
+
+  &__option {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 3.25rem;
+    min-height: 1.875rem;
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--auth-tab-text);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 999px;
+    transition:
+      color $motion,
+      background-color $motion,
+      box-shadow $motion;
+
+    &:hover:not(:has(.language-switch__input:checked)) {
+      color: var(--auth-accent);
+      background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+    }
+
+    &:has(.language-switch__input:checked) {
+      color: var(--auth-accent);
+      cursor: default;
+      background: var(--color-surface);
+      box-shadow: 0 0.25rem 0.75rem rgb(69 92 161 / 16%);
+    }
+
+    &:has(.language-switch__input:focus-visible) {
+      outline: 0.1875rem solid var(--color-focus);
+      outline-offset: 0.125rem;
+    }
+  }
+
+  &__input {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+  }
+}

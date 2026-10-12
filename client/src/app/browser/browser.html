@@ -2,7 +2,7 @@
 <ng-template appTitlebarContent (spacerMiddleClick)="openNewTab()">
   <ul
     class="tab-list"
-    aria-label="Відкриті вкладки"
+    [attr.aria-label]="'Відкриті вкладки' | t"
     (dblclick)="onChromeDoubleClick($event)"
     (dragover)="onTabStripDragOver($event)"
     (dragleave)="onTabStripDragLeave($event)"
@@ -25,7 +25,7 @@
           type="button"
           [attr.aria-current]="tab.id === activeTabId() ? 'page' : null"
           [attr.aria-busy]="tab.site?.loading || null"
-          [title]="tab.site?.sleeping ? tabTitle(tab) + ' — вкладка спить, щоб заощадити пам’ять' : tabTitle(tab)"
+          [title]="tab.site?.sleeping ? tabTitle(tab) + (' — вкладка спить, щоб заощадити пам’ять' | t) : tabTitle(tab)"
           [class.tab__select--sleeping]="tab.site?.sleeping"
           [class.tab__select--crashed]="!!tab.site?.crashed"
           (click)="selectTab(tab.id)">
@@ -43,8 +43,10 @@
             class="tab__audio"
             type="button"
             [class.tab__audio--muted]="tab.site?.muted"
-            [attr.aria-label]="(tab.site?.muted ? 'Увімкнути звук вкладки «' : 'Вимкнути звук вкладки «') + tabTitle(tab) + '»'"
-            [title]="tab.site?.muted ? 'Увімкнути звук вкладки' : 'Вимкнути звук вкладки'"
+            [attr.aria-label]="
+              (tab.site?.muted ? 'Увімкнути звук вкладки «{0}»' : 'Вимкнути звук вкладки «{0}»') | t: [tabTitle(tab)]
+            "
+            [title]="tab.site?.muted ? ('Увімкнути звук вкладки' | t) : ('Вимкнути звук вкладки' | t)"
             (click)="toggleMute(tab)">
             <app-icon [icon]="tab.site?.muted ? 'volume-off' : 'volume'" />
           </button>
@@ -53,8 +55,8 @@
           <button
             class="tab__close"
             type="button"
-            [attr.aria-label]="'Закрити вкладку «' + tabTitle(tab) + '»'"
-            title="Закрити вкладку"
+            [attr.aria-label]="'Закрити вкладку «{0}»' | t: [tabTitle(tab)]"
+            [title]="'Закрити вкладку' | t"
             (click)="closeTab(tab.id)">
             <app-icon icon="close" />
           </button>
@@ -63,7 +65,12 @@
     }
   </ul>
 
-  <button class="new-tab-button" type="button" aria-label="Нова вкладка" title="Нова вкладка" (click)="openNewTab()">
+  <button
+    class="new-tab-button"
+    type="button"
+    [attr.aria-label]="'Нова вкладка' | t"
+    [title]="'Нова вкладка' | t"
+    (click)="openNewTab()">
     <app-icon icon="plus" />
   </button>
 </ng-template>
@@ -78,14 +85,20 @@
 <div class="chrome" (dblclick)="onChromeDoubleClick($event)">
   <div class="toolbar">
     <div class="toolbar__group">
-      <button class="toolbar__button" type="button" aria-label="Назад" title="Назад" [disabled]="!canGoBack()" (click)="goBack()">
+      <button
+        class="toolbar__button"
+        type="button"
+        [attr.aria-label]="'Назад' | t"
+        [title]="'Назад' | t"
+        [disabled]="!canGoBack()"
+        (click)="goBack()">
         <app-icon icon="arrow-left" />
       </button>
       <button
         class="toolbar__button"
         type="button"
-        aria-label="Вперед"
-        title="Вперед"
+        [attr.aria-label]="'Вперед' | t"
+        [title]="'Вперед' | t"
         [disabled]="!canGoForward()"
         (click)="goForward()">
         <app-icon icon="arrow-right" />
@@ -93,8 +106,8 @@
       <button
         class="toolbar__button toolbar__button--reload"
         type="button"
-        aria-label="Оновити"
-        title="Оновити (утримуйте — інші види оновлення)"
+        [attr.aria-label]="'Оновити сторінку' | t"
+        [title]="'Оновити (утримуйте — інші види оновлення)' | t"
         popovertarget="reload-menu"
         [disabled]="activeTab().page !== 'web'"
         (click)="onReloadClick($event)"
@@ -117,8 +130,8 @@
       inputId="omnibox"
       inputName="address"
       [(value)]="omniboxText"
-      ariaLabel="Адресний рядок"
-      placeholder="Введіть пошуковий запит або адресу сайту..."
+      [ariaLabel]="'Адресний рядок' | t"
+      [placeholder]="'Введіть пошуковий запит або адресу сайту...' | t"
       autocomplete="off"
       [spellcheck]="false"
       enterKeyHint="go"
@@ -134,16 +147,16 @@
             popovertarget="tracking-panel"
             [class.omnibox__shield--active]="siteProtected() && !!activeTab().site?.trackers?.length"
             [class.omnibox__shield--off]="!siteProtected()"
-            aria-label="Захист від стеження"
-            title="Захист від стеження">
+            [attr.aria-label]="'Захист від стеження' | t"
+            [title]="'Захист від стеження' | t">
             <app-icon [icon]="siteProtected() ? 'shield-check' : 'shield-off'" />
           </button>
           <button
             class="omnibox__site"
             type="button"
             popovertarget="site-permissions"
-            aria-label="Дозволи сайту"
-            title="Дозволи сайту">
+            [attr.aria-label]="'Дозволи сайту' | t"
+            [title]="'Дозволи сайту' | t">
             <app-icon icon="sliders" />
           </button>
         </span>
@@ -157,8 +170,8 @@
             class="omnibox__popup"
             type="button"
             popovertarget="popup-blocked"
-            aria-label="Спливне вікно заблоковано"
-            title="Спливне вікно заблоковано">
+            [attr.aria-label]="'Спливне вікно заблоковано' | t"
+            [title]="'Спливне вікно заблоковано' | t">
             <app-icon icon="popup" />
           </button>
         }
@@ -166,8 +179,8 @@
           <button
             class="omnibox__pip"
             type="button"
-            aria-label="Картинка в картинці"
-            title="Картинка в картинці (Ctrl+Shift+])"
+            [attr.aria-label]="'Картинка в картинці' | t"
+            [title]="'Картинка в картинці (Ctrl+Shift+])' | t"
             aria-keyshortcuts="Control+Shift+]"
             (click)="togglePictureInPicture()">
             <app-icon icon="picture-in-picture" />
@@ -180,8 +193,8 @@
             type="button"
             popovertarget="translator"
             [class.omnibox__translate--active]="pageTranslated()"
-            [attr.aria-label]="pageTranslated() ? 'Перекладач: сторінку перекладено' : 'Перекласти сторінку'"
-            [title]="pageTranslated() ? 'Сторінку перекладено' : 'Перекласти сторінку'">
+            [attr.aria-label]="pageTranslated() ? ('Перекладач: сторінку перекладено' | t) : ('Перекласти сторінку' | t)"
+            [title]="pageTranslated() ? ('Сторінку перекладено' | t) : ('Перекласти сторінку' | t)">
             <app-icon icon="translate" />
           </button>
         }
@@ -192,8 +205,8 @@
           type="button"
           popovertarget="bookmark-editor"
           [class.omnibox__action--active]="currentBookmark()"
-          [attr.aria-label]="currentBookmark() ? 'Редагувати закладку' : 'Додати сторінку в закладки'"
-          [title]="currentBookmark() ? 'Редагувати закладку' : 'Додати в закладки'">
+          [attr.aria-label]="currentBookmark() ? ('Редагувати закладку' | t) : ('Додати сторінку в закладки' | t)"
+          [title]="currentBookmark() ? ('Редагувати закладку' | t) : ('Додати в закладки' | t)">
           <app-icon [icon]="currentBookmark() ? 'star-filled' : 'star'" />
         </button>
       </span>
@@ -223,8 +236,8 @@
       <button
         class="toolbar__button toolbar__button--tools"
         type="button"
-        aria-label="Інструменти"
-        title="Інструменти"
+        [attr.aria-label]="'Інструменти' | t"
+        [title]="'Інструменти' | t"
         #toolsButton
         popovertarget="tools-menu">
         <app-icon icon="apps" />
@@ -240,8 +253,8 @@
         #extensionsButton
         class="toolbar__button"
         type="button"
-        aria-label="Розширення"
-        title="Розширення"
+        [attr.aria-label]="'Розширення' | t"
+        [title]="'Розширення' | t"
         popovertarget="extensions-menu">
         <app-icon icon="puzzle" />
       </button>
@@ -255,8 +268,8 @@
         class="toolbar__button toolbar__button--filled toolbar__button--menu"
         type="button"
         [class.toolbar__button--update]="updates.attention()"
-        [attr.aria-label]="updates.attention() ? 'Меню — доступне оновлення' : 'Меню'"
-        [attr.title]="updates.attention() ? 'Меню — доступне оновлення' : 'Меню'"
+        [attr.aria-label]="updates.attention() ? ('Меню — доступне оновлення' | t) : ('Меню' | t)"
+        [attr.title]="updates.attention() ? ('Меню — доступне оновлення' | t) : ('Меню' | t)"
         popovertarget="browser-menu">
         <app-icon icon="menu" />
         @if (updates.attention()) {
@@ -265,12 +278,15 @@
       </button>
       <app-browser-menu
         [(zoom)]="zoom"
+        [siteOpen]="!!activeTab().site"
         (newTab)="openNewTab()"
         (newWindow)="openWindow()"
         (privateWindow)="openWindow(true)"
         (openPage)="openPage($event)"
         (find)="openFind()"
         (print)="print()"
+        (viewSource)="viewSource()"
+        (devTools)="openDevTools()"
         (fullscreen)="toggleFullscreen()" />
     </div>
   </div>

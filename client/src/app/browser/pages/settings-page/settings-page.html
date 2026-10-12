@@ -1,48 +1,71 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Налаштування</h1>
+    <h1 class="page__title">{{ 'Налаштування' | t }}</h1>
   </header>
 
   @if (defaultBrowser.state(); as state) {
-    <h2 class="page__group">Браузер за замовчуванням</h2>
+    <h2 class="page__group">{{ 'Браузер за замовчуванням' | t }}</h2>
     <div class="page__list settings">
       <div class="settings__row">
         <span class="settings__text settings__text--wide">
           @if (state.isDefault) {
-            <span class="page__name">Astra Browser — ваш браузер за замовчуванням</span>
-            <span class="page__meta">Посилання з Telegram, пошти й документів відкриваються тут.</span>
+            <span class="page__name">{{ 'Astra Browser — ваш браузер за замовчуванням' | t }}</span>
+            <span class="page__meta">{{ 'Посилання з Telegram, пошти й документів відкриваються тут.' | t }}</span>
           } @else {
-            <span class="page__name">Зробити Astra браузером за замовчуванням</span>
+            <span class="page__name">{{ 'Зробити Astra браузером за замовчуванням' | t }}</span>
             <span class="page__meta">
               @if (!state.registered) {
-                Доступно в Astra Browser, встановленому інсталятором.
+                {{ 'Доступно в Astra Browser, встановленому інсталятором.' | t }}
               } @else if (defaultBrowserAsked()) {
-                У «Параметрах Windows», що відкрилися, натисніть кнопку вгорі сторінки Astra Browser — і посилання з інших програм
-                відкриватимуться тут.
+                {{
+                  'У «Параметрах Windows», що відкрилися, натисніть «Установити за замовчуванням» угорі сторінки — і посилання з інших програм відкриватимуться тут.'
+                    | t
+                }}
               } @else {
-                Зараз посилання з Telegram, пошти й документів відкриває інший браузер.
+                {{ 'Зараз посилання з Telegram, пошти й документів відкриває інший браузер.' | t }}
               }
             </span>
           }
         </span>
         @if (!state.isDefault) {
           <button class="page__button" type="button" [disabled]="!state.registered" (click)="makeDefaultBrowser()">
-            Зробити основним…
+            {{ 'Зробити основним…' | t }}
           </button>
         }
       </div>
       @if (defaultBrowserError(); as message) {
-        <p class="settings__error" role="alert">{{ message }}</p>
+        <p class="settings__error" role="alert">{{ message | t }}</p>
       }
     </div>
   }
 
-  <h2 class="page__group">Вигляд</h2>
+  <h2 class="page__group">{{ 'Вигляд' | t }}</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">
       <legend class="settings__text">
-        <span class="page__name">Тема</span>
-        <span class="page__meta">«Як у системі» стежить за темою Windows</span>
+        <span class="page__name">{{ 'Мова' | t }}</span>
+        <span class="page__meta">{{ '«Як у системі» — англійська, якщо Windows англійською, інакше українська' | t }}</span>
+      </legend>
+      <div class="segmented">
+        @for (language of languages; track language.value) {
+          <label class="segmented__option" [attr.lang]="language.translated ? null : language.value">
+            <input
+              class="segmented__input"
+              type="radio"
+              name="language"
+              [value]="language.value"
+              [checked]="i18n.preference() === language.value"
+              (change)="i18n.preference.set(language.value)" />
+            <span>{{ language.translated ? (language.label | t) : language.label }}</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="settings__row settings__fieldset">
+      <legend class="settings__text">
+        <span class="page__name">{{ 'Тема' | t }}</span>
+        <span class="page__meta">{{ '«Як у системі» стежить за темою Windows' | t }}</span>
       </legend>
       <div class="segmented">
         @for (theme of themes; track theme.value) {
@@ -55,7 +78,7 @@
               [checked]="settings.theme() === theme.value"
               (change)="settings.theme.set(theme.value)" />
             <app-icon class="segmented__icon" [icon]="theme.icon" />
-            <span>{{ theme.label }}</span>
+            <span>{{ theme.label | t }}</span>
           </label>
         }
       </div>
@@ -63,8 +86,8 @@
 
     <div class="settings__row">
       <span class="settings__text">
-        <span class="page__name" id="settings-bookmarks-bar-name">Панель закладок</span>
-        <span class="page__meta" id="settings-bookmarks-bar-hint">Показувати закладки під адресним рядком</span>
+        <span class="page__name" id="settings-bookmarks-bar-name">{{ 'Панель закладок' | t }}</span>
+        <span class="page__meta" id="settings-bookmarks-bar-hint">{{ 'Показувати закладки під адресним рядком' | t }}</span>
       </span>
       <app-switch
         inputId="settings-bookmarks-bar"
@@ -76,12 +99,12 @@
     </div>
   </div>
 
-  <h2 class="page__group">Під час запуску</h2>
+  <h2 class="page__group">{{ 'Під час запуску' | t }}</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">
       <legend class="settings__text">
-        <span class="page__name">Що відкривати</span>
-        <span class="page__meta">Вкладки й вікна з минулого разу чи одну нову вкладку</span>
+        <span class="page__name">{{ 'Що відкривати' | t }}</span>
+        <span class="page__meta">{{ 'Вкладки й вікна з минулого разу чи одну нову вкладку' | t }}</span>
       </legend>
       <div class="segmented">
         @for (option of startupOptions; track option.value) {
@@ -93,19 +116,19 @@
               [value]="option.value"
               [checked]="settings.startup() === option.value"
               (change)="settings.startup.set(option.value)" />
-            <span>{{ option.label }}</span>
+            <span>{{ option.label | t }}</span>
           </label>
         }
       </div>
     </fieldset>
   </div>
 
-  <h2 class="page__group">Пошук</h2>
+  <h2 class="page__group">{{ 'Пошук' | t }}</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">
       <legend class="settings__text">
-        <span class="page__name">Пошукова система</span>
-        <span class="page__meta">Для запитів з адресного рядка й нової вкладки</span>
+        <span class="page__name">{{ 'Пошукова система' | t }}</span>
+        <span class="page__meta">{{ 'Для запитів з адресного рядка й нової вкладки' | t }}</span>
       </legend>
       <div class="segmented">
         @for (engine of engines; track engine.value) {
@@ -117,16 +140,16 @@
               [value]="engine.value"
               [checked]="settings.searchEngine() === engine.value"
               (change)="settings.searchEngine.set(engine.value)" />
-            <span>{{ engine.label }}</span>
+            <span>{{ engine.label | t }}</span>
           </label>
         }
       </div>
     </fieldset>
     <div class="settings__row">
       <span class="settings__text settings__text--wide">
-        <span class="page__name" id="settings-search-suggestions-name">Підказки пошукової системи</span>
+        <span class="page__name" id="settings-search-suggestions-name">{{ 'Підказки пошукової системи' | t }}</span>
         <span class="page__meta settings__hint" id="settings-search-suggestions-hint">
-          Те, що ви вводите в адресному рядку, надсилається пошуковій системі, щоб показати можливі запити
+          {{ 'Те, що ви вводите в адресному рядку, надсилається пошуковій системі, щоб показати можливі запити' | t }}
         </span>
       </span>
       <app-switch
@@ -140,26 +163,26 @@
   </div>
 
   @if (downloadSettings.settings(); as downloads) {
-    <h2 class="page__group">Завантаження</h2>
+    <h2 class="page__group">{{ 'Завантаження' | t }}</h2>
     <div class="page__list settings">
       <div class="settings__row">
         <span class="settings__text settings__text--wide">
-          <span class="page__name">Тека для завантажень</span>
+          <span class="page__name">{{ 'Тека для завантажень' | t }}</span>
           <span class="page__meta" [title]="downloads.folder">{{ downloads.folder }}</span>
         </span>
         <div class="settings__actions">
           @if (downloads.custom) {
-            <button class="page__button" type="button" (click)="resetFolder()">Стандартна</button>
+            <button class="page__button" type="button" (click)="resetFolder()">{{ 'Стандартна' | t }}</button>
           }
-          <button class="page__button" type="button" (click)="openFolder()">Відкрити</button>
-          <button class="page__button" type="button" (click)="chooseFolder()">Змінити…</button>
+          <button class="page__button" type="button" (click)="openFolder()">{{ 'Відкрити' | t }}</button>
+          <button class="page__button" type="button" (click)="chooseFolder()">{{ 'Змінити…' | t }}</button>
         </div>
       </div>
       <div class="settings__row">
         <span class="settings__text">
-          <span class="page__name" id="settings-ask-download-name">Питати, куди зберегти файл</span>
+          <span class="page__name" id="settings-ask-download-name">{{ 'Питати, куди зберегти файл' | t }}</span>
           <span class="page__meta" id="settings-ask-download-hint">
-            Перед кожним завантаженням показувати теку й давати вибрати іншу
+            {{ 'Перед кожним завантаженням показувати теку й давати вибрати іншу' | t }}
           </span>
         </span>
         <app-switch
@@ -173,14 +196,16 @@
     </div>
   }
 
-  <h2 class="page__group">Продуктивність</h2>
+  <h2 class="page__group">{{ 'Продуктивність' | t }}</h2>
   <div class="page__list settings">
     <div class="settings__row">
       <span class="settings__text settings__text--wide">
-        <span class="page__name" id="settings-sleep-tabs-label">Присипляти неактивні вкладки</span>
+        <span class="page__name" id="settings-sleep-tabs-label">{{ 'Присипляти неактивні вкладки' | t }}</span>
         <span class="page__meta settings__hint" id="settings-sleep-tabs-hint">
-          Фонова вкладка засинає, щоб звільнити пам’ять і процесор, а відкриєте — прокинеться з тим самим вмістом. Вкладки, що
-          грають звук, не засинають.
+          {{
+            'Фонова вкладка засинає, щоб звільнити пам’ять і процесор, а відкриєте — прокинеться з тим самим вмістом. Вкладки, що грають звук, не засинають.'
+              | t
+          }}
         </span>
       </span>
       <app-select
@@ -195,12 +220,12 @@
     </div>
   </div>
 
-  <h2 class="page__group" id="settings-privacy">Конфіденційність</h2>
+  <h2 class="page__group" id="settings-privacy">{{ 'Конфіденційність' | t }}</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">
       <legend class="settings__text settings__text--wide">
-        <span class="page__name">Захист від стеження</span>
-        <span class="page__meta settings__hint">{{ trackingHint() }}</span>
+        <span class="page__name">{{ 'Захист від стеження' | t }}</span>
+        <span class="page__meta settings__hint">{{ trackingHint() | t }}</span>
       </legend>
       <div class="segmented">
         @for (level of trackingLevels; track level.value) {
@@ -212,7 +237,7 @@
               [value]="level.value"
               [checked]="settings.trackingProtection() === level.value"
               (change)="settings.trackingProtection.set(level.value)" />
-            <span>{{ level.label }}</span>
+            <span>{{ level.label | t }}</span>
           </label>
         }
       </div>
@@ -221,17 +246,19 @@
       <div class="settings__row settings__row--nested">
         <span class="settings__text">
           <span class="page__name">{{ site }}</span>
-          <span class="page__meta">Захист від стеження для цього сайту вимкнено</span>
+          <span class="page__meta">{{ 'Захист від стеження для цього сайту вимкнено' | t }}</span>
         </span>
-        <button class="page__button" type="button" (click)="tracking.removeException(site)">Увімкнути</button>
+        <button class="page__button" type="button" (click)="tracking.removeException(site)">{{ 'Увімкнути' | t }}</button>
       </div>
     }
     <div class="settings__row">
       <span class="settings__text settings__text--wide">
-        <span class="page__name" id="settings-smart-screen-name">Захист від небезпечних сайтів і файлів</span>
+        <span class="page__name" id="settings-smart-screen-name">{{ 'Захист від небезпечних сайтів і файлів' | t }}</span>
         <span class="page__meta settings__hint" id="settings-smart-screen-hint">
-          Microsoft Defender SmartScreen попереджає про фішинг і шкідливі завантаження. Для перевірки адреси сайтів надсилаються в
-          Microsoft.
+          {{
+            'Microsoft Defender SmartScreen попереджає про фішинг і шкідливі завантаження. Для перевірки адреси сайтів надсилаються в Microsoft.'
+              | t
+          }}
         </span>
       </span>
       <app-switch
@@ -244,9 +271,9 @@
     </div>
     <div class="settings__row">
       <span class="settings__text settings__text--wide">
-        <span class="page__name" id="settings-gpc-name">Просити сайти не продавати й не поширювати мої дані</span>
+        <span class="page__name" id="settings-gpc-name">{{ 'Просити сайти не продавати й не поширювати мої дані' | t }}</span>
         <span class="page__meta settings__hint" id="settings-gpc-hint">
-          Сигнал Global Privacy Control. Частина сайтів за законом зобов’язана його виконувати.
+          {{ 'Сигнал Global Privacy Control. Частина сайтів за законом зобов’язана його виконувати.' | t }}
         </span>
       </span>
       <app-switch
@@ -260,10 +287,12 @@
     @if (dns.state(); as state) {
       <div class="settings__row settings__row--stack">
         <span class="settings__text settings__text--wide">
-          <span class="page__name" id="settings-dns-name">DNS через HTTPS</span>
+          <span class="page__name" id="settings-dns-name">{{ 'DNS через HTTPS' | t }}</span>
           <span class="page__meta settings__hint">
-            Шифрує запити про назви сайтів, тож інтернет-провайдеру й іншим у вашій мережі складніше дізнатися, які сайти ви
-            відкриваєте.
+            {{
+              'Шифрує запити про назви сайтів, тож інтернет-провайдеру й іншим у вашій мережі складніше дізнатися, які сайти ви відкриваєте.'
+                | t
+            }}
           </span>
         </span>
         <div class="dns" role="radiogroup" aria-labelledby="settings-dns-name">
@@ -277,15 +306,15 @@
                 [checked]="state.settings.mode === mode.value"
                 (change)="setDnsMode(mode.value)" />
               <span class="dns__text">
-                <span class="dns__label">{{ mode.label }}</span>
-                <span class="dns__hint">{{ mode.hint }}</span>
+                <span class="dns__label">{{ mode.label | t }}</span>
+                <span class="dns__hint">{{ mode.hint | t }}</span>
               </span>
             </label>
           }
         </div>
         @if (state.settings.mode === 'increased' || state.settings.mode === 'max') {
           <div class="dns__provider">
-            <span class="dns__provider-label" id="settings-dns-provider-label">Постачальник</span>
+            <span class="dns__provider-label" id="settings-dns-provider-label">{{ 'Постачальник' | t }}</span>
             <app-select
               class="settings__select"
               selectId="settings-dns-provider"
@@ -302,40 +331,40 @@
                 inputId="settings-dns-custom"
                 inputName="dns-custom"
                 type="url"
-                ariaLabel="Адреса постачальника DNS через HTTPS"
+                [ariaLabel]="'Адреса постачальника DNS через HTTPS' | t"
                 placeholder="https://dns.example.com/dns-query"
                 autocomplete="off"
                 [(value)]="dnsCustom" />
-              <button class="page__button" type="submit">Зберегти</button>
+              <button class="page__button" type="submit">{{ 'Зберегти' | t }}</button>
             </form>
           }
         }
         @if (dnsError(); as message) {
-          <p class="dns__error" role="alert">{{ message }}</p>
+          <p class="dns__error" role="alert">{{ message | t }}</p>
         }
         @if (state.restartNeeded) {
           <div class="dns__notice" role="status">
-            <span>Нові налаштування DNS запрацюють після перезапуску браузера. Вкладки відкриються знову.</span>
-            <button class="page__button" type="button" (click)="restartBrowser()">Перезапустити</button>
+            <span>{{ 'Нові налаштування DNS запрацюють після перезапуску браузера. Вкладки відкриються знову.' | t }}</span>
+            <button class="page__button" type="button" (click)="restartBrowser()">{{ 'Перезапустити' | t }}</button>
           </div>
         }
       </div>
     }
     <div class="settings__row">
       <span class="settings__text">
-        <span class="page__name">Очистити дані перегляду</span>
+        <span class="page__name">{{ 'Очистити дані перегляду' | t }}</span>
         <span class="page__meta">
-          Історія ({{ records(history.entries().length) }}), файли cookie, кеш, дані форм і налаштування сайтів
+          {{ 'Історія ({0}), файли cookie, кеш, дані форм і налаштування сайтів' | t: [records(history.entries().length)] }}
         </span>
       </span>
-      <button class="page__button page__button--danger" type="button" (click)="clearData.show()">Очистити…</button>
+      <button class="page__button page__button--danger" type="button" (click)="clearData.show()">{{ 'Очистити…' | t }}</button>
     </div>
     <div class="settings__row">
       <span class="settings__text">
-        <span class="page__name" id="settings-history-days-label">Зберігати історію</span>
-        <span class="page__meta" id="settings-history-days-hint"
-          >Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації</span
-        >
+        <span class="page__name" id="settings-history-days-label">{{ 'Зберігати історію' | t }}</span>
+        <span class="page__meta" id="settings-history-days-hint">{{
+          'Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації' | t
+        }}</span>
       </span>
       <app-select
         class="settings__select"

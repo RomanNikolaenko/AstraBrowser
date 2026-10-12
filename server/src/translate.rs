@@ -47,7 +47,7 @@ fn language() -> String {
 #[specta::specta]
 pub fn translate_set_language(language: String) -> Result<(), String> {
   if !is_language(&language) {
-    return Err("Некоректна мова".into());
+    return Err(crate::i18n::text("Некоректна мова", "Invalid language").into());
   }
   *LANGUAGE.lock().map_err(|error| error.to_string())? = language;
   Ok(())
@@ -79,19 +79,19 @@ fn parse(reply: &Value) -> Option<Translation> {
 }
 
 fn translate(text: &str, target: &str) -> Result<Translation, String> {
-  const OFFLINE: &str = "Не вдалося перекласти: немає з'єднання з Google Перекладачем.";
+  let offline = crate::i18n::text("Не вдалося перекласти: немає з'єднання з Google Перекладачем.", "Couldn't translate: no connection to Google Translate.");
   let mut response = agent()
     .post(ENDPOINT)
     .query("client", "dict-chrome-ex")
     .query("sl", "auto")
     .query("tl", target)
     .send_form([("q", text)])
-    .map_err(|_| OFFLINE.to_string())?;
-  let body = response.body_mut().read_to_string().map_err(|_| OFFLINE.to_string())?;
+    .map_err(|_| offline.to_string())?;
+  let body = response.body_mut().read_to_string().map_err(|_| offline.to_string())?;
   serde_json::from_str::<Value>(&body)
     .ok()
     .and_then(|reply| parse(&reply))
-    .ok_or_else(|| "Google Перекладач зараз не відповідає. Спробуйте трохи згодом.".to_string())
+    .ok_or_else(|| crate::i18n::text("Google Перекладач зараз не відповідає. Спробуйте трохи згодом.", "Google Translate isn't responding right now. Try again a bit later.").to_string())
 }
 
 /// Прохання скрипта сторінки `label` перекласти виділене: переклад іде у фоні, а відповідь — тій сторінці.

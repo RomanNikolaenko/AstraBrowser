@@ -31,19 +31,24 @@
             <span class="screenshot__dim"></span>
           }
           <div class="screenshot__toolbar" (pointerdown)="$event.stopPropagation()">
-            <h2 class="screenshot__hint" id="screenshot-title">Виділіть область мишею</h2>
-            <button class="screenshot__tool" type="button" title="Видима частина (Enter)" (click)="takeVisible()">
-              Видима частина <kbd class="screenshot__key">Enter</kbd>
+            <h2 class="screenshot__hint" id="screenshot-title">{{ 'Виділіть область мишею' | t }}</h2>
+            <button class="screenshot__tool" type="button" [title]="'Видима частина (Enter)' | t" (click)="takeVisible()">
+              {{ 'Видима частина' | t }} <kbd class="screenshot__key">Enter</kbd>
             </button>
             <button
               class="screenshot__tool"
               type="button"
-              title="Уся сторінка (Shift+Enter)"
+              [title]="'Уся сторінка (Shift+Enter)' | t"
               [disabled]="busy()"
               (click)="takeFullPage()">
-              {{ busy() ? 'Знімаю…' : 'Уся сторінка' }} <kbd class="screenshot__key">Shift+Enter</kbd>
+              {{ busy() ? ('Знімаю…' | t) : ('Уся сторінка' | t) }} <kbd class="screenshot__key">Shift+Enter</kbd>
             </button>
-            <button class="screenshot__tool" type="button" aria-label="Скасувати" title="Скасувати (Esc)" (click)="close()">
+            <button
+              class="screenshot__tool"
+              type="button"
+              [attr.aria-label]="'Скасувати' | t"
+              [title]="'Скасувати (Esc)' | t"
+              (click)="close()">
               <app-icon icon="close" />
             </button>
           </div>
@@ -54,41 +59,43 @@
       @if (result(); as shot) {
         <div class="screenshot__panel">
           <div class="screenshot__head">
-            <h2 class="screenshot__title" id="screenshot-title">Скріншот</h2>
-            <span class="screenshot__meta">{{ shot.width }} × {{ shot.height }} пікс.</span>
+            <h2 class="screenshot__title" id="screenshot-title">{{ 'Скріншот' | t }}</h2>
+            <span class="screenshot__meta">{{ '{0} × {1} пікс.' | t: [shot.width, shot.height] }}</span>
           </div>
           <div class="screenshot__preview">
-            <img class="screenshot__image" [src]="shot.url" alt="Скріншот сторінки" />
+            <img class="screenshot__image" [src]="shot.url" [alt]="'Скріншот сторінки' | t" />
           </div>
           <p class="screenshot__keys">
-            <kbd class="screenshot__key">Ctrl+C</kbd> копіювати · <kbd class="screenshot__key">Ctrl+S</kbd> зберегти ·
-            <kbd class="screenshot__key">Esc</kbd> закрити
+            <kbd class="screenshot__key">Ctrl+C</kbd> {{ 'копіювати ·' | t }} <kbd class="screenshot__key">Ctrl+S</kbd>
+            {{ 'зберегти ·' | t }} <kbd class="screenshot__key">Esc</kbd> {{ 'закрити' | t }}
           </p>
           @if (savedPath(); as path) {
             <p class="screenshot__saved">
-              Збережено: <span class="screenshot__path" [title]="path">{{ path }}</span>
-              <button class="screenshot__link" type="button" (click)="showSaved(path)">Показати в теці</button>
+              {{ 'Збережено:' | t }} <span class="screenshot__path" [title]="path">{{ path }}</span>
+              <button class="screenshot__link" type="button" (click)="showSaved(path)">{{ 'Показати в теці' | t }}</button>
             </p>
           }
           @if (error()) {
-            <p class="screenshot__error" role="alert">{{ error() }}</p>
+            <p class="screenshot__error" role="alert">{{ error() | t }}</p>
           }
           <div class="screenshot__actions">
-            <button class="screenshot__button" type="button" title="Закрити (Esc)" (click)="close()">Закрити</button>
-            <button class="screenshot__button" type="button" title="Копіювати (Ctrl+C)" (click)="copy()">
+            <button class="screenshot__button" type="button" [title]="'Закрити (Esc)' | t" (click)="close()">
+              {{ 'Закрити' | t }}
+            </button>
+            <button class="screenshot__button" type="button" [title]="'Копіювати (Ctrl+C)' | t" (click)="copy()">
               <app-icon class="screenshot__button-icon" [icon]="copied() ? 'check' : 'copy'" />
-              {{ copied() ? 'Скопійовано' : 'Копіювати' }}
+              {{ copied() ? ('Скопійовано' | t) : ('Копіювати' | t) }}
             </button>
             <button
               #saveButton
               class="screenshot__button screenshot__button--primary"
               type="button"
-              title="Зберегти (Ctrl+S)"
+              [title]="'Зберегти (Ctrl+S)' | t"
               autofocus
               [disabled]="busy()"
               (click)="save()">
               <app-icon class="screenshot__button-icon" icon="download" />
-              Зберегти…
+              {{ 'Зберегти…' | t }}
             </button>
           </div>
         </div>
@@ -96,11 +103,11 @@
     }
     @case ('message') {
       <div class="screenshot__panel">
-        <h2 class="screenshot__title" id="screenshot-title">Скріншот</h2>
-        <p class="screenshot__message">{{ error() }}</p>
+        <h2 class="screenshot__title" id="screenshot-title">{{ 'Скріншот' | t }}</h2>
+        <p class="screenshot__message">{{ error() | t }}</p>
         <div class="screenshot__actions">
           <button class="screenshot__button screenshot__button--primary" type="button" autofocus (click)="close()">
-            Зрозуміло
+            {{ 'Зрозуміло' | t }}
           </button>
         </div>
       </div>
@@ -109,4 +116,4 @@
 </dialog>
 
 <!-- Поки знімається вся сторінка: вікно закрите (схована сторінка не малюється), а над сайтом — ця плашка. -->
-<div #status class="screenshot__status" popover="manual" role="status">Знімаю всю сторінку…</div>
+<div #status class="screenshot__status" popover="manual" role="status">{{ 'Знімаю всю сторінку…' | t }}</div>

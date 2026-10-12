@@ -4,6 +4,7 @@ import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
 import { storedSignal } from '../../shared/storage/stored-signal';
 import { SessionStore } from '../session/session';
+import { translate } from '../../shared/i18n/i18n';
 
 /** Новіша версія застосунку (server/src/updates.rs). */
 export interface AppUpdate {
@@ -95,7 +96,7 @@ export class UpdateStore {
       await commands.appUpdateInstall();
     } catch (error) {
       this.installing.set(false);
-      this.error.set(typeof error === 'string' ? error : 'Не вдалося встановити оновлення.');
+      this.error.set(typeof error === 'string' ? error : translate('Не вдалося встановити оновлення.'));
       // Знайдене оновлення встановлення забрало — шукаємо його знову, щоб можна було спробувати ще раз.
       await this.check();
     }

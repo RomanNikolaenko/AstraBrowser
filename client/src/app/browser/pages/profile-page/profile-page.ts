@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { Cooldown, PASSWORD_MIN_LENGTH, codeFormat, normalizeCode } from '../../../auth/auth-forms';
+import { Cooldown, PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT, codeFormat, normalizeCode } from '../../../auth/auth-forms';
 import { AuthStore, authErrorMessage } from '../../../shared/auth/auth';
 import { BrowserWindows } from '../../../shared/browser-windows/browser-windows';
 import { FormField, emailFormat, matches, minLength, required, validateFields } from '../../../shared/form-field/form-field';
@@ -16,6 +16,7 @@ import { PasswordsStore } from '../../data/passwords';
 import { AVATAR_COLORS, ProfileStore } from '../../data/profile';
 import { PageViews } from '../../page-views/page-views';
 import { SyncService } from '../../sync/sync';
+import { formatDate, tr, translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 /** Розмір фото профілю: досить для великого аватара й не забагато для localStorage. */
 const PHOTO_SIZE = 256;
@@ -25,20 +26,18 @@ const ALL_SITE_DATA = { siteData: true, cache: true, history: true, autofill: tr
 
 type Message = { readonly text: string; readonly error: boolean } | null;
 
-const dateFormat = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
-const timeFormat = new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit' });
-const dayTimeFormat = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-
 /** «о 14:05» сьогодні, «4 жовтня о 14:05» — раніше. */
 function syncedAt(time: number, now = new Date()): string {
   const date = new Date(time);
-  return date.toDateString() === now.toDateString() ? `о ${timeFormat.format(date)}` : dayTimeFormat.format(date);
+  return date.toDateString() === now.toDateString()
+    ? translate('о {0}', [formatDate(date, { hour: '2-digit', minute: '2-digit' })])
+    : formatDate(date, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 }
 
 /** «Закладки 2026-10-04.html». */
 function exportFileName(time = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, '0');
-  return `Закладки ${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}.html`;
+  return translate('Закладки {0}.html', [`${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`]);
 }
 
 /**
@@ -48,7 +47,7 @@ function exportFileName(time = new Date()): string {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Avatar, UiIcon, UiInput],
+  imports: [TranslatePipe, Avatar, UiIcon, UiInput],
   selector: 'app-profile-page',
   styleUrls: ['../internal-page.scss', './profile-page.scss'],
   templateUrl: './profile-page.html',
@@ -70,48 +69,48 @@ export class ProfilePage {
   protected readonly sync = inject(SyncService);
   protected readonly syncBusy = signal(false);
   protected readonly syncMessage = signal<string | null>(null);
-  protected readonly syncPassword = new FormField([required('Введіть пароль облікового запису')]);
+  protected readonly syncPassword = new FormField([required(tr('Введіть пароль облікового запису'))]);
 
   protected readonly syncProblem = computed(() => !['idle', 'syncing'].includes(this.sync.status().state));
   protected readonly syncTitle = computed(() => {
     const status = this.sync.status();
     switch (status.state) {
       case 'syncing':
-        return 'Синхронізуємо…';
+        return translate('Синхронізуємо…');
       case 'offline':
-        return 'Немає з’єднання';
+        return translate('Немає з’єднання');
       case 'not-configured':
-        return 'Синхронізацію не налаштовано на сервері';
+        return translate('Синхронізацію не налаштовано на сервері');
       case 'error':
-        return 'Не вдалося синхронізувати';
+        return translate('Не вдалося синхронізувати');
       default:
-        return status.at ? 'Синхронізовано' : 'Синхронізацію ввімкнено';
+        return status.at ? translate('Синхронізовано') : translate('Синхронізацію ввімкнено');
     }
   });
   protected readonly syncDetail = computed(() => {
     const status = this.sync.status();
-    const last = status.at ? `Востаннє ${syncedAt(status.at)}. ` : '';
+    const last = status.at ? translate('Востаннє {0}. ', [syncedAt(status.at)]) : '';
     switch (status.state) {
       case 'offline':
-        return `${last}Синхронізуємо, щойно з’явиться інтернет.`;
+        return last + translate('Синхронізуємо, щойно з’явиться інтернет.');
       case 'not-configured':
-        return 'У проєкті Supabase потрібно один раз виконати SQL із файла supabase/sync.sql.';
+        return translate('У проєкті Supabase потрібно один раз виконати SQL із файла supabase/sync.sql.');
       case 'error':
         return `${last}${status.message ?? ''}`;
       default:
-        return `${last}Закладки, нотатки, історія, профіль, налаштування й паролі сайтів — на всіх ваших комп’ютерах.`;
+        return last + translate('Закладки, нотатки, історія, профіль, налаштування й паролі сайтів — на всіх ваших комп’ютерах.');
     }
   });
   protected readonly changingPassword = signal(false);
   protected readonly passwordBusy = signal(false);
   protected readonly passwordMessage = signal<{ readonly text: string; readonly error: boolean } | null>(null);
   protected readonly newPassword = new FormField([
-    required('Введіть новий пароль'),
-    minLength(PASSWORD_MIN_LENGTH, `Пароль має містити щонайменше ${PASSWORD_MIN_LENGTH} символів`),
+    required(tr('Введіть новий пароль')),
+    minLength(PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT),
   ]);
   protected readonly passwordConfirmation = new FormField([
-    required('Повторіть пароль'),
-    matches(() => this.newPassword.value(), 'Паролі не збігаються'),
+    required(tr('Повторіть пароль')),
+    matches(() => this.newPassword.value(), tr('Паролі не збігаються')),
   ]);
 
   /** Зміна пошти: спершу нова адреса, потім коди з листів. */
@@ -122,29 +121,31 @@ export class ProfilePage {
   protected readonly emailWaiting = signal({ address: '', partial: false });
   protected readonly emailCooldown = new Cooldown();
   protected readonly newEmail = new FormField([
-    required('Введіть нову пошту'),
-    emailFormat('Некоректна адреса електронної пошти'),
+    required(tr('Введіть нову пошту')),
+    emailFormat(tr('Некоректна адреса електронної пошти')),
     (value) =>
-      value.trim().toLowerCase() === this.auth.user()?.email.toLowerCase() ? 'Це вже пошта вашого облікового запису' : null,
+      value.trim().toLowerCase() === this.auth.user()?.email.toLowerCase()
+        ? translate('Це вже пошта вашого облікового запису')
+        : null,
   ]);
-  protected readonly emailCode = new FormField([required('Введіть код із листа'), codeFormat]);
+  protected readonly emailCode = new FormField([required(tr('Введіть код із листа')), codeFormat]);
 
   /** Видаляти обліковий запис — лише зі звичайного вікна: приватне й гостьове мають власні дані. */
   protected readonly canDeleteAccount = !this.windows.isPrivate && !this.windows.isGuest;
   protected readonly deletingAccount = signal(false);
   protected readonly deleteBusy = signal(false);
   protected readonly deleteError = signal<string | null>(null);
-  protected readonly deletePassword = new FormField([required('Введіть пароль облікового запису')]);
+  protected readonly deletePassword = new FormField([required(tr('Введіть пароль облікового запису'))]);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.emailCooldown.stop());
   }
 
   protected readonly stats = computed(() => [
-    { icon: 'star', label: 'Закладки', value: this.bookmarks.entries().length },
-    { icon: 'key', label: 'Паролі', value: this.passwords.entries().length },
-    { icon: 'notes', label: 'Нотатки', value: this.notes.entries().length },
-    { icon: 'clock', label: 'Записи історії', value: this.history.entries().length },
+    { icon: 'star', label: translate('Закладки'), value: this.bookmarks.entries().length },
+    { icon: 'key', label: translate('Паролі'), value: this.passwords.entries().length },
+    { icon: 'notes', label: translate('Нотатки'), value: this.notes.entries().length },
+    { icon: 'clock', label: translate('Записи історії'), value: this.history.entries().length },
   ]);
 
   protected async unlockSync(event: Event): Promise<void> {
@@ -189,7 +190,7 @@ export class ProfilePage {
     try {
       await this.auth.setPassword(this.newPassword.value());
       this.changingPassword.set(false);
-      this.passwordMessage.set({ text: 'Пароль змінено.', error: false });
+      this.passwordMessage.set({ text: translate('Пароль змінено.'), error: false });
     } catch (error) {
       this.passwordMessage.set({ text: authErrorMessage(error), error: true });
     } finally {
@@ -230,7 +231,7 @@ export class ProfilePage {
       this.emailStep.set('code');
       this.emailCooldown.start();
       if (resend) {
-        this.emailMessage.set({ text: 'Новий лист надіслано. Перевірте й папку «Спам».', error: false });
+        this.emailMessage.set({ text: translate('Новий лист надіслано. Перевірте й папку «Спам».'), error: false });
       }
     } catch (error) {
       this.emailMessage.set({ text: authErrorMessage(error), error: true });
@@ -255,7 +256,7 @@ export class ProfilePage {
         this.emailWaiting.set({ address: waiting, partial: true });
       } else {
         this.emailStep.set('closed');
-        this.emailMessage.set({ text: `Пошту змінено. Тепер входьте з ${email}.`, error: false });
+        this.emailMessage.set({ text: translate('Пошту змінено. Тепер входьте з {0}.', [email]), error: false });
       }
     } catch (error) {
       this.emailMessage.set({ text: authErrorMessage(error), error: true });
@@ -299,7 +300,7 @@ export class ProfilePage {
     try {
       this.profile.photo.set(await resizeImage(file, PHOTO_SIZE, PHOTO_SIZE, 'cover'));
     } catch {
-      this.photoError.set('Не вдалося відкрити це зображення. Виберіть фото у форматі JPEG, PNG чи WebP.');
+      this.photoError.set(translate('Не вдалося відкрити це зображення. Виберіть фото у форматі JPEG, PNG чи WebP.'));
     }
   }
 
@@ -313,11 +314,15 @@ export class ProfilePage {
     const items = parseBookmarksHtml(await file.text());
     const count = countImported(items);
     if (!count) {
-      this.bookmarksMessage.set({ text: 'У файлі немає закладок, які можна імпортувати.', error: true });
+      this.bookmarksMessage.set({ text: translate('У файлі немає закладок, які можна імпортувати.'), error: true });
       return;
     }
-    this.bookmarks.importTree(`Імпорт ${dateFormat.format(new Date())}`, items);
-    this.bookmarksMessage.set({ text: `Імпортовано закладок: ${count}. Вони в новій теці на панелі закладок.`, error: false });
+    const date = formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
+    this.bookmarks.importTree(translate('Імпорт {0}', [date]), items);
+    this.bookmarksMessage.set({
+      text: translate('Імпортовано закладок: {0}. Вони в новій теці на панелі закладок.', [count]),
+      error: false,
+    });
   }
 
   protected async exportBookmarks(): Promise<void> {
@@ -325,10 +330,10 @@ export class ProfilePage {
     try {
       const path = await this.pageViews.saveFile(html, exportFileName(), 'html');
       if (path) {
-        this.bookmarksMessage.set({ text: `Закладки збережено: ${path}`, error: false });
+        this.bookmarksMessage.set({ text: translate('Закладки збережено: {0}', [path]), error: false });
       }
     } catch {
-      this.bookmarksMessage.set({ text: 'Не вдалося зберегти файл закладок.', error: true });
+      this.bookmarksMessage.set({ text: translate('Не вдалося зберегти файл закладок.'), error: true });
     }
   }
 }

@@ -5,11 +5,12 @@ import { MiddleClick } from '../middle-click/middle-click';
 import { UiIcon } from '../ui-icon/ui-icon';
 import { WindowControls } from '../window-controls/window-controls';
 import { TitlebarSlot } from './titlebar-content';
+import { TranslatePipe } from '../i18n/i18n';
 
 /** Єдиний заголовок вікна для всіх екранів; екран може додати в нього свій вміст через `appTitlebarContent`. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MiddleClick, NgTemplateOutlet, UiIcon, WindowControls],
+  imports: [TranslatePipe, MiddleClick, NgTemplateOutlet, UiIcon, WindowControls],
   selector: 'app-titlebar',
   styleUrl: './titlebar.scss',
   templateUrl: './titlebar.html',

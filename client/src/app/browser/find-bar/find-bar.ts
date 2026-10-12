@@ -14,6 +14,7 @@ import {
 } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
+import { translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 // Імена для ::highlight() у глобальних стилях (styles.scss).
 const ALL_MATCHES = 'find-matches';
@@ -50,7 +51,7 @@ export function findMatches(root: HTMLElement, query: string): Range[] {
 /** Пошук на сторінці (Ctrl+F): підсвічує збіги в `root` і переходить між ними. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon, UiInput],
+  imports: [TranslatePipe, UiIcon, UiInput],
   selector: 'app-find-bar',
   styleUrl: './find-bar.scss',
   templateUrl: './find-bar.html',
@@ -78,9 +79,9 @@ export class FindBar {
       return '';
     }
     if (this.finder()) {
-      return this.found() === null ? '' : this.found() ? 'Знайдено' : 'Немає збігів';
+      return this.found() === null ? '' : this.found() ? translate('Знайдено') : translate('Немає збігів');
     }
-    return this.total() ? `${this.current() + 1} / ${this.total()}` : 'Немає збігів';
+    return this.total() ? `${this.current() + 1} / ${this.total()}` : translate('Немає збігів');
   });
 
   private readonly field = viewChild.required(UiInput);

@@ -54,7 +54,7 @@ pub async fn app_update_check(app: AppHandle, updates: State<'_, Updates>) -> Re
     .map_err(|error| error.to_string())
     .inspect_err(|error| log::warn!("Не вдалося перевірити оновлення: {error}"))?;
   let available = update.as_ref().map(|update| AvailableUpdate { version: update.version.clone(), notes: update.body.clone() });
-  *updates.pending.lock().map_err(|_| "Оновлення недоступне.".to_string())? = update;
+  *updates.pending.lock().map_err(|_| crate::i18n::text("Оновлення недоступне.", "The update isn't available.").to_string())? = update;
   Ok(UpdateState { current, available })
 }
 
@@ -65,9 +65,9 @@ pub async fn app_update_install(app: AppHandle, updates: State<'_, Updates>) -> 
   let update = updates
     .pending
     .lock()
-    .map_err(|_| "Оновлення недоступне.".to_string())?
+    .map_err(|_| crate::i18n::text("Оновлення недоступне.", "The update isn't available.").to_string())?
     .take()
-    .ok_or_else(|| "Оновлень немає.".to_string())?;
+    .ok_or_else(|| crate::i18n::text("Оновлень немає.", "There are no updates.").to_string())?;
   log::info!("Встановлюємо оновлення {}", update.version);
   let mut downloaded = 0;
   update
@@ -79,7 +79,7 @@ pub async fn app_update_install(app: AppHandle, updates: State<'_, Updates>) -> 
       || {},
     )
     .await
-    .map_err(|error| format!("Не вдалося встановити оновлення: {error}"))
+    .map_err(|error| format!("{} {error}", crate::i18n::text("Не вдалося встановити оновлення:", "Couldn't install the update:")))
     .inspect_err(|error| log::error!("{error}"))?;
   app.restart()
 }

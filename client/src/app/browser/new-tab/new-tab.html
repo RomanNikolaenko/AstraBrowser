@@ -12,8 +12,8 @@
       icon="search"
       inputId="new-tab-search"
       inputName="query"
-      ariaLabel="Пошук у Astra або адреса сайту"
-      placeholder="Пошук у Astra або введіть адресу сайту..."
+      [ariaLabel]="'Пошук у Astra або адреса сайту' | t"
+      [placeholder]="'Пошук у Astra або введіть адресу сайту...' | t"
       autocomplete="off"
       enterKeyHint="search"
       [(value)]="query" />

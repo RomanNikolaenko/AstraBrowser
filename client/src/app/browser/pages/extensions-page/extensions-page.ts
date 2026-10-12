@@ -4,13 +4,12 @@ import { UiAccordion } from '../../../shared/ui-accordion/ui-accordion';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { AdBlockStore } from '../../data/adblock';
 import { SiteIcon } from '../../site-icon/site-icon';
-
-const updatedFormat = new Intl.DateTimeFormat('uk', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+import { formatDate, translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 /** Вбудовані розширення браузера; поки це блокувальник реклами (server/src/adblock.rs). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SiteIcon, UiAccordion, UiIcon, UiSwitch],
+  imports: [TranslatePipe, SiteIcon, UiAccordion, UiIcon, UiSwitch],
   selector: 'app-extensions-page',
   styleUrls: ['../internal-page.scss', './extensions-page.scss'],
   templateUrl: './extensions-page.html',
@@ -23,22 +22,23 @@ export class ExtensionsPage {
     const status = this.adblock.status();
     if (!status) {
       if (!this.adblock.available) {
-        return { text: 'Працює лише в застосунку Astra Browser', error: false };
+        return { text: translate('Працює лише в застосунку Astra Browser'), error: false };
       }
       return this.adblock.failed()
-        ? { text: 'Блокувальник не відповідає — перезапустіть Astra Browser', error: true }
-        : { text: 'Завантаження…', error: false };
+        ? { text: translate('Блокувальник не відповідає — перезапустіть Astra Browser'), error: true }
+        : { text: translate('Завантаження…'), error: false };
     }
     if (status.updating) {
-      return { text: 'Оновлення списків фільтрів…', error: false };
+      return { text: translate('Оновлення списків фільтрів…'), error: false };
     }
     if (status.error) {
-      return { text: `Не вдалося оновити списки: ${status.error}`, error: true };
+      return { text: translate('Не вдалося оновити списки: {0}', [status.error]), error: true };
     }
     if (status.updatedAt) {
-      return { text: `Списки оновлено ${updatedFormat.format(status.updatedAt)}`, error: false };
+      const updated = formatDate(status.updatedAt, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      return { text: translate('Списки оновлено {0}', [updated]), error: false };
     }
-    return { text: 'Списки фільтрів ще не завантажено', error: false };
+    return { text: translate('Списки фільтрів ще не завантажено'), error: false };
   });
 
   protected setEnabled(enabled: boolean): void {

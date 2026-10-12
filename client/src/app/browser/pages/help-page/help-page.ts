@@ -3,8 +3,10 @@ import { getTauriVersion, getVersion } from '@tauri-apps/api/app';
 import { isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../../bindings';
 import { SHORTCUTS } from '../internal-pages';
+import { translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 @Component({
+  imports: [TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-help-page',
   styleUrls: ['../internal-page.scss', './help-page.scss'],
@@ -37,7 +39,7 @@ export class HelpPage {
     try {
       await commands.appOpenLogs();
     } catch {
-      this.logError.set('Не вдалося відкрити теку з журналом.');
+      this.logError.set(translate('Не вдалося відкрити теку з журналом.'));
     }
   }
 }

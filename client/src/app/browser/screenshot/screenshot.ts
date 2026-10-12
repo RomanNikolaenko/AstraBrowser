@@ -12,6 +12,7 @@ import {
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { PageBounds, PageViews } from '../page-views/page-views';
 import { hostname } from '../pages/internal-pages';
+import { translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Сайт, який знімають: його webview, де він на екрані й адреса (для назви файла). */
 export interface ScreenshotPage {
@@ -41,7 +42,7 @@ export function screenshotFileName(url: string, time = new Date()): string {
   const date = `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`;
   const clock = `${pad(time.getHours())}-${pad(time.getMinutes())}-${pad(time.getSeconds())}`;
   const site = hostname(url).replace(/[\\/:*?"<>|]/g, '');
-  return `Скріншот ${site ? `${site} ` : ''}${date} ${clock}.png`;
+  return translate('Скріншот {0}.png', [`${site ? `${site} ` : ''}${date} ${clock}`]);
 }
 
 /**
@@ -51,7 +52,7 @@ export function screenshotFileName(url: string, time = new Date()): string {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-screenshot',
   styleUrl: './screenshot.scss',
   templateUrl: './screenshot.html',
@@ -96,7 +97,7 @@ export class Screenshot {
   async start(page: ScreenshotPage | null): Promise<void> {
     this.reset();
     if (!page) {
-      this.showMessage('Скріншот можна зробити лише для сайту — відкрийте сайт у вкладці.');
+      this.showMessage(translate('Скріншот можна зробити лише для сайту — відкрийте сайт у вкладці.'));
       return;
     }
     this.page = page;
@@ -108,7 +109,7 @@ export class Screenshot {
       this.mode.set('select');
       this.open();
     } catch {
-      this.showMessage('Не вдалося зняти сторінку. Спробуйте ще раз, коли вона завантажиться.');
+      this.showMessage(translate('Не вдалося зняти сторінку. Спробуйте ще раз, коли вона завантажиться.'));
     }
   }
 
@@ -171,7 +172,7 @@ export class Screenshot {
       const blob = new Blob([await this.pageViews.screenshot(page.label, true)], { type: 'image/png' });
       await this.showResult(blob);
     } catch {
-      this.showMessage('Не вдалося зняти всю сторінку.');
+      this.showMessage(translate('Не вдалося зняти всю сторінку.'));
     } finally {
       this.busy.set(false);
       this.status().nativeElement.hidePopover?.();
@@ -189,7 +190,7 @@ export class Screenshot {
       clearTimeout(this.copiedTimer);
       this.copiedTimer = setTimeout(() => this.copied.set(false), COPIED_FOR);
     } catch {
-      this.error.set('Не вдалося скопіювати картинку.');
+      this.error.set(translate('Не вдалося скопіювати картинку.'));
     }
   }
 
@@ -207,7 +208,7 @@ export class Screenshot {
         this.savedPath.set(path);
       }
     } catch {
-      this.error.set('Не вдалося зберегти файл.');
+      this.error.set(translate('Не вдалося зберегти файл.'));
     } finally {
       this.busy.set(false);
     }
@@ -344,7 +345,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Не вдалося прочитати знімок'));
+    image.onerror = () => reject(new Error(translate('Не вдалося прочитати знімок')));
     image.src = url;
   });
 }

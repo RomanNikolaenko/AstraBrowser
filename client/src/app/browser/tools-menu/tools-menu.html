@@ -1,5 +1,5 @@
 <app-popover class="tools-menu" popoverId="tools-menu" caret>
-  <h2 class="tools-menu__title">Інструменти</h2>
+  <h2 class="tools-menu__title">{{ 'Інструменти' | t }}</h2>
   <ul class="tools-menu__grid">
     @for (tool of tools; track tool.label) {
       <li>
@@ -8,10 +8,10 @@
           type="button"
           popovertarget="tools-menu"
           popovertargetaction="hide"
-          [title]="tool.shortcut ? tool.label + ' (' + tool.shortcut + ')' : tool.label"
+          [title]="tool.shortcut ? (tool.label | t) + ' (' + tool.shortcut + ')' : (tool.label | t)"
           (click)="run(tool)">
           <app-icon class="tools-menu__icon" [icon]="tool.icon" />
-          <span>{{ tool.label }}</span>
+          <span>{{ tool.label | t }}</span>
         </button>
       </li>
     }

@@ -3,6 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../bindings';
 import { UiSelectOption } from '../../shared/ui-select/ui-select';
 import { SessionStore } from '../session/session';
+import { tr } from '../../shared/i18n/i18n';
 
 /** Режим DNS через HTTPS (server/src/dns.rs, Mode). */
 export type DnsMode = 'default' | 'increased' | 'max' | 'off';
@@ -24,28 +25,28 @@ interface DnsState {
 export const DNS_MODES: readonly { readonly value: DnsMode; readonly label: string; readonly hint: string }[] = [
   {
     value: 'default',
-    label: 'Типовий захист',
-    hint: 'Захищений DNS, якщо його підтримує ваш постачальник DNS. Інакше — звичайний.',
+    label: tr('Типовий захист'),
+    hint: tr('Захищений DNS, якщо його підтримує ваш постачальник DNS. Інакше — звичайний.'),
   },
   {
     value: 'increased',
-    label: 'Посилений захист',
-    hint: 'Завжди через вибраного постачальника, а якщо він недоступний — звичайний DNS.',
+    label: tr('Посилений захист'),
+    hint: tr('Завжди через вибраного постачальника, а якщо він недоступний — звичайний DNS.'),
   },
   {
     value: 'max',
-    label: 'Максимальний захист',
-    hint: 'Лише захищений DNS. Якщо постачальник недоступний, сайти не відкриватимуться.',
+    label: tr('Максимальний захист'),
+    hint: tr('Лише захищений DNS. Якщо постачальник недоступний, сайти не відкриватимуться.'),
   },
-  { value: 'off', label: 'Вимкнено', hint: 'Звичайний DNS вашої мережі чи інтернет-провайдера.' },
+  { value: 'off', label: tr('Вимкнено'), hint: tr('Звичайний DNS вашої мережі чи інтернет-провайдера.') },
 ];
 
 export const DNS_PROVIDERS: readonly UiSelectOption<DnsProvider>[] = [
   { value: 'cloudflare', label: 'Cloudflare' },
   { value: 'google', label: 'Google Public DNS' },
-  { value: 'quad9', label: 'Quad9 — блокує шкідливі сайти' },
-  { value: 'adguard', label: 'AdGuard DNS — блокує рекламу' },
-  { value: 'custom', label: 'Власний…' },
+  { value: 'quad9', label: tr('Quad9 — блокує шкідливі сайти') },
+  { value: 'adguard', label: tr('AdGuard DNS — блокує рекламу') },
+  { value: 'custom', label: tr('Власний…') },
 ];
 
 /**

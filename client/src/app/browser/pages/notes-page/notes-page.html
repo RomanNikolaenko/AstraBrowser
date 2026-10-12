@@ -1,6 +1,6 @@
 <section class="page notes">
   <header class="page__header">
-    <h1 class="page__title">Нотатки</h1>
+    <h1 class="page__title">{{ 'Нотатки' | t }}</h1>
     @if (notes.entries().length) {
       <app-input
         class="page__search"
@@ -8,26 +8,26 @@
         icon="search"
         inputId="notes-search"
         inputName="notes-search"
-        ariaLabel="Пошук у нотатках"
-        placeholder="Пошук у нотатках"
+        [ariaLabel]="'Пошук у нотатках' | t"
+        [placeholder]="'Пошук у нотатках' | t"
         autocomplete="off"
         [(value)]="query" />
     }
     <button class="page__button" type="button" (click)="newNote()">
       <app-icon class="notes__button-icon" icon="plus" />
-      Нова нотатка
+      {{ 'Нова нотатка' | t }}
     </button>
   </header>
 
   @if (!notes.entries().length) {
     <div class="page__empty">
       <span class="page__empty-icon"><app-icon icon="notes" /></span>
-      <h2 class="page__empty-title">Нотаток ще немає</h2>
-      <p>Записуйте думки, списки й посилання — усе зберігається само, щойно ви пишете.</p>
+      <h2 class="page__empty-title">{{ 'Нотаток ще немає' | t }}</h2>
+      <p>{{ 'Записуйте думки, списки й посилання — усе зберігається само, щойно ви пишете.' | t }}</p>
     </div>
   } @else {
     <div class="notes__layout">
-      <nav class="page__list notes__list" aria-label="Нотатки">
+      <nav class="page__list notes__list" [attr.aria-label]="'Нотатки' | t">
         @for (note of filtered(); track note.id) {
           <button
             class="notes__item"
@@ -38,7 +38,7 @@
             <span class="notes__item-head">
               <span class="notes__item-title">{{ noteTitle(note) }}</span>
               @if (note.pinned) {
-                <app-icon class="notes__item-pin" icon="pin" aria-label="Закріплена" />
+                <app-icon class="notes__item-pin" icon="pin" [attr.aria-label]="'Закріплена' | t" />
               }
             </span>
             @if (notePreview(note); as preview) {
@@ -47,7 +47,7 @@
             <time class="notes__item-time" [attr.datetime]="isoTime(note.updated)">{{ shortTime(note.updated) }}</time>
           </button>
         } @empty {
-          <p class="page__no-results">Нічого не знайдено за запитом «{{ query() }}».</p>
+          <p class="page__no-results">{{ 'Нічого не знайдено за запитом «{0}».' | t: [query()] }}</p>
         }
       </nav>
 
@@ -60,16 +60,16 @@
               type="button"
               [class.notes__action--on]="note.pinned"
               [attr.aria-pressed]="note.pinned"
-              [title]="note.pinned ? 'Відкріпити' : 'Закріпити вгорі'"
-              [attr.aria-label]="note.pinned ? 'Відкріпити нотатку' : 'Закріпити нотатку вгорі'"
+              [title]="note.pinned ? ('Відкріпити' | t) : ('Закріпити вгорі' | t)"
+              [attr.aria-label]="note.pinned ? ('Відкріпити нотатку' | t) : ('Закріпити нотатку вгорі' | t)"
               (click)="notes.togglePin(note.id)">
               <app-icon icon="pin" />
             </button>
             <button
               class="notes__action"
               type="button"
-              [title]="copied() ? 'Скопійовано' : 'Скопіювати текст'"
-              aria-label="Скопіювати текст нотатки"
+              [title]="copied() ? ('Скопійовано' | t) : ('Скопіювати текст' | t)"
+              [attr.aria-label]="'Скопіювати текст нотатки' | t"
               [disabled]="isEmptyNote(note)"
               (click)="copy(note)">
               <app-icon [icon]="copied() ? 'check' : 'copy'" />
@@ -77,8 +77,8 @@
             <button
               class="notes__action"
               type="button"
-              title="Видалити"
-              aria-label="Видалити нотатку"
+              [title]="'Видалити' | t"
+              [attr.aria-label]="'Видалити нотатку' | t"
               (click)="confirmRemove.show()">
               <app-icon icon="trash" />
             </button>
@@ -90,8 +90,8 @@
             name="note-title"
             type="text"
             autocomplete="off"
-            placeholder="Назва"
-            aria-label="Назва нотатки"
+            [placeholder]="'Назва' | t"
+            [attr.aria-label]="'Назва нотатки' | t"
             [value]="note.title"
             (input)="setTitle(note, $event)"
             (keydown.enter)="focusText($event)" />
@@ -100,8 +100,8 @@
             class="notes__text"
             id="note-text"
             name="note-text"
-            placeholder="Почніть писати…"
-            aria-label="Текст нотатки"
+            [placeholder]="'Почніть писати…' | t"
+            [attr.aria-label]="'Текст нотатки' | t"
             [value]="note.text"
             (input)="setText(note, $event)"></textarea>
           <p class="notes__footer">{{ counts(note) }}</p>
@@ -112,9 +112,9 @@
 
   <app-confirm-dialog
     #confirmRemove
-    heading="Видалити нотатку?"
-    [message]="removeMessage()"
-    confirmLabel="Видалити"
+    [heading]="'Видалити нотатку?' | t"
+    [message]="removeMessage() | t"
+    [confirmLabel]="'Видалити' | t"
     danger
     (confirmed)="remove()" />
 </section>

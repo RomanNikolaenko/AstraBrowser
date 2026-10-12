@@ -24,6 +24,7 @@ import { BookmarkActions, BookmarkMenuTarget, folderMenuId, openFolderInBackgrou
 import { BookmarkDrag } from './bookmark-drag';
 import { BookmarkFolderMenu } from './bookmark-folder-menu';
 import { FOLDER_PALETTE, folderColor, folderIcon } from './folder-colors';
+import { tr, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Форма з контекстного меню: нова закладка чи тека (у `place`) або зміна наявної (`editing`). */
 interface BookmarkDialog {
@@ -33,8 +34,8 @@ interface BookmarkDialog {
 }
 
 const DIALOG_TITLES = {
-  bookmark: ['Нова закладка', 'Редагувати закладку'],
-  folder: ['Нова тека', 'Редагувати теку'],
+  bookmark: [tr('Нова закладка'), tr('Редагувати закладку')],
+  folder: [tr('Нова тека'), tr('Редагувати теку')],
 } as const;
 
 /**
@@ -45,7 +46,7 @@ const DIALOG_TITLES = {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BookmarkFolderMenu, MiddleClick, Popover, SiteIcon, Tooltip, UiIcon, UiInput],
+  imports: [TranslatePipe, BookmarkFolderMenu, MiddleClick, Popover, SiteIcon, Tooltip, UiIcon, UiInput],
   providers: [{ provide: BookmarkActions, useExisting: BookmarksBar }, BookmarkDrag],
   selector: 'app-bookmarks-bar',
   styleUrl: './bookmarks-bar.scss',
@@ -79,8 +80,8 @@ export class BookmarksBar implements BookmarkActions {
   });
   protected readonly openAllCount = computed(() => this.bookmarks.bookmarksOf(this.openAllFolder()).length);
 
-  protected readonly title = new FormField([required('Введіть назву')]);
-  protected readonly url = new FormField([required('Введіть адресу'), siteOrInternalPage('Некоректна адреса сайту')]);
+  protected readonly title = new FormField([required(tr('Введіть назву'))]);
+  protected readonly url = new FormField([required(tr('Введіть адресу')), siteOrInternalPage(tr('Некоректна адреса сайту'))]);
   /** Колір теки у формі; undefined — без кольору. */
   protected readonly color = signal<FolderColor | undefined>(undefined);
   protected readonly palette = FOLDER_PALETTE;
@@ -186,7 +187,7 @@ export class BookmarksBar implements BookmarkActions {
   }
 
   protected addFolder(): void {
-    this.showDialog({ kind: 'folder', place: this.insertPlace() }, 'Нова тека');
+    this.showDialog({ kind: 'folder', place: this.insertPlace() }, translate('Нова тека'));
   }
 
   protected addSeparator(): void {

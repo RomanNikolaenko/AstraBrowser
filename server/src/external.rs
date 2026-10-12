@@ -47,10 +47,10 @@ pub fn open_external(url: String) -> Result<(), String> {
   };
   use windows_core::{w, HSTRING, PCWSTR};
 
-  let parsed = Url::parse(&url).map_err(|_| "Некоректне посилання".to_string())?;
-  let scheme = scheme_of(&parsed).ok_or("Таке посилання браузер не відкриває")?;
+  let parsed = Url::parse(&url).map_err(|_| crate::i18n::text("Некоректне посилання", "Invalid link").to_string())?;
+  let scheme = scheme_of(&parsed).ok_or(crate::i18n::text("Таке посилання браузер не відкриває", "The browser doesn't open links like this"))?;
   if app_name(scheme).is_none() {
-    return Err("На цьому комп’ютері немає програми, що відкриває такі посилання".into());
+    return Err(crate::i18n::text("На цьому комп’ютері немає програми, що відкриває такі посилання", "There's no app on this computer that opens links like this").into());
   }
   let file = HSTRING::from(parsed.as_str());
   let mut info = SHELLEXECUTEINFOW {
@@ -62,7 +62,7 @@ pub fn open_external(url: String) -> Result<(), String> {
     nShow: SW_SHOWNORMAL.0,
     ..Default::default()
   };
-  unsafe { ShellExecuteExW(&mut info) }.map_err(|_| "На цьому комп’ютері немає програми, що відкриває такі посилання".to_string())
+  unsafe { ShellExecuteExW(&mut info) }.map_err(|_| crate::i18n::text("На цьому комп’ютері немає програми, що відкриває такі посилання", "There's no app on this computer that opens links like this").to_string())
 }
 
 /// Програма для посилання `url`: її назва, якщо посилання можна відкрити; `None` — нема чим, тож і питати не варто

@@ -58,6 +58,8 @@ describe('SignIn', () => {
     await fixture.whenStable();
   });
 
+  afterEach(() => localStorage.removeItem('astra.settings.language'));
+
   it('should not show errors before the user interacts', () => {
     expect(errors()).toEqual([]);
     expect(element.querySelector('.auth__alert')).toBeNull();
@@ -78,6 +80,16 @@ describe('SignIn', () => {
     expect(errors()).toEqual(['Введіть електронну пошту', 'Введіть пароль']);
     expect(auth.signIn).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('should switch the whole page to English with the language switch', async () => {
+    element.querySelector<HTMLInputElement>('.language-switch__input[value="en"]')?.click();
+    await fixture.whenStable();
+    await submit();
+
+    expect(element.querySelector('.auth__heading')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Welcome to Astra Browser');
+    expect(element.querySelector('.auth__submit')?.textContent?.trim()).toBe('Sign in');
+    expect(errors()).toEqual(['Enter your email', 'Enter your password']);
   });
 
   it('should sign in, remembering the session by default, and open the browser', async () => {

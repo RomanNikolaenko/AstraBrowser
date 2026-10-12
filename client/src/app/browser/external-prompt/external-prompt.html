@@ -1,12 +1,12 @@
 <dialog #dialog class="external-prompt" aria-labelledby="external-prompt-title" closedby="any" (close)="onClose()">
   @if (request(); as request) {
     <div class="external-prompt__panel">
-      <h2 class="external-prompt__title" id="external-prompt-title">Відкрити програму?</h2>
+      <h2 class="external-prompt__title" id="external-prompt-title">{{ 'Відкрити програму?' | t }}</h2>
       <p class="external-prompt__text">
         @if (site()) {
-          Сайт <strong>{{ site() }}</strong> хоче відкрити посилання в {{ app() }}:
+          {{ 'Сайт' | t }} <strong>{{ site() }}</strong> {{ 'хоче відкрити посилання в {0}:' | t: [app()] }}
         } @else {
-          Сторінка хоче відкрити посилання в {{ app() }}:
+          {{ 'Сторінка хоче відкрити посилання в {0}:' | t: [app()] }}
         }
       </p>
       <div class="external-prompt__link">
@@ -17,22 +17,22 @@
       @if (site()) {
         <label class="external-prompt__remember">
           <input type="checkbox" name="remember" [checked]="remember()" (change)="setRemember($event)" />
-          Завжди дозволяти {{ site() }} відкривати посилання «{{ request.scheme }}:»
+          {{ 'Завжди дозволяти {0} відкривати посилання «{1}:»' | t: [site(), request.scheme] }}
         </label>
       }
       @if (error(); as message) {
-        <p class="external-prompt__error" role="alert">{{ message }}</p>
+        <p class="external-prompt__error" role="alert">{{ message | t }}</p>
       }
 
       <div class="external-prompt__actions">
         <!-- Фокус на «Скасувати»: випадковий Enter програму не запустить. -->
-        <button class="external-prompt__button" type="button" autofocus (click)="cancel()">Скасувати</button>
+        <button class="external-prompt__button" type="button" autofocus (click)="cancel()">{{ 'Скасувати' | t }}</button>
         <button
           class="external-prompt__button external-prompt__button--primary"
           type="button"
           [disabled]="busy()"
           (click)="open()">
-          Відкрити
+          {{ 'Відкрити' | t }}
         </button>
       </div>
     </div>

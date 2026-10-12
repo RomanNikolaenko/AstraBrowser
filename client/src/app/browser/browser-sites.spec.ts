@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { UpdateStore } from './data/updates';
+import { AuthStore } from '../shared/auth/auth';
 import { BrowserWindows } from '../shared/browser-windows/browser-windows';
 import { Titlebar } from '../shared/titlebar/titlebar';
 import { Browser } from './browser';
@@ -140,6 +141,9 @@ class FakePageViews {
   }
   print(label: string) {
     return this.record('print', label);
+  }
+  openDevTools(label: string) {
+    return this.record('devtools', label);
   }
   close(label: string) {
     return this.record('close', label);
@@ -468,6 +472,18 @@ describe('Browser with sites', () => {
     expect(titles()).toEqual(['Нова вкладка']);
   });
 
+  it('should start with a clean new tab right after signing in and forget the tabs of the last time', async () => {
+    fixture.destroy();
+    localStorage.setItem('astra.session.web', JSON.stringify({ tabs: [{ page: 'settings' }], active: 0 }));
+    vi.spyOn(TestBed.inject(AuthStore), 'takeFreshSignIn').mockReturnValue(true);
+    fixture = TestBed.createComponent(Host);
+    element = fixture.nativeElement as HTMLElement;
+    await stable();
+
+    expect(titles()).toEqual(['Нова вкладка']);
+    expect(JSON.parse(localStorage.getItem('astra.session.web') ?? 'null')).toEqual({ tabs: [{ page: 'new-tab' }], active: 0 });
+  });
+
   it('should ask before a site opens an app link and remember the answer for that site', async () => {
     await typeInOmnibox('example.com');
     await load(1, 'https://example.com/');
@@ -639,6 +655,48 @@ describe('Browser with sites', () => {
 
     await context('translate-text', { text: 'hello' });
     expect(pages.called('open').at(-1)?.[1]).toBe('https://translate.google.com/?sl=auto&tl=uk&text=hello&op=translate');
+  });
+
+  it('should open a local development server, show its source and its developer tools', async () => {
+    await typeInOmnibox('localhost:4200');
+    await load(1, 'http://localhost:4200/');
+    expect(pages.called('open')).toEqual([[label(1), 'http://localhost:4200/']]);
+
+    // Ctrl+U у сайті — код сторінки новою вкладкою.
+    pages.emit('page://shortcut', { label: label(1), shortcut: 'view-source' });
+    await stable();
+    expect(pages.called('open').at(-1)).toEqual([label(2), 'view-source:http://localhost:4200/']);
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('localhost');
+    // WebView2 називає адресу коду сторінки адресою самого сайту — вкладка лишається з кодом, історія — без нього.
+    await load(2, 'http://localhost:4200/');
+    pages.emit('page://navigation', { label: label(2), url: 'http://localhost:4200/', canGoBack: false, canGoForward: false });
+    pages.emit('page://title', { label: label(2), title: 'view-source:http://localhost:4200/' });
+    await stable();
+    expect(omnibox().value).toBe('view-source:http://localhost:4200/');
+    expect(
+      TestBed.inject(HistoryStore)
+        .entries()
+        .map((entry) => entry.title)
+    ).not.toContain('view-source:http://localhost:4200/');
+
+    // F12 з інтерфейсу — інструменти розробника сайту в активній вкладці.
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'F12', key: 'F12', cancelable: true }));
+    await stable();
+    expect(pages.called('devtools')).toEqual([[label(2)]]);
+
+    // «Переглянути джерело сторінки» з контекстного меню сайту.
+    pages.emit('page://context', { label: label(1), action: 'view-source', url: 'http://localhost:4200/' });
+    await stable();
+    expect(pages.called('open').at(-1)).toEqual([label(3), 'view-source:http://localhost:4200/']);
+  });
+
+  it('should not open developer tools on internal pages', async () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'F12', key: 'F12', cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, code: 'KeyU', key: 'г', cancelable: true }));
+    await stable();
+
+    expect(pages.called('devtools')).toEqual([]);
+    expect(titles()).toEqual(['Нова вкладка']);
   });
 
   it('should put background tabs to sleep after a while and wake them up when opened', async () => {
@@ -1004,7 +1062,7 @@ describe('Browser with sites', () => {
   });
 
   describe('reload menu', () => {
-    const reloadButton = () => button('Оновити');
+    const reloadButton = () => button('Оновити сторінку');
     const menuOpen = () => !!element.querySelector('app-reload-menu .is-open');
     const item = (text: string) =>
       [...element.querySelectorAll<HTMLButtonElement>('.reload-menu__item')].find((node) => node.textContent?.includes(text));
@@ -1065,7 +1123,7 @@ describe('Browser with sites', () => {
       await stable();
 
       expect(menuOpen()).toBe(false);
-      expect(button('Оновити').disabled).toBe(true);
+      expect(button('Оновити сторінку').disabled).toBe(true);
     });
 
     it('should open the menu from the context menu and run the chosen reload', async () => {
@@ -1097,7 +1155,7 @@ describe('Browser with sites', () => {
   it('should reload, print and find on the site', async () => {
     await typeInOmnibox('angular.dev');
 
-    button('Оновити').click();
+    button('Оновити сторінку').click();
     document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, code: 'KeyP', key: 'з', cancelable: true }));
     document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, code: 'KeyF', key: 'а', cancelable: true }));
     await stable();

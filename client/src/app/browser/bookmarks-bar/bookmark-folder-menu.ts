@@ -8,6 +8,7 @@ import { SiteIcon } from '../site-icon/site-icon';
 import { BookmarkActions, folderBookmarks, folderMenuId, openFolderInBackground } from './bookmark-actions';
 import { BookmarkDrag } from './bookmark-drag';
 import { folderColor, folderIcon } from './folder-colors';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Випадне меню теки на панелі закладок: її закладки, роздільники й вкладені теки (ті — збоку, як підменю).
@@ -16,7 +17,7 @@ import { folderColor, folderIcon } from './folder-colors';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MiddleClick, Popover, SiteIcon, Tooltip, UiIcon],
+  imports: [TranslatePipe, MiddleClick, Popover, SiteIcon, Tooltip, UiIcon],
   selector: 'app-bookmark-folder-menu',
   styleUrl: './bookmark-folder-menu.scss',
   templateUrl: './bookmark-folder-menu.html',

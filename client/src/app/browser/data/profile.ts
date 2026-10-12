@@ -1,22 +1,23 @@
 import { DestroyRef, Injectable, computed, effect, inject, untracked } from '@angular/core';
 import { AuthStore } from '../../shared/auth/auth';
 import { accountSignal } from '../../shared/storage/stored-signal';
+import { tr, translate } from '../../shared/i18n/i18n';
 
 /** Колір аватара з ініціалами. */
 export type AvatarColor = 'blue' | 'violet' | 'pink' | 'orange' | 'green' | 'teal' | 'slate';
 
 export const AVATAR_COLORS: readonly { readonly value: AvatarColor; readonly label: string; readonly background: string }[] = [
-  { value: 'blue', label: 'Синій', background: 'linear-gradient(135deg, #3b82f6, #6366f1)' },
-  { value: 'violet', label: 'Фіолетовий', background: 'linear-gradient(135deg, #8b5cf6, #c026d3)' },
-  { value: 'pink', label: 'Рожевий', background: 'linear-gradient(135deg, #ec4899, #f43f5e)' },
-  { value: 'orange', label: 'Помаранчевий', background: 'linear-gradient(135deg, #f97316, #f59e0b)' },
-  { value: 'green', label: 'Зелений', background: 'linear-gradient(135deg, #10b981, #65a30d)' },
-  { value: 'teal', label: 'Бірюзовий', background: 'linear-gradient(135deg, #06b6d4, #0d9488)' },
-  { value: 'slate', label: 'Сірий', background: 'linear-gradient(135deg, #64748b, #334155)' },
+  { value: 'blue', label: tr('Синій'), background: 'linear-gradient(135deg, #3b82f6, #6366f1)' },
+  { value: 'violet', label: tr('Фіолетовий'), background: 'linear-gradient(135deg, #8b5cf6, #c026d3)' },
+  { value: 'pink', label: tr('Рожевий'), background: 'linear-gradient(135deg, #ec4899, #f43f5e)' },
+  { value: 'orange', label: tr('Помаранчевий'), background: 'linear-gradient(135deg, #f97316, #f59e0b)' },
+  { value: 'green', label: tr('Зелений'), background: 'linear-gradient(135deg, #10b981, #65a30d)' },
+  { value: 'teal', label: tr('Бірюзовий'), background: 'linear-gradient(135deg, #06b6d4, #0d9488)' },
+  { value: 'slate', label: tr('Сірий'), background: 'linear-gradient(135deg, #64748b, #334155)' },
 ];
 
 /** Ім'я, коли його ще не вказали. */
-export const DEFAULT_PROFILE_NAME = 'Користувач';
+export const DEFAULT_PROFILE_NAME = tr('Користувач');
 
 /** Ініціали для аватара: перші літери двох перших слів («Роман Ніколаєнко» → «РН»). */
 export function initialsOf(name: string): string {
@@ -43,7 +44,7 @@ export class ProfileStore {
   /** Фото (JPEG data: URL, зменшене до 256×256); порожньо — ініціали. */
   readonly photo = accountSignal('astra.profile.photo', '');
 
-  readonly displayName = computed(() => this.name().trim() || DEFAULT_PROFILE_NAME);
+  readonly displayName = computed(() => this.name().trim() || translate(DEFAULT_PROFILE_NAME));
   /** Порожньо, поки імені немає — тоді на аватарі значок людини. */
   readonly initials = computed(() => initialsOf(this.name()));
   readonly background = computed(

@@ -1,11 +1,14 @@
 import { signal } from '@angular/core';
 import { Validator } from '../shared/form-field/form-field';
+import { tr, translate } from '../shared/i18n/i18n';
 
 /** Скільки секунд чекати, перш ніж надіслати лист із кодом ще раз (Supabase дозволяє раз на хвилину). */
 export const RESEND_COOLDOWN = 60;
 
 /** Найкоротший пароль облікового запису. */
 export const PASSWORD_MIN_LENGTH = 8;
+/** Підказка до закороткого пароля (число — PASSWORD_MIN_LENGTH; тест у auth-forms.spec.ts стежить, щоб збігалося). */
+export const PASSWORD_TOO_SHORT = tr('Пароль має містити щонайменше 8 символів');
 
 /** Код із листа без пробілів (його часто копіюють як «123 456»). */
 export function normalizeCode(value: string): string {
@@ -13,7 +16,8 @@ export function normalizeCode(value: string): string {
 }
 
 /** Код Supabase — від 6 до 10 цифр (довжину задають у налаштуваннях проєкту). */
-export const codeFormat: Validator = (value) => (/^\d{6,10}$/.test(normalizeCode(value)) ? null : 'Код — це 6–10 цифр із листа');
+export const codeFormat: Validator = (value) =>
+  /^\d{6,10}$/.test(normalizeCode(value)) ? null : translate('Код — це 6–10 цифр із листа');
 
 /** Пошта, яку сторінки входу передають одна одній (стан навігації, не URL). */
 export function emailFromNavigation(): string {

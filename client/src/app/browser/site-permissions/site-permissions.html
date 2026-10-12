@@ -1,11 +1,11 @@
 <app-popover class="site-permissions" popoverId="site-permissions" align="start" caret (opened)="onOpened()">
-  <h2 class="site-permissions__title">Дозволи для {{ host() }}</h2>
+  <h2 class="site-permissions__title">{{ 'Дозволи для {0}' | t: [host()] }}</h2>
 
   <div class="site-permissions__list">
     @for (row of rows; track row.kind) {
       <div class="site-permissions__row">
         <app-icon class="site-permissions__icon" [icon]="row.icon" />
-        <label class="site-permissions__label" [for]="'site-permissions-' + row.kind">{{ row.label }}</label>
+        <label class="site-permissions__label" [for]="'site-permissions-' + row.kind">{{ row.label | t }}</label>
         <app-select
           class="site-permissions__select"
           [selectId]="'site-permissions-' + row.kind"
@@ -19,7 +19,7 @@
 
     <div class="site-permissions__row">
       <app-icon class="site-permissions__icon" icon="popup" />
-      <span class="site-permissions__label" id="site-permissions-popups-label">Спливні вікна</span>
+      <span class="site-permissions__label" id="site-permissions-popups-label">{{ 'Спливні вікна' | t }}</span>
       <app-select
         class="site-permissions__select"
         selectId="site-permissions-popups"
@@ -32,7 +32,7 @@
 
     <div class="site-permissions__row">
       <app-icon class="site-permissions__icon" icon="autoplay" />
-      <span class="site-permissions__label" id="site-permissions-autoplay-label">Автовідтворення</span>
+      <span class="site-permissions__label" id="site-permissions-autoplay-label">{{ 'Автовідтворення' | t }}</span>
       <app-select
         class="site-permissions__select"
         selectId="site-permissions-autoplay"
@@ -47,8 +47,8 @@
 
   @if (changed()) {
     <div class="site-permissions__notice" role="status">
-      <span>Діє одразу, а для того, що вже на сторінці, — після перезавантаження</span>
-      <button class="site-permissions__reload" type="button" (click)="reload()">Перезавантажити</button>
+      <span>{{ 'Діє одразу, а для того, що вже на сторінці, — після перезавантаження' | t }}</span>
+      <button class="site-permissions__reload" type="button" (click)="reload()">{{ 'Перезавантажити' | t }}</button>
     </div>
   }
 </app-popover>

@@ -15,6 +15,7 @@ import { hostname } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
 import { TranslateLanguageStore } from './translate-language';
 import { TRANSLATE_LANGUAGES, isTranslated, originalUrl, translatePageUrl, translateTextUrl } from './translate-urls';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Перекладач (з «Інструментів»): поточна сторінка — через Google Перекладач (у тій самій вкладці, «Показати оригінал»
@@ -23,7 +24,7 @@ import { TRANSLATE_LANGUAGES, isTranslated, originalUrl, translatePageUrl, trans
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon, UiSelect],
+  imports: [TranslatePipe, Popover, UiIcon, UiSelect],
   selector: 'app-translator',
   styleUrl: './translator.scss',
   templateUrl: './translator.html',

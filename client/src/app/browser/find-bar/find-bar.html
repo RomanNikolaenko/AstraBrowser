@@ -4,8 +4,8 @@
     icon="search"
     inputId="find-on-page"
     inputName="find-on-page"
-    ariaLabel="Знайти на сторінці"
-    placeholder="Знайти на сторінці"
+    [ariaLabel]="'Знайти на сторінці' | t"
+    [placeholder]="'Знайти на сторінці' | t"
     autocomplete="off"
     [spellcheck]="false"
     enterKeyHint="search"
@@ -17,8 +17,8 @@
   <button
     class="find-bar__button"
     type="button"
-    aria-label="Попередній збіг"
-    title="Попередній збіг (Shift+Enter)"
+    [attr.aria-label]="'Попередній збіг' | t"
+    [title]="'Попередній збіг (Shift+Enter)' | t"
     [disabled]="!canStep()"
     (click)="previous()">
     <app-icon icon="chevron-up" />
@@ -26,13 +26,18 @@
   <button
     class="find-bar__button"
     type="button"
-    aria-label="Наступний збіг"
-    title="Наступний збіг (Enter)"
+    [attr.aria-label]="'Наступний збіг' | t"
+    [title]="'Наступний збіг (Enter)' | t"
     [disabled]="!canStep()"
     (click)="next()">
     <app-icon icon="chevron-down" />
   </button>
-  <button class="find-bar__button" type="button" aria-label="Закрити пошук" title="Закрити (Esc)" (click)="closed.emit()">
+  <button
+    class="find-bar__button"
+    type="button"
+    [attr.aria-label]="'Закрити пошук' | t"
+    [title]="'Закрити (Esc)' | t"
+    (click)="closed.emit()">
     <app-icon icon="close" />
   </button>
 </div>

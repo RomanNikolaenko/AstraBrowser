@@ -1,6 +1,7 @@
+import { tr } from '../../shared/i18n/i18n';
 /** Мови перекладу: код Google Перекладача й назва. */
 export const TRANSLATE_LANGUAGES = [
-  { value: 'uk', label: 'Українська' },
+  { value: 'uk', label: tr('Українська') },
   { value: 'en', label: 'English' },
   { value: 'pl', label: 'Polski' },
   { value: 'de', label: 'Deutsch' },

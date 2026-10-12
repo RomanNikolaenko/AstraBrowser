@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, output } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { InternalPage } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Інструмент, що не є сторінкою: його відкриває сам браузер. */
 export type ToolAction = 'translate' | 'screenshot';
@@ -18,7 +19,7 @@ interface Tool {
 /** Панель інструментів (кнопка-сітка): внутрішня сторінка чи інструмент браузера (перекладач, скріншот). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [TranslatePipe, Popover, UiIcon],
   selector: 'app-tools-menu',
   styleUrl: './tools-menu.scss',
   templateUrl: './tools-menu.html',
@@ -28,15 +29,15 @@ export class ToolsMenu {
   readonly runAction = output<ToolAction>();
 
   protected readonly tools: readonly Tool[] = [
-    { label: 'Завантаження', icon: 'download', page: 'downloads', shortcut: 'Ctrl+J' },
-    { label: 'Історія', icon: 'clock', page: 'history' },
-    { label: 'Закладки', icon: 'star', page: 'bookmarks' },
-    { label: 'Паролі', icon: 'key', page: 'passwords' },
-    { label: 'Розширення', icon: 'puzzle', page: 'extensions' },
-    { label: 'Нотатки', icon: 'notes', page: 'notes' },
-    { label: 'Перекладач', icon: 'translate', action: 'translate' },
-    { label: 'Скріншот', icon: 'crop', action: 'screenshot', shortcut: 'Ctrl+Shift+S' },
-    { label: 'Налаштування', icon: 'settings', page: 'settings' },
+    { label: tr('Завантаження'), icon: 'download', page: 'downloads', shortcut: 'Ctrl+J' },
+    { label: tr('Історія'), icon: 'clock', page: 'history' },
+    { label: tr('Закладки'), icon: 'star', page: 'bookmarks' },
+    { label: tr('Паролі'), icon: 'key', page: 'passwords' },
+    { label: tr('Розширення'), icon: 'puzzle', page: 'extensions' },
+    { label: tr('Нотатки'), icon: 'notes', page: 'notes' },
+    { label: tr('Перекладач'), icon: 'translate', action: 'translate' },
+    { label: tr('Скріншот'), icon: 'crop', action: 'screenshot', shortcut: 'Ctrl+Shift+S' },
+    { label: tr('Налаштування'), icon: 'settings', page: 'settings' },
   ];
 
   protected run(tool: Tool): void {

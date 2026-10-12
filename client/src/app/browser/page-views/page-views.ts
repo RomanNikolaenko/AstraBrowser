@@ -70,7 +70,8 @@ export interface PageContextEvent {
     | 'search'
     | 'translate-text'
     | 'translate-page'
-    | 'screenshot';
+    | 'screenshot'
+    | 'view-source';
   readonly url?: string;
   readonly text?: string;
 }
@@ -150,7 +151,8 @@ export interface PageExternalEvent {
 /** Гаряча клавіша браузера, натиснута, поки фокус у сайті (server/src/webview2.rs, watch_shortcuts). */
 export interface PageShortcutEvent {
   readonly label: string;
-  readonly shortcut: 'next-tab' | 'previous-tab' | 'reopen-tab' | 'screenshot' | 'zoom-in' | 'zoom-out' | 'zoom-reset';
+  readonly shortcut:
+    'next-tab' | 'previous-tab' | 'reopen-tab' | 'screenshot' | 'view-source' | 'zoom-in' | 'zoom-out' | 'zoom-reset';
 }
 
 /** Користувач увійшов на сайт — «Зберегти пароль?» (server/src/passwords.rs). */
@@ -279,6 +281,11 @@ export class PageViews {
 
   async print(label: string): Promise<void> {
     await commands.pagePrint(label);
+  }
+
+  /** Інструменти розробника сайту (DevTools) — окремим вікном. */
+  async openDevTools(label: string): Promise<void> {
+    await commands.pageOpenDevtools(label);
   }
 
   async close(label: string): Promise<void> {

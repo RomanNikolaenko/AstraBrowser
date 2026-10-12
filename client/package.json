@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "lint:styles": "stylelint \"src/**/*.scss\"",
     "lint:styles:fix": "stylelint \"src/**/*.scss\" --fix",
+    "i18n:check": "node scripts/i18n-check.mjs",
     "tauri:dev": "cd ../server && tauri dev",
     "tauri:build": "cd ../server && tauri build",
     "release": "node scripts/release.mjs"

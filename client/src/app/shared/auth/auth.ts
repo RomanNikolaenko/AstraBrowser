@@ -6,6 +6,7 @@ import { listen } from '@tauri-apps/api/event';
 import { BrowserWindows } from '../browser-windows/browser-windows';
 import { SettingsStore } from '../settings/settings';
 import { adoptLegacyData, removeAccountData, setStorageAccount } from '../storage/stored-signal';
+import { translate } from '../i18n/i18n';
 
 /** Користувач облікового запису Astra Browser. */
 export interface AuthUser {
@@ -61,7 +62,7 @@ export function isAuthError(error: unknown): error is AuthError {
 
 /** Текст помилки для форми. */
 export function authErrorMessage(error: unknown): string {
-  return isAuthError(error) ? error.message : 'Не вдалося виконати дію. Спробуйте ще раз.';
+  return isAuthError(error) ? error.message : translate('Не вдалося виконати дію. Спробуйте ще раз.');
 }
 
 /**
@@ -91,6 +92,9 @@ export class AuthStore {
   private readonly windows = inject(BrowserWindows);
   private readonly settings = inject(SettingsStore);
   private readonly reload = inject(RELOAD_PAGE);
+  /** Уже відомо, чи хтось увійшов, коли відкрилося вікно: поява користувача після цього — це вхід. */
+  private loaded = false;
+  private signedInNow = false;
 
   constructor() {
     this.forgetDeletedAccount();
@@ -201,6 +205,16 @@ export class AuthStore {
     this.apply({ user: null });
   }
 
+  /**
+   * Чи щойно ввійшли (у цьому вікні чи в іншому), а не відкрили браузер з уже відкритим сеансом. Тоді браузер
+   * починає з чистої нової вкладки. Відповідає «так» лише раз.
+   */
+  takeFreshSignIn(): boolean {
+    const fresh = this.signedInNow;
+    this.signedInNow = false;
+    return fresh;
+  }
+
   /** Після видалення облікового запису вікно перезавантажилось — прибираємо його дані (deleteAccount). */
   private forgetDeletedAccount(): void {
     try {
@@ -223,6 +237,7 @@ export class AuthStore {
     } catch {
       this.user.set(null);
     }
+    this.loaded = true;
   }
 
   private apply(state: AuthState): void {
@@ -240,6 +255,7 @@ export class AuthStore {
     }
     this.user.set(user);
     if (user && !previous) {
+      this.signedInNow = this.loaded;
       // Увійшли в іншому вікні — це вікно теж іде зі сторінки входу в браузер.
       if (SIGNED_OUT_PAGES.some((page) => this.router.url.startsWith(page))) {
         void this.router.navigate(['/home']);

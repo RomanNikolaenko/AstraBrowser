@@ -1,36 +1,36 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Керування профілем</h1>
+    <h1 class="page__title">{{ 'Керування профілем' | t }}</h1>
   </header>
 
-  <h2 class="page__group">Профіль</h2>
+  <h2 class="page__group">{{ 'Профіль' | t }}</h2>
   <div class="page__list profile">
     <div class="profile__identity">
       <app-avatar class="profile__avatar" />
       <div class="profile__photo-actions">
         <button class="page__button" type="button" (click)="photoInput.click()">
-          {{ profile.photo() ? 'Змінити фото…' : 'Додати фото…' }}
+          {{ profile.photo() ? ('Змінити фото…' | t) : ('Додати фото…' | t) }}
         </button>
         @if (profile.photo()) {
-          <button class="page__button" type="button" (click)="profile.photo.set('')">Прибрати фото</button>
+          <button class="page__button" type="button" (click)="profile.photo.set('')">{{ 'Прибрати фото' | t }}</button>
         }
         <input
           #photoInput
           class="profile__file"
           type="file"
           accept="image/*"
-          aria-label="Фото профілю"
+          [attr.aria-label]="'Фото профілю' | t"
           (change)="choosePhoto($event)" />
       </div>
     </div>
     @if (photoError()) {
-      <p class="profile__error" role="alert">{{ photoError() }}</p>
+      <p class="profile__error" role="alert">{{ photoError() | t }}</p>
     }
 
     <div class="profile__row">
       <span class="page__text">
-        <span class="page__name" id="profile-name-label">Ім'я</span>
-        <span class="page__meta" id="profile-name-hint">Видно в меню профілю; ініціали — на аватарі без фото</span>
+        <span class="page__name" id="profile-name-label">{{ "Ім'я" | t }}</span>
+        <span class="page__meta" id="profile-name-hint">{{ 'Видно в меню профілю; ініціали — на аватарі без фото' | t }}</span>
       </span>
       <app-input
         class="profile__name"
@@ -38,7 +38,7 @@
         inputName="profile-name"
         ariaLabelledby="profile-name-label"
         ariaDescribedby="profile-name-hint"
-        placeholder="Користувач"
+        [placeholder]="'Користувач' | t"
         autocomplete="name"
         [value]="profile.name()"
         (valueChange)="profile.rename($event)" />
@@ -47,17 +47,17 @@
     @if (!profile.photo()) {
       <fieldset class="profile__row profile__fieldset">
         <legend class="page__text">
-          <span class="page__name">Колір аватара</span>
+          <span class="page__name">{{ 'Колір аватара' | t }}</span>
         </legend>
         <div class="swatches">
           @for (color of colors; track color.value) {
-            <label class="swatches__item" [title]="color.label" [style.--swatch]="color.background">
+            <label class="swatches__item" [title]="color.label | t" [style.--swatch]="color.background">
               <input
                 class="swatches__input"
                 type="radio"
                 name="avatar-color"
                 [value]="color.value"
-                [attr.aria-label]="color.label"
+                [attr.aria-label]="color.label | t"
                 [checked]="profile.color() === color.value"
                 (change)="profile.color.set(color.value)" />
             </label>
@@ -67,35 +67,37 @@
     }
   </div>
 
-  <h2 class="page__group">Обліковий запис</h2>
+  <h2 class="page__group">{{ 'Обліковий запис' | t }}</h2>
   <div class="page__list profile">
     <div class="profile__row">
       <span class="page__text profile__text">
-        <span class="page__name">{{ auth.user()?.email || 'Обліковий запис Astra' }}</span>
-        <span class="page__meta">Ви ввійшли в Astra Browser</span>
+        <span class="page__name">{{ auth.user()?.email || ('Обліковий запис Astra' | t) }}</span>
+        <span class="page__meta">{{ 'Ви ввійшли в Astra Browser' | t }}</span>
       </span>
-      <button class="page__button" type="button" (click)="signOut()">Вийти</button>
+      <button class="page__button" type="button" (click)="signOut()">{{ 'Вийти' | t }}</button>
     </div>
     @if (auth.user(); as user) {
       <div class="profile__row">
         <span class="page__text profile__text">
-          <span class="page__name">Пошта</span>
-          <span class="page__meta">Для входу й листів від Astra Browser</span>
+          <span class="page__name">{{ 'Пошта' | t }}</span>
+          <span class="page__meta">{{ 'Для входу й листів від Astra Browser' | t }}</span>
         </span>
         @if (emailStep() === 'closed') {
-          <button class="page__button" type="button" (click)="startEmailChange()">Змінити пошту…</button>
+          <button class="page__button" type="button" (click)="startEmailChange()">{{ 'Змінити пошту…' | t }}</button>
         }
       </div>
       @if (emailStep() === 'email') {
         <form class="profile__password" novalidate (submit)="sendEmailCode($event)">
-          <p class="profile__hint">Ми надішлемо на нову пошту лист із кодом. Пошта зміниться, щойно ви його введете.</p>
+          <p class="profile__hint">
+            {{ 'Ми надішлемо на нову пошту лист із кодом. Пошта зміниться, щойно ви його введете.' | t }}
+          </p>
           <app-input
             class="profile__field"
             inputId="profile-new-email"
             inputName="new-email"
             type="email"
-            ariaLabel="Нова пошта"
-            placeholder="Нова пошта"
+            [ariaLabel]="'Нова пошта' | t"
+            [placeholder]="'Нова пошта' | t"
             autocomplete="email"
             [(value)]="newEmail.value"
             [(touched)]="newEmail.touched"
@@ -103,24 +105,26 @@
           <div class="profile__password-actions">
             <button class="page__button" type="submit" [disabled]="emailBusy() || emailCooldown.seconds() > 0">
               @if (emailBusy()) {
-                Надсилаємо…
+                {{ 'Надсилаємо…' | t }}
               } @else if (emailCooldown.seconds() > 0) {
-                Надіслати код за {{ emailCooldown.seconds() }} с
+                {{ 'Надіслати код за {0} с' | t: [emailCooldown.seconds()] }}
               } @else {
-                Надіслати код
+                {{ 'Надіслати код' | t }}
               }
             </button>
-            <button class="page__button" type="button" (click)="cancelEmailChange()">Скасувати</button>
+            <button class="page__button" type="button" (click)="cancelEmailChange()">{{ 'Скасувати' | t }}</button>
           </div>
         </form>
       } @else if (emailStep() === 'code') {
         <form class="profile__password" novalidate (submit)="confirmEmailCode($event)">
           <p class="profile__hint">
             @if (emailWaiting().partial) {
-              Перший код прийнято. Тепер введіть код із листа на {{ emailWaiting().address }}.
+              {{ 'Перший код прийнято. Тепер введіть код із листа на {0}.' | t: [emailWaiting().address] }}
             } @else {
-              Введіть код із листа, який ми надіслали на {{ emailWaiting().address }}. Якщо лист прийде й на {{ user.email }},
-              знадобиться і його код.
+              {{
+                'Введіть код із листа, який ми надіслали на {0}. Якщо лист прийде й на {1}, знадобиться і його код.'
+                  | t: [emailWaiting().address, user.email]
+              }}
             }
           </p>
           <app-input
@@ -128,15 +132,15 @@
             icon="key"
             inputId="profile-email-code"
             inputName="code"
-            ariaLabel="Код із листа"
-            placeholder="Код із листа"
+            [ariaLabel]="'Код із листа' | t"
+            [placeholder]="'Код із листа' | t"
             autocomplete="one-time-code"
             [(value)]="emailCode.value"
             [(touched)]="emailCode.touched"
             [error]="emailCode.visibleError()" />
           <div class="profile__password-actions">
             <button class="page__button" type="submit" [disabled]="emailBusy()">
-              {{ emailBusy() ? 'Перевіряємо…' : 'Підтвердити' }}
+              {{ emailBusy() ? ('Перевіряємо…' | t) : ('Підтвердити' | t) }}
             </button>
             <button
               class="page__button"
@@ -144,26 +148,26 @@
               [disabled]="emailBusy() || emailCooldown.seconds() > 0"
               (click)="sendEmailCode()">
               @if (emailCooldown.seconds() > 0) {
-                Надіслати ще раз за {{ emailCooldown.seconds() }} с
+                {{ 'Надіслати ще раз за {0} с' | t: [emailCooldown.seconds()] }}
               } @else {
-                Надіслати ще раз
+                {{ 'Надіслати ще раз' | t }}
               }
             </button>
-            <button class="page__button" type="button" (click)="cancelEmailChange()">Скасувати</button>
+            <button class="page__button" type="button" (click)="cancelEmailChange()">{{ 'Скасувати' | t }}</button>
           </div>
         </form>
       }
       @if (emailMessage(); as message) {
-        <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+        <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text | t }}</p>
       }
     }
     <div class="profile__row">
       <span class="page__text profile__text">
-        <span class="page__name">Пароль</span>
-        <span class="page__meta">Пароль для входу в Astra Browser</span>
+        <span class="page__name">{{ 'Пароль' | t }}</span>
+        <span class="page__meta">{{ 'Пароль для входу в Astra Browser' | t }}</span>
       </span>
       @if (!changingPassword()) {
-        <button class="page__button" type="button" (click)="startPasswordChange()">Змінити пароль…</button>
+        <button class="page__button" type="button" (click)="startPasswordChange()">{{ 'Змінити пароль…' | t }}</button>
       }
     </div>
     @if (changingPassword()) {
@@ -173,8 +177,8 @@
           inputId="profile-new-password"
           inputName="new-password"
           type="password"
-          ariaLabel="Новий пароль"
-          placeholder="Новий пароль"
+          [ariaLabel]="'Новий пароль' | t"
+          [placeholder]="'Новий пароль' | t"
           autocomplete="new-password"
           [(value)]="newPassword.value"
           [(touched)]="newPassword.touched"
@@ -184,63 +188,67 @@
           inputId="profile-new-password-confirmation"
           inputName="new-password-confirmation"
           type="password"
-          ariaLabel="Підтвердіть пароль"
-          placeholder="Повторіть пароль"
+          [ariaLabel]="'Підтвердіть пароль' | t"
+          [placeholder]="'Повторіть пароль' | t"
           autocomplete="new-password"
           [(value)]="passwordConfirmation.value"
           [(touched)]="passwordConfirmation.touched"
           [error]="passwordConfirmation.visibleError()" />
         <div class="profile__password-actions">
           <button class="page__button" type="submit" [disabled]="passwordBusy()">
-            {{ passwordBusy() ? 'Зберігаємо…' : 'Зберегти пароль' }}
+            {{ passwordBusy() ? ('Зберігаємо…' | t) : ('Зберегти пароль' | t) }}
           </button>
-          <button class="page__button" type="button" (click)="changingPassword.set(false)">Скасувати</button>
+          <button class="page__button" type="button" (click)="changingPassword.set(false)">{{ 'Скасувати' | t }}</button>
         </div>
       </form>
     }
     @if (passwordMessage(); as message) {
-      <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+      <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text | t }}</p>
     }
     @if (auth.user(); as user) {
       @if (canDeleteAccount) {
         <div class="profile__row">
           <span class="page__text profile__text">
-            <span class="page__name">Видалити обліковий запис</span>
-            <span class="page__meta">Назавжди — разом з усіма синхронізованими даними</span>
+            <span class="page__name">{{ 'Видалити обліковий запис' | t }}</span>
+            <span class="page__meta">{{ 'Назавжди — разом з усіма синхронізованими даними' | t }}</span>
           </span>
           @if (!deletingAccount()) {
-            <button class="page__button page__button--danger" type="button" (click)="startAccountDeletion()">Видалити…</button>
+            <button class="page__button page__button--danger" type="button" (click)="startAccountDeletion()">
+              {{ 'Видалити…' | t }}
+            </button>
           }
         </div>
         @if (deletingAccount()) {
           <form class="profile__password" novalidate (submit)="deleteAccount($event)">
             <p class="profile__hint">
-              Обліковий запис {{ user.email }} буде видалено назавжди. З сервера зникнуть усі синхронізовані дані — закладки,
-              нотатки, історія, налаштування й паролі сайтів, — а з цього комп’ютера — дані цього облікового запису, cookies і
-              входи на сайтах. <strong class="profile__warning">Скасувати це неможливо.</strong>
+              {{
+                'Обліковий запис {0} буде видалено назавжди. З сервера зникнуть усі синхронізовані дані — закладки, нотатки, історія, налаштування й паролі сайтів, — а з цього комп’ютера — дані цього облікового запису, cookies і входи на сайтах.'
+                  | t: [user.email]
+              }}
+              <strong class="profile__warning">{{ 'Скасувати це неможливо.' | t }}</strong>
             </p>
             <app-input
               class="profile__field"
               inputId="profile-delete-password"
               inputName="account-password"
               type="password"
-              ariaLabel="Пароль облікового запису"
-              placeholder="Пароль облікового запису"
+              [ariaLabel]="'Пароль облікового запису' | t"
+              [placeholder]="'Пароль облікового запису' | t"
               autocomplete="current-password"
               [(value)]="deletePassword.value"
               [(touched)]="deletePassword.touched"
               [error]="deletePassword.visibleError()" />
             <div class="profile__password-actions">
               <button class="page__button page__button--danger" type="submit" [disabled]="deleteBusy()">
-                {{ deleteBusy() ? 'Видаляємо…' : 'Видалити назавжди' }}
+                {{ deleteBusy() ? ('Видаляємо…' | t) : ('Видалити назавжди' | t) }}
               </button>
               <button class="page__button" type="button" [disabled]="deleteBusy()" (click)="deletingAccount.set(false)">
-                Скасувати
+                {{ 'Скасувати' | t }}
               </button>
             </div>
           </form>
           @if (deleteError(); as message) {
-            <p class="profile__message profile__error" role="alert">{{ message }}</p>
+            <p class="profile__message profile__error" role="alert">{{ message | t }}</p>
           }
         }
       }
@@ -248,28 +256,33 @@
   </div>
 
   @if (sync.available()) {
-    <h2 class="page__group">Синхронізація</h2>
+    <h2 class="page__group">{{ 'Синхронізація' | t }}</h2>
     <div class="page__list profile">
       <div class="profile__row">
         <span class="page__text profile__text">
           <span class="page__name profile__sync-title">
             <app-icon class="profile__sync-icon" [class.profile__sync-icon--problem]="syncProblem()" icon="cloud" />
-            {{ syncTitle() }}
+            {{ syncTitle() | t }}
           </span>
-          <span class="page__meta">{{ syncDetail() }}</span>
+          <span class="page__meta">{{ syncDetail() | t }}</span>
         </span>
         <button class="page__button" type="button" [disabled]="sync.status().state === 'syncing'" (click)="sync.syncNow()">
-          Синхронізувати зараз
+          {{ 'Синхронізувати зараз' | t }}
         </button>
       </div>
       @if (sync.status().passwords !== 'ok') {
         <form class="profile__password" novalidate (submit)="unlockSync($event)">
           <p class="profile__hint">
             @if (sync.status().passwords === 'stale') {
-              Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів.
+              {{
+                "Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів."
+                  | t
+              }}
             } @else {
-              Щоб синхронізувати паролі сайтів, введіть пароль облікового запису: з нього створюється ключ, яким паролі шифруються
-              ще на цьому комп'ютері.
+              {{
+                "Щоб синхронізувати паролі сайтів, введіть пароль облікового запису: з нього створюється ключ, яким паролі шифруються ще на цьому комп'ютері."
+                  | t
+              }}
             }
           </p>
           <app-input
@@ -277,61 +290,61 @@
             inputId="profile-sync-password"
             inputName="account-password"
             type="password"
-            ariaLabel="Пароль облікового запису"
-            placeholder="Пароль облікового запису"
+            [ariaLabel]="'Пароль облікового запису' | t"
+            [placeholder]="'Пароль облікового запису' | t"
             autocomplete="current-password"
             [(value)]="syncPassword.value"
             [(touched)]="syncPassword.touched"
             [error]="syncPassword.visibleError()" />
           <button class="page__button" type="submit" [disabled]="syncBusy()">
-            {{ syncBusy() ? 'Перевіряємо…' : 'Синхронізувати паролі' }}
+            {{ syncBusy() ? ('Перевіряємо…' | t) : ('Синхронізувати паролі' | t) }}
           </button>
         </form>
       }
       @if (syncMessage(); as message) {
-        <p class="profile__message profile__error" role="alert">{{ message }}</p>
+        <p class="profile__message profile__error" role="alert">{{ message | t }}</p>
       }
     </div>
   }
 
-  <h2 class="page__group">Закладки</h2>
+  <h2 class="page__group">{{ 'Закладки' | t }}</h2>
   <div class="page__list profile">
     <div class="profile__row">
       <span class="page__text profile__text">
-        <span class="page__name">Імпорт з іншого браузера</span>
+        <span class="page__name">{{ 'Імпорт з іншого браузера' | t }}</span>
         <span class="page__meta">
-          Файл закладок HTML: у Chrome чи Edge — «Закладки → Диспетчер закладок → ⋯ → Експортувати закладки»
+          {{ 'Файл закладок HTML: у Chrome чи Edge — «Закладки → Диспетчер закладок → ⋯ → Експортувати закладки»' | t }}
         </span>
       </span>
-      <button class="page__button" type="button" (click)="bookmarksInput.click()">Імпортувати…</button>
+      <button class="page__button" type="button" (click)="bookmarksInput.click()">{{ 'Імпортувати…' | t }}</button>
       <input
         #bookmarksInput
         class="profile__file"
         type="file"
         accept=".html,.htm,text/html"
-        aria-label="Файл закладок"
+        [attr.aria-label]="'Файл закладок' | t"
         (change)="importBookmarks($event)" />
     </div>
     <div class="profile__row">
       <span class="page__text profile__text">
-        <span class="page__name">Експорт закладок</span>
-        <span class="page__meta">Файл HTML, який відкриють Chrome, Edge, Firefox та інші браузери</span>
+        <span class="page__name">{{ 'Експорт закладок' | t }}</span>
+        <span class="page__meta">{{ 'Файл HTML, який відкриють Chrome, Edge, Firefox та інші браузери' | t }}</span>
       </span>
       <button class="page__button" type="button" [disabled]="!bookmarks.bar().length" (click)="exportBookmarks()">
-        Експортувати…
+        {{ 'Експортувати…' | t }}
       </button>
     </div>
     @if (bookmarksMessage(); as message) {
-      <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text }}</p>
+      <p class="profile__message" [class.profile__error]="message.error" role="status">{{ message.text | t }}</p>
     }
   </div>
 
-  <h2 class="page__group">Дані в цьому браузері</h2>
+  <h2 class="page__group">{{ 'Дані в цьому браузері' | t }}</h2>
   <ul class="page__list profile profile__stats">
     @for (stat of stats(); track stat.label) {
       <li class="profile__stat">
         <app-icon class="profile__stat-icon" [icon]="stat.icon" />
-        <span class="profile__stat-label">{{ stat.label }}</span>
+        <span class="profile__stat-label">{{ stat.label | t }}</span>
         <span class="profile__stat-value">{{ stat.value }}</span>
       </li>
     }

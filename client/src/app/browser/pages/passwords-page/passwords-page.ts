@@ -8,6 +8,7 @@ import { PasswordSettings, PasswordsStore, SavedPassword } from '../../data/pass
 import { SiteIcon } from '../../site-icon/site-icon';
 import { hostname, matchesQuery } from '../internal-pages';
 import { PasswordEditor } from './password-editor/password-editor';
+import { translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 /** Ті самі записи, але без `key`. */
 function without<T>(record: Readonly<Record<string, T>>, key: string): Readonly<Record<string, T>> {
@@ -23,7 +24,7 @@ const COPIED_FOR = 1500;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfirmDialog, PasswordEditor, SiteIcon, UiIcon, UiInput, UiSwitch],
+  imports: [TranslatePipe, ConfirmDialog, PasswordEditor, SiteIcon, UiIcon, UiInput, UiSwitch],
   selector: 'app-passwords-page',
   styleUrls: ['../internal-page.scss', './passwords-page.scss'],
   templateUrl: './passwords-page.html',
@@ -48,8 +49,8 @@ export class PasswordsPage {
     if (!entry) {
       return '';
     }
-    const account = entry.username ? `«${entry.username}» на ${hostname(entry.origin)}` : hostname(entry.origin);
-    return `Пароль для ${account} буде видалено з браузера. Скасувати це не вийде.`;
+    const account = entry.username ? translate('«{0}» на {1}', [entry.username, hostname(entry.origin)]) : hostname(entry.origin);
+    return translate('Пароль для {0} буде видалено з браузера. Скасувати це не вийде.', [account]);
   });
 
   private readonly confirmRemove = viewChild.required<ConfirmDialog>('confirmRemove');

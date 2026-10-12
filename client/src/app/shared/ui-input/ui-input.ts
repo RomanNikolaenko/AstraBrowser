@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { UiIcon } from '../ui-icon/ui-icon';
+import { TranslatePipe } from '../i18n/i18n';
 
 export type UiInputType = 'text' | 'email' | 'password' | 'search' | 'url' | 'tel';
 
@@ -34,7 +35,7 @@ let nextErrorId = 0;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-input',
   styleUrl: './ui-input.scss',
   templateUrl: './ui-input.html',

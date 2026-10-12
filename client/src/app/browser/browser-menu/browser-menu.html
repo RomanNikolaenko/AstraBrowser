@@ -3,13 +3,13 @@
     @for (section of sections; track $index) {
       @if ($index === zoomSectionIndex) {
         <div class="menu__section menu__zoom">
-          <span class="menu__zoom-label" id="browser-menu-zoom">Масштаб</span>
+          <span class="menu__zoom-label" id="browser-menu-zoom">{{ 'Масштаб' | t }}</span>
           <div class="menu__zoom-control" role="group" aria-labelledby="browser-menu-zoom">
             <button
               class="menu__zoom-button"
               type="button"
-              aria-label="Зменшити масштаб"
-              title="Зменшити масштаб"
+              [attr.aria-label]="'Зменшити масштаб' | t"
+              [title]="'Зменшити масштаб' | t"
               [disabled]="!canZoomOut()"
               (click)="zoomOut()">
               <app-icon icon="minus" />
@@ -18,8 +18,8 @@
             <button
               class="menu__zoom-button"
               type="button"
-              aria-label="Збільшити масштаб"
-              title="Збільшити масштаб"
+              [attr.aria-label]="'Збільшити масштаб' | t"
+              [title]="'Збільшити масштаб' | t"
               [disabled]="!canZoomIn()"
               (click)="zoomIn()">
               <app-icon icon="plus" />
@@ -28,8 +28,8 @@
           <button
             class="menu__zoom-button menu__fullscreen"
             type="button"
-            aria-label="Повноекранний режим"
-            title="Повноекранний режим"
+            [attr.aria-label]="'Повноекранний режим' | t"
+            [title]="'Повноекранний режим' | t"
             popovertarget="browser-menu"
             popovertargetaction="hide"
             (click)="fullscreen.emit()">
@@ -46,9 +46,10 @@
             popovertarget="browser-menu"
             popovertargetaction="hide"
             [attr.aria-keyshortcuts]="item.keys ?? null"
+            [disabled]="item.site && !siteOpen()"
             (click)="run(item)">
             <app-icon class="menu__icon" [icon]="item.icon" />
-            <span class="menu__label">{{ item.label }}</span>
+            <span class="menu__label">{{ item.label | t }}</span>
             @if (item.shortcut) {
               <kbd class="menu__shortcut" aria-hidden="true">{{ item.shortcut }}</kbd>
             }
@@ -64,10 +65,10 @@
         type="button"
         [class.menu__update--available]="updates.available() && !updates.installing()"
         [disabled]="!updates.canInstall()"
-        [attr.title]="updateTitle()"
+        [attr.title]="updateTitle() | t"
         (click)="updates.install()">
         <app-icon class="menu__icon" icon="update" />
-        <span class="menu__label">{{ updateLabel() }}</span>
+        <span class="menu__label">{{ updateLabel() | t }}</span>
         @if (updates.installing()) {
           @if (updates.percent() !== null) {
             <span class="menu__version">{{ updates.percent() }}%</span>

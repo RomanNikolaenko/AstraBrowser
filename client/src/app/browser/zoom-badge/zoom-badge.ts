@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, model, viewChild } from '
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { Popover } from '../popover/popover';
 import { DEFAULT_ZOOM, canZoomIn, canZoomOut, zoomIn, zoomOut } from '../zoom';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Масштаб в адресному рядку, як в Edge: плашка «90%» видно лише тоді, коли масштаб не 100%.
@@ -9,7 +10,7 @@ import { DEFAULT_ZOOM, canZoomIn, canZoomOut, zoomIn, zoomOut } from '../zoom';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [Popover, TranslatePipe, UiIcon],
   selector: 'app-zoom-badge',
   styleUrl: './zoom-badge.scss',
   template: `
@@ -19,20 +20,20 @@ import { DEFAULT_ZOOM, canZoomIn, canZoomOut, zoomIn, zoomOut } from '../zoom';
         class="zoom-badge"
         type="button"
         popovertarget="zoom-popover"
-        [attr.aria-label]="'Масштаб ' + zoom() + '%'"
-        [title]="'Масштаб ' + zoom() + '%'">
+        [attr.aria-label]="'Масштаб {0}%' | t: [zoom()]"
+        [title]="'Масштаб {0}%' | t: [zoom()]">
         {{ zoom() }}%
       </button>
     }
     <app-popover class="zoom-popover" popoverId="zoom-popover" caret>
       <div class="zoom-popover__row">
-        <span class="zoom-popover__label" id="zoom-popover-label">Масштаб</span>
+        <span class="zoom-popover__label" id="zoom-popover-label">{{ 'Масштаб' | t }}</span>
         <div class="zoom-popover__control" role="group" aria-labelledby="zoom-popover-label">
           <button
             class="zoom-popover__step"
             type="button"
-            aria-label="Зменшити масштаб"
-            title="Зменшити масштаб"
+            [attr.aria-label]="'Зменшити масштаб' | t"
+            [title]="'Зменшити масштаб' | t"
             [disabled]="!canOut()"
             (click)="zoom.set(stepOut())">
             <app-icon icon="minus" />
@@ -41,14 +42,14 @@ import { DEFAULT_ZOOM, canZoomIn, canZoomOut, zoomIn, zoomOut } from '../zoom';
           <button
             class="zoom-popover__step"
             type="button"
-            aria-label="Збільшити масштаб"
-            title="Збільшити масштаб"
+            [attr.aria-label]="'Збільшити масштаб' | t"
+            [title]="'Збільшити масштаб' | t"
             [disabled]="!canIn()"
             (click)="zoom.set(stepIn())">
             <app-icon icon="plus" />
           </button>
         </div>
-        <button class="zoom-popover__reset" type="button" (click)="reset()">Скинути</button>
+        <button class="zoom-popover__reset" type="button" (click)="reset()">{{ 'Скинути' | t }}</button>
       </div>
     </app-popover>
   `,

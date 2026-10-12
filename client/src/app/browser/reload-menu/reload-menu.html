@@ -1,5 +1,5 @@
 <app-popover class="reload-menu" popoverId="reload-menu" align="start" caret>
-  <h2 class="reload-menu__title">Оновлення</h2>
+  <h2 class="reload-menu__title">{{ 'Оновлення' | t }}</h2>
   <ul class="reload-menu__list">
     @for (action of actions; track action.mode) {
       <li>
@@ -12,8 +12,8 @@
           (click)="reload.emit(action.mode)">
           <app-icon class="reload-menu__icon" [icon]="action.icon" />
           <span class="reload-menu__text">
-            <span class="reload-menu__label">{{ action.label }}</span>
-            <span class="reload-menu__hint">{{ action.hint }}</span>
+            <span class="reload-menu__label">{{ action.label | t }}</span>
+            <span class="reload-menu__hint">{{ action.hint | t }}</span>
           </span>
         </button>
       </li>

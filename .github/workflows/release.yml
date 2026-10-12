@@ -55,6 +55,11 @@ jobs:
         working-directory: client
         run: npm ci
 
+      # Кожен текст інтерфейсу має англійський переклад (client/src/app/shared/i18n/en.ts).
+      - name: Переклад
+        working-directory: client
+        run: npm run i18n:check
+
       - name: Збірка й підпис
         working-directory: client
         shell: bash

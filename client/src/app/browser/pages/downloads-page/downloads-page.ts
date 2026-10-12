@@ -5,10 +5,11 @@ import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
 import { DownloadEntry, DownloadsStore } from '../../data/downloads';
 import { PageViews } from '../../page-views/page-views';
 import { formatSize, formatTime, groupByDay, hostname, matchesQuery } from '../internal-pages';
+import { translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ConfirmDialog, UiIcon, UiInput],
+  imports: [TranslatePipe, ConfirmDialog, UiIcon, UiInput],
   selector: 'app-downloads-page',
   styleUrls: ['../internal-page.scss'],
   templateUrl: './downloads-page.html',
@@ -40,11 +41,11 @@ export class DownloadsPage {
   protected status(entry: DownloadEntry): string {
     switch (entry.status) {
       case 'completed':
-        return `Завантажено · ${formatSize(entry.size)} · ${hostname(entry.url)}`;
+        return translate('Завантажено · {0} · {1}', [formatSize(entry.size), hostname(entry.url)]);
       case 'canceled':
-        return `Скасовано · ${hostname(entry.url)}`;
+        return translate('Скасовано · {0}', [hostname(entry.url)]);
       case 'failed':
-        return `Помилка завантаження · ${hostname(entry.url)}`;
+        return translate('Помилка завантаження · {0}', [hostname(entry.url)]);
     }
   }
 

@@ -19,19 +19,18 @@ import { DNS_MODES, DNS_PROVIDERS, DnsMode, DnsProvider, DnsSettings, DnsStore }
 import { DownloadSettingsStore } from '../../data/download-settings';
 import { HistoryStore } from '../../data/history';
 import { TrackingStore } from '../../data/tracking';
-
-const plural = new Intl.PluralRules('uk');
-const RECORDS: Record<string, string> = { one: 'запис', few: 'записи', many: 'записів', other: 'запису' };
+import { I18n, LANGUAGE_NAMES, LanguagePreference, plural, tr, translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ClearDataDialog, UiIcon, UiInput, UiSelect, UiSwitch],
+  imports: [TranslatePipe, ClearDataDialog, UiIcon, UiInput, UiSelect, UiSwitch],
   selector: 'app-settings-page',
   styleUrls: ['../internal-page.scss', './settings-page.scss'],
   templateUrl: './settings-page.html',
 })
 export class SettingsPage {
   protected readonly settings = inject(SettingsStore);
+  protected readonly i18n = inject(I18n);
   protected readonly history = inject(HistoryStore);
   protected readonly downloadSettings = inject(DownloadSettingsStore);
   protected readonly tracking = inject(TrackingStore);
@@ -72,7 +71,7 @@ export class SettingsPage {
       await this.defaultBrowser.openSettings();
       this.defaultBrowserAsked.set(true);
     } catch (error) {
-      this.defaultBrowserError.set(typeof error === 'string' ? error : 'Не вдалося відкрити «Параметри Windows».');
+      this.defaultBrowserError.set(typeof error === 'string' ? error : translate('Не вдалося відкрити «Параметри Windows».'));
     }
   }
 
@@ -81,15 +80,26 @@ export class SettingsPage {
     () => TRACKING_PROTECTION.find((level) => level.value === this.settings.trackingProtection())?.hint ?? ''
   );
 
+  /** «Як у системі» перекладається, назви мов — завжди своєю мовою. */
+  protected readonly languages: readonly {
+    readonly value: LanguagePreference;
+    readonly label: string;
+    readonly translated: boolean;
+  }[] = [
+    { value: 'system', label: tr('Як у системі'), translated: true },
+    { value: 'uk', label: LANGUAGE_NAMES.uk, translated: false },
+    { value: 'en', label: LANGUAGE_NAMES.en, translated: false },
+  ];
+
   protected readonly themes: readonly { readonly value: ThemePreference; readonly label: string; readonly icon: string }[] = [
-    { value: 'system', label: 'Як у системі', icon: 'monitor' },
-    { value: 'light', label: 'Світла', icon: 'sun' },
-    { value: 'dark', label: 'Темна', icon: 'moon' },
+    { value: 'system', label: tr('Як у системі'), icon: 'monitor' },
+    { value: 'light', label: tr('Світла'), icon: 'sun' },
+    { value: 'dark', label: tr('Темна'), icon: 'moon' },
   ];
 
   protected readonly startupOptions: readonly { readonly value: StartupPage; readonly label: string }[] = [
-    { value: 'restore', label: 'Продовжити, де зупинилися' },
-    { value: 'new-tab', label: 'Нову вкладку' },
+    { value: 'restore', label: tr('Продовжити, де зупинилися') },
+    { value: 'new-tab', label: tr('Нову вкладку') },
   ];
 
   protected readonly engines = Object.entries(SEARCH_ENGINES).map(([value, engine]) => ({
@@ -116,7 +126,9 @@ export class SettingsPage {
   }
 
   protected records(count: number): string {
-    return count ? `${count} ${RECORDS[plural.select(count)]}` : 'Порожньо';
+    return count
+      ? plural(count, ['{0} запис', '{0} записи', '{0} записів'], ['{0} entry', '{0} entries'])
+      : translate('Порожньо');
   }
 
   protected setDnsMode(mode: DnsMode): void {
@@ -157,7 +169,7 @@ export class SettingsPage {
     try {
       await this.dns.save(settings);
     } catch (error) {
-      this.dnsError.set(typeof error === 'string' ? error : 'Не вдалося зберегти налаштування DNS.');
+      this.dnsError.set(typeof error === 'string' ? error : translate('Не вдалося зберегти налаштування DNS.'));
     }
   }
 

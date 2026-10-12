@@ -1,4 +1,14 @@
-import { FormField, emailFormat, matches, minLength, normalizeUrl, required, urlFormat, validateFields } from './form-field';
+import {
+  FormField,
+  emailFormat,
+  matches,
+  minLength,
+  normalizeAddress,
+  normalizeUrl,
+  required,
+  urlFormat,
+  validateFields,
+} from './form-field';
 
 describe('FormField', () => {
   it('should return the first failing validator message', () => {
@@ -67,8 +77,29 @@ describe('normalizeUrl', () => {
     expect(normalizeUrl(' http://example.com/path ')).toBe('http://example.com/path');
   });
 
+  it('should open local development servers over http', () => {
+    expect(normalizeUrl('localhost')).toBe('http://localhost/');
+    expect(normalizeUrl('localhost:4200/home')).toBe('http://localhost:4200/home');
+    expect(normalizeUrl('app.localhost:3000')).toBe('http://app.localhost:3000/');
+    expect(normalizeUrl('127.0.0.1:8080')).toBe('http://127.0.0.1:8080/');
+    expect(normalizeUrl('192.168.1.10')).toBe('http://192.168.1.10/');
+    expect(normalizeUrl('[::1]:5173')).toBe('http://[::1]:5173/');
+    expect(normalizeUrl('http://intranet:8080/')).toBe('http://intranet:8080/');
+    expect(normalizeUrl('https://localhost:4433')).toBe('https://localhost:4433/');
+    expect(normalizeUrl('devbox:8080')).toBe('https://devbox:8080/');
+  });
+
+  it('should open the source of a page typed with view-source:', () => {
+    expect(normalizeAddress('view-source:example.com')).toBe('view-source:https://example.com/');
+    expect(normalizeAddress(' VIEW-SOURCE:http://localhost:4200/')).toBe('view-source:http://localhost:4200/');
+    expect(normalizeAddress('view-source:javascript:alert(1)')).toBeNull();
+    expect(normalizeAddress('angular.dev')).toBe('https://angular.dev/');
+    expect(normalizeAddress('рецепт борщу')).toBeNull();
+  });
+
   it('should reject non-web and malformed addresses', () => {
-    expect(normalizeUrl('localhost')).toBeNull();
+    expect(normalizeUrl('intranet')).toBeNull();
+    expect(normalizeUrl('localhost 4200')).toBeNull();
     expect(normalizeUrl('javascript:alert(1)')).toBeNull();
     expect(normalizeUrl('ftp://example.com')).toBeNull();
     expect(normalizeUrl('not a url')).toBeNull();

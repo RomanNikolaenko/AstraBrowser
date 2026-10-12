@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, output, signal } 
 import { SettingsStore } from '../../shared/settings/settings';
 import { UiInput } from '../../shared/ui-input/ui-input';
 import { newTabBackgroundCss } from './new-tab-backgrounds';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiInput],
+  imports: [TranslatePipe, UiInput],
   selector: 'app-new-tab',
   styleUrl: './new-tab.scss',
   templateUrl: './new-tab.html',

@@ -5,6 +5,7 @@ import { DownloadStatus, DownloadsStore } from '../data/downloads';
 import { PageViews } from '../page-views/page-views';
 import { formatSize, hostname } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
+import { translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Рядок списку: завантаження, що триває (`active`), чи завершене (`entry`). */
 interface DownloadRow {
@@ -29,7 +30,7 @@ const ROWS = 6;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [TranslatePipe, Popover, UiIcon],
   selector: 'app-downloads-menu',
   styleUrl: './downloads-menu.scss',
   templateUrl: './downloads-menu.html',
@@ -85,19 +86,19 @@ export class DownloadsMenu {
 
   protected readonly label = computed(() => {
     const count = this.downloads.active().length;
-    return count ? `Завантаження: триває ${count}` : 'Завантаження';
+    return count ? translate('Завантаження: триває {0}', [count]) : translate('Завантаження');
   });
 
   protected describe(row: DownloadRow): string {
     switch (row.status) {
       case 'in-progress':
-        return row.total ? `${formatSize(row.received)} з ${formatSize(row.total)}` : formatSize(row.received);
+        return row.total ? translate('{0} з {1}', [formatSize(row.received), formatSize(row.total)]) : formatSize(row.received);
       case 'completed':
-        return `Завантажено · ${formatSize(row.received)} · ${hostname(row.url)}`;
+        return translate('Завантажено · {0} · {1}', [formatSize(row.received), hostname(row.url)]);
       case 'canceled':
-        return 'Скасовано';
+        return translate('Скасовано');
       case 'failed':
-        return 'Помилка завантаження';
+        return translate('Помилка завантаження');
     }
   }
 

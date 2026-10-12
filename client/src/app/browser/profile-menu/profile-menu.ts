@@ -5,6 +5,7 @@ import { Avatar } from '../avatar/avatar';
 import { ProfileStore } from '../data/profile';
 import { InternalPage } from '../pages/internal-pages';
 import { Popover } from '../popover/popover';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 interface ProfileItem {
   readonly label: string;
@@ -20,7 +21,7 @@ interface ProfileItem {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Avatar, Popover, UiIcon],
+  imports: [TranslatePipe, Avatar, Popover, UiIcon],
   selector: 'app-profile-menu',
   styleUrl: './profile-menu.scss',
   templateUrl: './profile-menu.html',
@@ -36,10 +37,10 @@ export class ProfileMenu {
   protected readonly auth = inject(AuthStore);
 
   protected readonly items: readonly ProfileItem[] = [
-    { label: 'Керування профілем', icon: 'user', page: 'profile' },
-    { label: 'Паролі', icon: 'key', page: 'passwords' },
-    { label: 'Персоналізація', icon: 'palette', page: 'personalization' },
-    { label: 'Гостьовий режим', icon: 'guest', guest: true },
+    { label: tr('Керування профілем'), icon: 'user', page: 'profile' },
+    { label: tr('Паролі'), icon: 'key', page: 'passwords' },
+    { label: tr('Персоналізація'), icon: 'palette', page: 'personalization' },
+    { label: tr('Гостьовий режим'), icon: 'guest', guest: true },
   ];
 
   protected run(item: ProfileItem): void {

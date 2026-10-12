@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
 import { UiIcon } from '../ui-icon/ui-icon';
+import { TranslatePipe } from '../i18n/i18n';
 
 let nextId = 0;
 
@@ -11,7 +12,7 @@ let nextId = 0;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-accordion',
   styleUrl: './ui-accordion.scss',
   templateUrl: './ui-accordion.html',

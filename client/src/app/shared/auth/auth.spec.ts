@@ -97,6 +97,25 @@ describe('AuthStore', () => {
     expect(auth.user()).toEqual(USER);
   });
 
+  it('should tell a sign-in from a remembered session, once', async () => {
+    saved = USER;
+    const remembered = TestBed.inject(AuthStore);
+    await remembered.ready;
+    expect(remembered.takeFreshSignIn()).toBe(false);
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: RELOAD_PAGE, useValue: reload }] });
+    saved = null;
+    const auth = TestBed.inject(AuthStore);
+    await auth.ready;
+    expect(auth.takeFreshSignIn()).toBe(false);
+
+    await auth.signIn('user@example.com', 'secret', true);
+
+    expect(auth.takeFreshSignIn()).toBe(true);
+    expect(auth.takeFreshSignIn()).toBe(false);
+  });
+
   it('should follow sign-ins and sign-outs from other windows', async () => {
     const router = TestBed.inject(Router);
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
@@ -108,6 +127,8 @@ describe('AuthStore', () => {
     await tick();
     expect(auth.user()).toEqual(USER);
     expect(navigate).toHaveBeenCalledWith(['/home']);
+    // Це теж вхід: браузер у цьому вікні почне з чистої вкладки.
+    expect(auth.takeFreshSignIn()).toBe(true);
 
     // Вихід — повне перезавантаження: даних облікового запису в пам'яті вікна не лишається.
     url.mockReturnValue('/home');

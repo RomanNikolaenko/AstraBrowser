@@ -6,9 +6,9 @@
   [attr.aria-controls]="panelId"
   (click)="toggle()">
   <app-icon class="ui-accordion__chevron" icon="chevron-right" />
-  <span class="ui-accordion__heading">{{ heading() }}</span>
+  <span class="ui-accordion__heading">{{ heading() | t }}</span>
   @if (badge() !== undefined) {
-    <span class="ui-accordion__badge">{{ badge() }}</span>
+    <span class="ui-accordion__badge">{{ badge() | t }}</span>
   }
 </button>
 <div class="ui-accordion__body" role="region" [id]="panelId" [attr.aria-labelledby]="triggerId" [inert]="!open()">

@@ -20,15 +20,43 @@ export const minLength =
   (value) =>
     value.length >= length ? null : message;
 
-/** Адреса сайту http(s) у повному вигляді або `null`. Схему https:// можна не вказувати. */
+/**
+ * Цей комп'ютер і локальна мережа (сервери розробки): localhost, *.localhost, 127.x, 10.x, 192.168.x, 172.16–31.x,
+ * [::1]. Без схеми вони відкриваються через http://, як у Chrome.
+ */
+const LOCAL_HOST =
+  /^(?:localhost|[^.]+\.localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|\[::1\])$/i;
+
+/**
+ * Адреса сайту http(s) у повному вигляді або `null`. Схему можна не вказувати: тоді це https://, а для localhost і
+ * локальної мережі — http://. Без схеми слово без крапки — адреса, лише якщо це localhost чи вказано порт
+ * (myhost:8080); інакше це пошук.
+ */
 export function normalizeUrl(value: string): string | null {
   const trimmed = value.trim();
   try {
-    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
-    return ['http:', 'https:'].includes(url.protocol) && url.hostname.includes('.') ? url.href : null;
+    if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      return ['http:', 'https:'].includes(url.protocol) && url.hostname ? url.href : null;
+    }
+    const url = new URL(`https://${trimmed}`);
+    if (LOCAL_HOST.test(url.hostname)) {
+      return new URL(`http://${trimmed}`).href;
+    }
+    return url.hostname.includes('.') || url.port ? url.href : null;
   } catch {
     return null;
   }
+}
+
+/** Введене в адресному рядку: адреса сайту чи його код (view-source:адреса) або `null` — тоді це пошук. */
+export function normalizeAddress(value: string): string | null {
+  const source = /^\s*view-source:/i.exec(value);
+  if (!source) {
+    return normalizeUrl(value);
+  }
+  const url = normalizeUrl(value.slice(source[0].length));
+  return url ? `view-source:${url}` : null;
 }
 
 export const urlFormat =

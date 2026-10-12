@@ -8,15 +8,15 @@
   (close)="onClose()">
   <div class="confirm-dialog__panel">
     <span class="confirm-dialog__icon"><app-icon [icon]="danger() ? 'trash' : 'alert'" /></span>
-    <h2 class="confirm-dialog__title" [id]="headingId">{{ heading() }}</h2>
+    <h2 class="confirm-dialog__title" [id]="headingId">{{ heading() | t }}</h2>
     @if (message()) {
-      <p class="confirm-dialog__message" [id]="messageId">{{ message() }}</p>
+      <p class="confirm-dialog__message" [id]="messageId">{{ message() | t }}</p>
     }
     <div class="confirm-dialog__actions">
       <!-- Фокус спершу на безпечній дії, а не на незворотній. -->
-      <button class="confirm-dialog__button" type="button" autofocus (click)="hide()">{{ cancelLabel() }}</button>
+      <button class="confirm-dialog__button" type="button" autofocus (click)="hide()">{{ cancelLabel() | t }}</button>
       <button class="confirm-dialog__button confirm-dialog__button--confirm" type="button" (click)="confirm()">
-        {{ confirmLabel() }}
+        {{ confirmLabel() | t }}
       </button>
     </div>
   </div>

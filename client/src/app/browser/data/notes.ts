@@ -1,5 +1,6 @@
 import { Injectable, computed } from '@angular/core';
 import { accountSignal } from '../../shared/storage/stored-signal';
+import { translate } from '../../shared/i18n/i18n';
 
 export interface Note {
   readonly id: string;
@@ -60,7 +61,7 @@ const lines = (text: string) =>
 
 /** Назва для списку: своя, інакше — перший рядок тексту. */
 export function noteTitle(note: Note): string {
-  return note.title.trim() || lines(note.text)[0] || 'Нова нотатка';
+  return note.title.trim() || lines(note.text)[0] || translate('Нова нотатка');
 }
 
 /** Початок тексту для списку — без рядка, що вже став назвою. */

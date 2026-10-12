@@ -4,7 +4,7 @@
   role="combobox"
   aria-haspopup="listbox"
   [attr.id]="selectId() ?? null"
-  [attr.aria-label]="ariaLabel() ?? null"
+  [attr.aria-label]="ariaLabel() ? (ariaLabel() | t) : null"
   [attr.aria-labelledby]="ariaLabelledby() || null"
   [attr.aria-describedby]="ariaDescribedby() || null"
   [attr.aria-expanded]="open()"
@@ -13,7 +13,7 @@
   [attr.popovertarget]="listId"
   [disabled]="disabled()"
   (keydown)="onKeydown($event)">
-  <span class="ui-select__value">{{ selected()?.label }}</span>
+  <span class="ui-select__value">{{ selected()?.label | t }}</span>
   <app-icon class="ui-select__chevron" icon="chevron-down" />
 </button>
 
@@ -34,7 +34,7 @@
       (pointermove)="hover(index)"
       (mousedown)="$event.preventDefault()"
       (click)="choose(index)">
-      <span>{{ option.label }}</span>
+      <span>{{ option.label | t }}</span>
       @if (option.value === value()) {
         <app-icon class="ui-select__check" icon="check" />
       }

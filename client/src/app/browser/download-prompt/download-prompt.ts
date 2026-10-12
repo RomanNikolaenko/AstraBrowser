@@ -15,6 +15,7 @@ import { DownloadSettingsStore } from '../data/download-settings';
 import { DownloadPromptRequest, DownloadsStore } from '../data/downloads';
 import { PageViews } from '../page-views/page-views';
 import { formatSize, hostname } from '../pages/internal-pages';
+import { TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * Перед завантаженням: що за файл і в яку теку він ляже, з можливістю вибрати іншу теку лише для нього
@@ -23,7 +24,7 @@ import { formatSize, hostname } from '../pages/internal-pages';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-download-prompt',
   styleUrl: './download-prompt.scss',
   templateUrl: './download-prompt.html',

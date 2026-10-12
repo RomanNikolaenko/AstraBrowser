@@ -7,10 +7,12 @@
   flex-direction: column;
 }
 
+// Колонка: угорі праворуч перемикач мови, під ним — решта висоти для вмісту.
 .auth {
-  display: grid;
+  display: flex;
   flex: 1 0 auto;
-  place-items: center;
+  flex-direction: column;
+  align-items: center;
   container: auth / inline-size;
   font-family: var(--font-family-base);
   color: var(--auth-text);
@@ -20,14 +22,20 @@
   background-position: center;
   background-size: cover;
 
+  &__language {
+    align-self: flex-end;
+    margin-block-start: 1rem;
+    margin-inline-end: 1.5rem;
+  }
+
   &__layout {
     display: grid;
+    flex: 1 0 auto;
     grid-template-columns: minmax(0, 1fr) minmax(30rem, 1fr);
     gap: 2rem;
     align-items: center;
     max-inline-size: 75rem;
     width: 100%;
-    height: 100%;
     padding: 2rem;
   }
 
@@ -452,11 +460,16 @@
   // Ширина intro = min(auth, 75rem) − 2 × 2rem (padding) − 2rem (gap) − 30rem (мін. ширина панелі),
   // тож intro < 25rem ⟺ auth < 61rem.
   @container auth (width < 61rem) {
+    &__language {
+      margin-block-start: 0.75rem;
+      margin-inline-end: 1rem;
+    }
+
     &__layout {
       grid-template-columns: minmax(0, 1fr);
       gap: 1.25rem;
+      align-content: center;
       width: min(100%, 40rem);
-      height: auto;
       padding: 1.25rem;
     }
 

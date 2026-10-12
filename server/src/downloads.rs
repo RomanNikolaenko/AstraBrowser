@@ -187,7 +187,7 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
     (Some(folder), Some(file_name)) => {
       let folder = PathBuf::from(folder);
       if !folder.is_dir() {
-        return Err(format!("Немає теки {}", folder.display()));
+        return Err(format!("{} {}", crate::i18n::text("Немає теки", "Folder not found:"), folder.display()));
       }
       Some(free_path(&folder, &file_name))
     }
@@ -200,7 +200,7 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
 #[tauri::command]
 #[specta::specta]
 pub async fn downloads_pick_folder(app: AppHandle, window: Window, current: Option<String>) -> Result<Option<String>, String> {
-  let mut dialog = app.dialog().file().set_parent(&window).set_title("Куди зберегти файл");
+  let mut dialog = app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Куди зберегти файл", "Where to save the file"));
   if let Some(current) = current.map(PathBuf::from).filter(|folder| folder.is_dir()) {
     dialog = dialog.set_directory(current);
   }
@@ -225,7 +225,7 @@ pub fn downloads_settings(app: AppHandle, downloads: State<'_, Downloads>) -> Do
 #[specta::specta]
 pub async fn downloads_choose_folder(app: AppHandle, window: Window) -> Result<DownloadSettings, String> {
   let downloads = app.state::<Downloads>();
-  let mut dialog = app.dialog().file().set_parent(&window).set_title("Тека для завантажень");
+  let mut dialog = app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Тека для завантажень", "Downloads folder"));
   if let Some(folder) = downloads.folder(&app) {
     dialog = dialog.set_directory(folder);
   }
@@ -261,7 +261,7 @@ pub fn downloads_set_ask(app: AppHandle, downloads: State<'_, Downloads>, ask: b
 #[tauri::command]
 #[specta::specta]
 pub fn downloads_open_folder(app: AppHandle, downloads: State<'_, Downloads>) -> Result<(), String> {
-  let folder = downloads.folder(&app).ok_or("Немає теки для завантажень")?;
+  let folder = downloads.folder(&app).ok_or(crate::i18n::text("Немає теки для завантажень", "No downloads folder"))?;
   Command::new("explorer").arg(folder).spawn().map(|_| ()).map_err(|error| error.to_string())
 }
 
@@ -277,14 +277,14 @@ pub fn download_cancel(app: AppHandle, id: u64) -> Result<(), String> {
 pub fn download_open(path: String) -> Result<(), String> {
   let path = Path::new(&path);
   if !path.is_file() {
-    return Err(format!("Файла вже немає: {}", path.display()));
+    return Err(format!("{} {}", crate::i18n::text("Файла вже немає:", "The file no longer exists:"), path.display()));
   }
   let result = unsafe { ShellExecuteW(None, w!("open"), &HSTRING::from(path.as_os_str()), None, None, SW_SHOWNORMAL) };
   // Більше за 32 — успіх; менші значення — коди помилок ShellExecute.
   if result.0 as isize > 32 {
     Ok(())
   } else {
-    Err(format!("Не вдалося відкрити {}", path.display()))
+    Err(format!("{} {}", crate::i18n::text("Не вдалося відкрити", "Couldn't open"), path.display()))
   }
 }
 
@@ -300,7 +300,7 @@ pub fn download_show(path: String) -> Result<(), String> {
   } else if let Some(folder) = path.parent().filter(|folder| folder.is_dir()) {
     explorer.arg(folder);
   } else {
-    return Err(format!("Немає ні файла, ні теки: {}", path.display()));
+    return Err(format!("{} {}", crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"), path.display()));
   }
   explorer.spawn().map(|_| ()).map_err(|error| error.to_string())
 }

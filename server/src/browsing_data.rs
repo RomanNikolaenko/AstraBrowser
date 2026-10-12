@@ -109,7 +109,7 @@ pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, 
     Ok(()) => tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(CLEAR_TIMEOUT))
       .await
       .map_err(|error| error.to_string())
-      .and_then(|received| received.map_err(|_| "Очищення триває задовго".to_string()))
+      .and_then(|received| received.map_err(|_| crate::i18n::text("Очищення триває задовго", "Clearing is taking too long").to_string()))
       .and_then(|cleared| cleared),
     Err(error) => Err(error.to_string()),
   };

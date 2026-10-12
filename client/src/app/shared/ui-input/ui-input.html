@@ -12,7 +12,7 @@
     [type]="type()"
     [value]="value()"
     [attr.placeholder]="placeholder() ?? null"
-    [attr.aria-label]="ariaLabel() ?? null"
+    [attr.aria-label]="ariaLabel() ? (ariaLabel() | t) : null"
     [attr.aria-labelledby]="ariaLabelledby() || null"
     [attr.aria-invalid]="error() ? true : null"
     [attr.aria-describedby]="describedBy()"
@@ -38,7 +38,7 @@
     <div class="ui-input__message-clip">
       <p class="ui-input__error" [id]="errorId">
         <app-icon class="ui-input__error-icon" icon="alert" />
-        <span>{{ shownError() }}</span>
+        <span>{{ shownError() | t }}</span>
       </p>
     </div>
   </div>

@@ -5,16 +5,17 @@ import { UiSelect, UiSelectOption } from '../../shared/ui-select/ui-select';
 import { AutoplayStore } from '../data/autoplay';
 import { DownloadsStore } from '../data/downloads';
 import { HistoryStore } from '../data/history';
+import { formatNumber, tr, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** За який час очистити. */
 export type ClearRange = 'hour' | 'day' | 'week' | 'month' | 'all';
 
 const RANGES: readonly (UiSelectOption<ClearRange> & { readonly hours: number })[] = [
-  { value: 'hour', label: 'останню годину', hours: 1 },
-  { value: 'day', label: 'останні 24 години', hours: 24 },
-  { value: 'week', label: 'останні 7 днів', hours: 24 * 7 },
-  { value: 'month', label: 'останні 4 тижні', hours: 24 * 28 },
-  { value: 'all', label: 'увесь час', hours: 0 },
+  { value: 'hour', label: tr('останню годину'), hours: 1 },
+  { value: 'day', label: tr('останні 24 години'), hours: 24 },
+  { value: 'week', label: tr('останні 7 днів'), hours: 24 * 7 },
+  { value: 'month', label: tr('останні 4 тижні'), hours: 24 * 28 },
+  { value: 'all', label: tr('увесь час'), hours: 0 },
 ];
 
 /** Що очистити — як у server/src/webview2.rs (ClearKinds), плюс історія й завантаження самого браузера. */
@@ -31,18 +32,18 @@ interface BrowsingDataSizes {
   readonly cache: number;
 }
 
-const sizeFormat = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-
 /** «11,0 МБ», «1,0 ГБ». */
 export function formatSize(bytes: number): string {
-  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+  const units = [translate('Б'), translate('КБ'), translate('МБ'), translate('ГБ'), translate('ТБ')];
   let value = bytes;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit++;
   }
-  return unit === 0 ? `${value} Б` : `${sizeFormat.format(value)} ${units[unit]}`;
+  return unit === 0
+    ? `${value} ${units[0]}`
+    : `${formatNumber(value, { maximumFractionDigits: 1, minimumFractionDigits: 1 })} ${units[unit]}`;
 }
 
 /** Що чистить WebView2 — як у server/src/webview2.rs (ClearKinds). */
@@ -76,7 +77,7 @@ export function rangeStart(range: ClearRange, now = Date.now()): number {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiSelect],
+  imports: [TranslatePipe, UiSelect],
   selector: 'app-clear-data-dialog',
   styleUrl: './clear-data-dialog.scss',
   templateUrl: './clear-data-dialog.html',
@@ -170,7 +171,11 @@ export class ClearDataDialog {
       }
       this.hide();
     } catch (error) {
-      this.error.set(typeof error === 'string' ? `Не вдалося очистити: ${error}` : 'Не вдалося очистити дані. Спробуйте ще раз.');
+      this.error.set(
+        typeof error === 'string'
+          ? translate('Не вдалося очистити: {0}', [error])
+          : translate('Не вдалося очистити дані. Спробуйте ще раз.')
+      );
     } finally {
       this.busy.set(false);
     }

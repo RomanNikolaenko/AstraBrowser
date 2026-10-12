@@ -1,6 +1,7 @@
-import { normalizeUrl } from '../../shared/form-field/form-field';
+import { normalizeAddress } from '../../shared/form-field/form-field';
 import type { Bookmark } from '../data/bookmarks';
 import type { HistoryEntry } from '../data/history';
+import { translate } from '../../shared/i18n/i18n';
 
 /**
  * Підказка адресного рядка: що відкриється, як вона виглядає в списку (`title`, `detail`) і що з'явиться в рядку,
@@ -100,10 +101,10 @@ export function localSuggestions(input: string, sources: SuggestionSources, now 
   }
   const typed = text.toLowerCase();
   const words = typed.split(/\s+/);
-  const url = normalizeUrl(text);
+  const url = normalizeAddress(text);
   const first: Suggestion = url
-    ? { kind: 'url', title: displayUrl(url), detail: 'Перейти на сайт', fill: text, url }
-    : { kind: 'search', title: text, detail: `Пошук у ${sources.engine}`, fill: text, query: text };
+    ? { kind: 'url', title: displayUrl(url), detail: translate('Перейти на сайт'), fill: text, url }
+    : { kind: 'search', title: text, detail: translate('Пошук у {0}', [sources.engine]), fill: text, query: text };
 
   const seen = new Set<string>(url ? [url] : []);
   const local: { readonly suggestion: Suggestion; readonly score: number }[] = [];
@@ -114,7 +115,7 @@ export function localSuggestions(input: string, sources: SuggestionSources, now 
         suggestion: {
           kind: 'tab',
           title: tab.title || displayUrl(tab.url),
-          detail: 'Перейти на вкладку',
+          detail: translate('Перейти на вкладку'),
           fill: displayUrl(tab.url),
           url: tab.url,
           tabId: tab.id,
@@ -181,7 +182,13 @@ export function withSearchSuggestions(
   const extra = remote
     .filter((query) => query.toLowerCase() !== typed && !known.has(query.toLowerCase()))
     .slice(0, 4)
-    .map((query): Suggestion => ({ kind: 'search', title: query, detail: `Пошук у ${engine}`, fill: query, query }));
+    .map((query): Suggestion => ({
+      kind: 'search',
+      title: query,
+      detail: translate('Пошук у {0}', [engine]),
+      fill: query,
+      query,
+    }));
   return [...local, ...extra];
 }
 

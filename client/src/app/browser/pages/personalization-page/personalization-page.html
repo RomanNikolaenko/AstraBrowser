@@ -1,14 +1,14 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Персоналізація</h1>
+    <h1 class="page__title">{{ 'Персоналізація' | t }}</h1>
   </header>
 
-  <h2 class="page__group">Тема й колір</h2>
+  <h2 class="page__group">{{ 'Тема й колір' | t }}</h2>
   <div class="page__list look">
     <fieldset class="look__row look__fieldset">
       <legend class="page__text">
-        <span class="page__name">Тема</span>
-        <span class="page__meta">«Як у системі» стежить за темою Windows</span>
+        <span class="page__name">{{ 'Тема' | t }}</span>
+        <span class="page__meta">{{ '«Як у системі» стежить за темою Windows' | t }}</span>
       </legend>
       <div class="segmented">
         @for (theme of themes; track theme.value) {
@@ -21,7 +21,7 @@
               [checked]="settings.theme() === theme.value"
               (change)="settings.theme.set(theme.value)" />
             <app-icon class="segmented__icon" [icon]="theme.icon" />
-            <span>{{ theme.label }}</span>
+            <span>{{ theme.label | t }}</span>
           </label>
         }
       </div>
@@ -29,18 +29,18 @@
 
     <fieldset class="look__row look__fieldset">
       <legend class="page__text">
-        <span class="page__name">Колір акценту</span>
-        <span class="page__meta">Кнопки, перемикачі, виділення й значки</span>
+        <span class="page__name">{{ 'Колір акценту' | t }}</span>
+        <span class="page__meta">{{ 'Кнопки, перемикачі, виділення й значки' | t }}</span>
       </legend>
       <div class="swatches">
         @for (accent of accents; track accent.value) {
-          <label class="swatches__item" [title]="accent.label" [style.--swatch]="accent.swatch">
+          <label class="swatches__item" [title]="accent.label | t" [style.--swatch]="accent.swatch">
             <input
               class="swatches__input"
               type="radio"
               name="accent-color"
               [value]="accent.value"
-              [attr.aria-label]="accent.label"
+              [attr.aria-label]="accent.label | t"
               [checked]="settings.accent() === accent.value"
               (change)="settings.accent.set(accent.value)" />
           </label>
@@ -49,10 +49,10 @@
     </fieldset>
   </div>
 
-  <h2 class="page__group">Нова вкладка</h2>
+  <h2 class="page__group">{{ 'Нова вкладка' | t }}</h2>
   <div class="page__list look">
     <fieldset class="look__fieldset look__backgrounds">
-      <legend class="look__legend">Фон</legend>
+      <legend class="look__legend">{{ 'Фон' | t }}</legend>
       @for (background of backgrounds; track background.value) {
         <label class="background">
           <input
@@ -63,7 +63,7 @@
             [checked]="settings.newTabBackground() === background.value"
             (change)="settings.newTabBackground.set(background.value)" />
           <span class="background__preview" [style.--preview]="background.css"></span>
-          <span class="background__label">{{ background.label }}</span>
+          <span class="background__label">{{ background.label | t }}</span>
         </label>
       }
       <label class="background">
@@ -80,20 +80,20 @@
             <app-icon class="background__plus" icon="plus" />
           }
         </span>
-        <span class="background__label">Своє зображення</span>
+        <span class="background__label">{{ 'Своє зображення' | t }}</span>
       </label>
     </fieldset>
     <div class="look__row">
       <span class="page__text">
-        <span class="page__name">Своє зображення</span>
-        <span class="page__meta">Фото чи картинка з комп'ютера — зменшується й зберігається в браузері</span>
+        <span class="page__name">{{ 'Своє зображення' | t }}</span>
+        <span class="page__meta">{{ "Фото чи картинка з комп'ютера — зменшується й зберігається в браузері" | t }}</span>
       </span>
       <div class="look__actions">
         @if (settings.newTabImage()) {
-          <button class="page__button" type="button" (click)="removeImage()">Прибрати</button>
+          <button class="page__button" type="button" (click)="removeImage()">{{ 'Прибрати' | t }}</button>
         }
         <button class="page__button" type="button" (click)="imageInput.click()">
-          {{ settings.newTabImage() ? 'Змінити…' : 'Вибрати…' }}
+          {{ settings.newTabImage() ? ('Змінити…' | t) : ('Вибрати…' | t) }}
         </button>
       </div>
       <input
@@ -101,11 +101,11 @@
         class="look__file"
         type="file"
         accept="image/*"
-        aria-label="Зображення для фону нової вкладки"
+        [attr.aria-label]="'Зображення для фону нової вкладки' | t"
         (change)="chooseImage($event)" />
     </div>
     @if (imageError()) {
-      <p class="look__error" role="alert">{{ imageError() }}</p>
+      <p class="look__error" role="alert">{{ imageError() | t }}</p>
     }
   </div>
 </section>

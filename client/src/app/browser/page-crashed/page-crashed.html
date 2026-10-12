@@ -1,26 +1,30 @@
 <div class="crash" role="alert">
   <app-icon class="crash__icon" icon="warning" />
   <h2 class="crash__title">
-    {{ failure() === 'unresponsive' ? 'Сторінка не відповідає' : 'Ой! Сторінка аварійно завершила роботу' }}
+    {{ failure() === 'unresponsive' ? ('Сторінка не відповідає' | t) : ('Ой! Сторінка аварійно завершила роботу' | t) }}
   </h2>
   <p class="crash__text">
     @switch (failure()) {
       @case ('unresponsive') {
-        Сторінка зависла. Можна зачекати, поки вона отямиться, або перезавантажити її.
+        {{ 'Сторінка зависла. Можна зачекати, поки вона отямиться, або перезавантажити її.' | t }}
       }
       @case ('browser') {
-        Зупинився процес браузера, що показує сайти. Перезавантажте сторінку.
+        {{ 'Зупинився процес браузера, що показує сайти. Перезавантажте сторінку.' | t }}
       }
       @default {
-        Можливо, сайту забракло пам’яті або в ньому сталася помилка. Перезавантажте сторінку — те, що ви ввели, могло не
-        зберегтися.
+        {{
+          'Можливо, сайту забракло пам’яті або в ньому сталася помилка. Перезавантажте сторінку — те, що ви ввели, могло не зберегтися.'
+            | t
+        }}
       }
     }
   </p>
   <div class="crash__actions">
     @if (failure() === 'unresponsive') {
-      <button class="crash__button" type="button" (click)="wait.emit()">Чекати</button>
+      <button class="crash__button" type="button" (click)="wait.emit()">{{ 'Чекати' | t }}</button>
     }
-    <button class="crash__button crash__button--primary" type="button" (click)="reload.emit()">Перезавантажити</button>
+    <button class="crash__button crash__button--primary" type="button" (click)="reload.emit()">
+      {{ 'Перезавантажити' | t }}
+    </button>
   </div>
 </div>

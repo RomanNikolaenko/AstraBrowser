@@ -8,7 +8,7 @@
 
 use tauri::{ipc::Invoke, Wry};
 
-use crate::{adblock, auth, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, translate, updates, window_drag};
+use crate::{adblock, auth, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, translate, updates, window_drag};
 
 /// Прив'язки для інтерфейсу (оновлюються під час розробки й перевіряються тестом).
 #[cfg(any(debug_assertions, test))]
@@ -31,6 +31,7 @@ fn specta() -> tauri_specta::Builder<Wry> {
       pages::page_set_zoom,
       pages::page_focus,
       pages::page_print,
+      pages::page_open_devtools,
       pages::page_close,
       pages::page_find,
       adblock::adblock_status,
@@ -92,6 +93,7 @@ fn specta() -> tauri_specta::Builder<Wry> {
       updates::app_update_check,
       updates::app_update_install,
       launch::launch_urls,
+      i18n::app_set_language,
       logging::app_log_error,
       logging::app_open_logs,
       default_browser::default_browser_state,

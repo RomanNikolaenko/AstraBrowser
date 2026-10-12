@@ -67,7 +67,7 @@ pub fn default_browser_open_settings() -> Result<(), String> {
   if result.0 as isize > 32 {
     Ok(())
   } else {
-    Err("Не вдалося відкрити «Параметри Windows».".to_string())
+    Err(crate::i18n::text("Не вдалося відкрити «Параметри Windows».", "Couldn't open Windows Settings.").to_string())
   }
 }
 

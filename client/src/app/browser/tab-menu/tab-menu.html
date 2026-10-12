@@ -1,29 +1,31 @@
 <span #anchor class="tab-menu__anchor"></span>
 <app-popover class="tab-menu" popoverId="tab-menu" align="start">
-  <ul class="tab-menu__list" role="menu" aria-label="Вкладка" tabindex="-1" (keydown)="onKeydown($event)">
+  <ul class="tab-menu__list" role="menu" [attr.aria-label]="'Вкладка' | t" tabindex="-1" (keydown)="onKeydown($event)">
     <li role="none">
       <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('new-tab-right')">
-        Нова вкладка праворуч
+        {{ 'Нова вкладка праворуч' | t }}
       </button>
     </li>
     <li class="tab-menu__separator" role="separator"></li>
     @if (target().site) {
       <li role="none">
-        <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('reload')">Перезавантажити</button>
+        <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('reload')">
+          {{ 'Перезавантажити' | t }}
+        </button>
       </li>
     }
     <li role="none">
-      <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('duplicate')">Дублювати</button>
+      <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('duplicate')">{{ 'Дублювати' | t }}</button>
     </li>
     <li role="none">
       <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run(target().pinned ? 'unpin' : 'pin')">
-        {{ target().pinned ? 'Відкріпити' : 'Закріпити' }}
+        {{ target().pinned ? ('Відкріпити' | t) : ('Закріпити' | t) }}
       </button>
     </li>
     @if (target().site) {
       <li role="none">
         <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run(target().muted ? 'unmute' : 'mute')">
-          {{ target().muted ? 'Увімкнути звук сайту' : 'Вимкнути звук сайту' }}
+          {{ target().muted ? ('Увімкнути звук сайту' | t) : ('Вимкнути звук сайту' | t) }}
         </button>
       </li>
     }
@@ -36,13 +38,14 @@
         role="menuitem"
         [disabled]="!target().others"
         (click)="run('new-window')">
-        Перемістити в нове вікно
+        {{ 'Перемістити в нове вікно' | t }}
       </button>
     </li>
     <li class="tab-menu__separator" role="separator"></li>
     <li role="none">
       <button #item class="tab-menu__item" type="button" role="menuitem" (click)="run('close')">
-        <span>Закрити</span><span class="tab-menu__shortcut">Ctrl+W</span>
+        <span>{{ 'Закрити' | t }}</span
+        ><span class="tab-menu__shortcut">Ctrl+W</span>
       </button>
     </li>
     <li role="none">
@@ -53,7 +56,7 @@
         role="menuitem"
         [disabled]="!target().others"
         (click)="run('close-others')">
-        Закрити інші вкладки
+        {{ 'Закрити інші вкладки' | t }}
       </button>
     </li>
     <li role="none">
@@ -64,7 +67,7 @@
         role="menuitem"
         [disabled]="!target().right"
         (click)="run('close-right')">
-        Закрити вкладки праворуч
+        {{ 'Закрити вкладки праворуч' | t }}
       </button>
     </li>
   </ul>

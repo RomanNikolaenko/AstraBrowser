@@ -1,4 +1,5 @@
 import type { BookmarkItem } from './bookmarks';
+import { translate } from '../../shared/i18n/i18n';
 
 /** Закладка чи тека з файла закладок іншого браузера — ще без id. */
 export type ImportedBookmark =
@@ -26,7 +27,7 @@ function readList(list: Element): ImportedBookmark[] {
         [...item.children].find((child) => child.tagName === 'DL') ??
         (item.nextElementSibling?.tagName === 'DL' ? item.nextElementSibling : null);
       const children = nested ? readList(nested) : [];
-      return children.length ? [{ type: 'folder', title: heading.textContent?.trim() || 'Тека', children }] : [];
+      return children.length ? [{ type: 'folder', title: heading.textContent?.trim() || translate('Тека'), children }] : [];
     }
     const link = [...item.children].find((child): child is HTMLAnchorElement => child.tagName === 'A');
     const url = link?.getAttribute('href')?.trim() ?? '';
@@ -65,12 +66,12 @@ export function bookmarksToHtml(items: readonly BookmarkItem[]): string {
   };
   return [
     '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
-    '<!-- Закладки Astra Browser. Цей файл можна імпортувати в будь-який браузер. -->',
+    `<!-- ${translate('Закладки Astra Browser. Цей файл можна імпортувати в будь-який браузер.')} -->`,
     '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
     '<TITLE>Bookmarks</TITLE>',
     '<H1>Bookmarks</H1>',
     '<DL><p>',
-    '    <DT><H3 PERSONAL_TOOLBAR_FOLDER="true">Панель закладок</H3>',
+    `    <DT><H3 PERSONAL_TOOLBAR_FOLDER="true">${escape(translate('Панель закладок'))}</H3>`,
     '    <DL><p>',
     ...list(items, 2),
     '    </DL><p>',

@@ -203,16 +203,16 @@ fn rest_error(status: u16, body: &Value) -> AuthError {
   match text(body, "code").unwrap_or_default() {
     // Таблиці чи функції синхронізації ще немає (SQL з інструкції не виконали) чи немає до неї доступу.
     "PGRST202" | "PGRST205" | "42P01" | "42883" | "42501" => {
-      AuthError::new("sync_not_configured", "Синхронізацію ще не налаштовано на сервері.")
+      AuthError::new("sync_not_configured", crate::i18n::text("Синхронізацію ще не налаштовано на сервері.", "Sync isn't set up on the server yet."))
     }
-    "PGRST301" | "PGRST303" => AuthError::new("session_expired", "Сеанс завершився. Увійдіть знову."),
-    _ if status >= 500 => AuthError::new("server", "Сервер синхронізації зараз недоступний. Спробуйте пізніше."),
-    code => AuthError::new(if code.is_empty() { "server" } else { code }, "Не вдалося синхронізувати дані. Спробуємо ще раз згодом."),
+    "PGRST301" | "PGRST303" => AuthError::new("session_expired", crate::i18n::text("Сеанс завершився. Увійдіть знову.", "Your session has ended. Please sign in again.")),
+    _ if status >= 500 => AuthError::new("server", crate::i18n::text("Сервер синхронізації зараз недоступний. Спробуйте пізніше.", "The sync server is unavailable right now. Please try again later.")),
+    code => AuthError::new(if code.is_empty() { "server" } else { code }, crate::i18n::text("Не вдалося синхронізувати дані. Спробуємо ще раз згодом.", "Couldn't sync your data. We'll try again later.")),
   }
 }
 
 fn offline() -> AuthError {
-  AuthError::new("offline", "Немає з'єднання з сервером. Перевірте інтернет і спробуйте ще раз.")
+  AuthError::new("offline", crate::i18n::text("Немає з'єднання з сервером. Перевірте інтернет і спробуйте ще раз.", "No connection to the server. Check your internet connection and try again."))
 }
 
 fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
@@ -223,27 +223,27 @@ fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
 fn api_error(status: u16, body: &Value) -> AuthError {
   let code = text(body, "error_code").or_else(|| text(body, "error")).unwrap_or(if status >= 500 { "server" } else { "unknown" });
   let message = match code {
-    "invalid_credentials" | "invalid_grant" => "Неправильна пошта або пароль.",
-    "email_not_confirmed" => "Пошту ще не підтверджено. Введіть код із листа, який ми надіслали.",
+    "invalid_credentials" | "invalid_grant" => crate::i18n::text("Неправильна пошта або пароль.", "Incorrect email or password."),
+    "email_not_confirmed" => crate::i18n::text("Пошту ще не підтверджено. Введіть код із листа, який ми надіслали.", "Your email isn't confirmed yet. Enter the code from the email we sent you."),
     "user_already_exists" | "email_exists" | "identity_already_exists" => {
-      "Обліковий запис із цією поштою вже існує. Увійдіть або відновіть пароль."
+      crate::i18n::text("Обліковий запис із цією поштою вже існує. Увійдіть або відновіть пароль.", "An account with this email already exists. Sign in or reset your password.")
     }
     "weak_password" => return weak_password(body),
-    "same_password" => "Новий пароль має відрізнятися від попереднього.",
-    "otp_expired" | "otp_disabled" => "Код неправильний або застарів. Надішліть новий.",
-    "over_email_send_rate_limit" => "Забагато листів за короткий час. Зачекайте трохи й спробуйте знову.",
-    "over_request_rate_limit" => "Забагато спроб. Зачекайте хвилину й спробуйте знову.",
-    "email_address_invalid" | "validation_failed" => "Перевірте адресу електронної пошти.",
-    "email_address_not_authorized" => "На цю адресу зараз не можна надіслати лист. Спробуйте іншу пошту.",
-    "signup_disabled" | "email_provider_disabled" => "Реєстрацію тимчасово вимкнено.",
-    "user_banned" => "Цей обліковий запис заблоковано.",
-    "user_not_found" => "Обліковий запис не знайдено.",
-    "reauthentication_needed" | "reauthentication_not_valid" => "Щоб змінити пароль, вийдіть і увійдіть знову.",
+    "same_password" => crate::i18n::text("Новий пароль має відрізнятися від попереднього.", "The new password must be different from the previous one."),
+    "otp_expired" | "otp_disabled" => crate::i18n::text("Код неправильний або застарів. Надішліть новий.", "The code is wrong or has expired. Request a new one."),
+    "over_email_send_rate_limit" => crate::i18n::text("Забагато листів за короткий час. Зачекайте трохи й спробуйте знову.", "Too many emails in a short time. Wait a little and try again."),
+    "over_request_rate_limit" => crate::i18n::text("Забагато спроб. Зачекайте хвилину й спробуйте знову.", "Too many attempts. Wait a minute and try again."),
+    "email_address_invalid" | "validation_failed" => crate::i18n::text("Перевірте адресу електронної пошти.", "Check the email address."),
+    "email_address_not_authorized" => crate::i18n::text("На цю адресу зараз не можна надіслати лист. Спробуйте іншу пошту.", "We can't send email to this address right now. Try another email."),
+    "signup_disabled" | "email_provider_disabled" => crate::i18n::text("Реєстрацію тимчасово вимкнено.", "Sign-up is temporarily disabled."),
+    "user_banned" => crate::i18n::text("Цей обліковий запис заблоковано.", "This account has been blocked."),
+    "user_not_found" => crate::i18n::text("Обліковий запис не знайдено.", "Account not found."),
+    "reauthentication_needed" | "reauthentication_not_valid" => crate::i18n::text("Щоб змінити пароль, вийдіть і увійдіть знову.", "To change your password, sign out and sign in again."),
     "session_not_found" | "session_expired" | "refresh_token_not_found" | "refresh_token_already_used" | "bad_jwt" => {
-      "Сеанс завершився. Увійдіть знову."
+      crate::i18n::text("Сеанс завершився. Увійдіть знову.", "Your session has ended. Please sign in again.")
     }
-    _ if status >= 500 => "Сервер облікових записів зараз недоступний. Спробуйте пізніше.",
-    _ => "Не вдалося виконати дію. Спробуйте ще раз.",
+    _ if status >= 500 => crate::i18n::text("Сервер облікових записів зараз недоступний. Спробуйте пізніше.", "The account server is unavailable right now. Please try again later."),
+    _ => crate::i18n::text("Не вдалося виконати дію. Спробуйте ще раз.", "Something went wrong. Please try again."),
   };
   AuthError::new(code, message)
 }
@@ -256,11 +256,11 @@ fn weak_password(body: &Value) -> AuthError {
     .map(|reasons| reasons.iter().filter_map(Value::as_str).collect())
     .unwrap_or_default();
   let message = if reasons.contains(&"pwned") {
-    "Цей пароль трапляється у витоках даних. Виберіть інший."
+    crate::i18n::text("Цей пароль трапляється у витоках даних. Виберіть інший.", "This password has appeared in data breaches. Choose a different one.")
   } else if reasons.contains(&"characters") {
-    "Пароль має містити великі й малі літери, цифри та символи."
+    crate::i18n::text("Пароль має містити великі й малі літери, цифри та символи.", "The password must contain upper and lower case letters, digits and symbols.")
   } else {
-    "Пароль закороткий. Виберіть довший."
+    crate::i18n::text("Пароль закороткий. Виберіть довший.", "The password is too short. Choose a longer one.")
   };
   AuthError::new("weak_password", message)
 }
@@ -391,7 +391,7 @@ impl Auth {
   /// Оновлює токен доступу, якщо той скоро спливе (чи `force`). Відповідь сервера, що сеанс недійсний, — вихід;
   /// без інтернету сеанс лишається як є.
   fn refresh(&self, app: &AppHandle, force: bool) -> Result<Option<Session>, AuthError> {
-    let _guard = self.refreshing.lock().map_err(|_| AuthError::new("internal", "Не вдалося оновити сеанс."))?;
+    let _guard = self.refreshing.lock().map_err(|_| AuthError::new("internal", crate::i18n::text("Не вдалося оновити сеанс.", "Couldn't refresh the session.")))?;
     if self.deleting.lock().map_or(true, |deleting| deleting.is_some()) {
       return Err(signed_out());
     }
@@ -426,7 +426,7 @@ impl Auth {
 }
 
 fn signed_out() -> AuthError {
-  AuthError::new("signed_out", "Ви не ввійшли в обліковий запис.")
+  AuthError::new("signed_out", crate::i18n::text("Ви не ввійшли в обліковий запис.", "You're not signed in."))
 }
 
 /// Ключ синхронізації паролів поточного облікового запису і коли його отримано з пароля (секунди Unix).
@@ -496,7 +496,7 @@ pub fn start(app: &AppHandle) {
 pub async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, AuthError> + Send + 'static) -> Result<T, AuthError> {
   tauri::async_runtime::spawn_blocking(work)
     .await
-    .map_err(|_| AuthError::new("internal", "Не вдалося виконати дію. Спробуйте ще раз."))?
+    .map_err(|_| AuthError::new("internal", crate::i18n::text("Не вдалося виконати дію. Спробуйте ще раз.", "Something went wrong. Please try again.")))?
 }
 
 fn clean_email(email: &str) -> String {
@@ -731,12 +731,12 @@ pub async fn auth_change_email(app: AppHandle, email: String) -> Result<(), Auth
     let token = auth.access_token(&app)?;
     let email = clean_email(&email);
     if auth.current().is_some_and(|session| session.user.email == email) {
-      return Err(AuthError::new("same_email", "Це вже пошта вашого облікового запису."));
+      return Err(AuthError::new("same_email", crate::i18n::text("Це вже пошта вашого облікового запису.", "This is already your account's email.")));
     }
     match call(Method::Put, "user", Some(&token), &json!({ "email": email })) {
       Ok(_) => Ok(()),
       Err(error) if matches!(error.code.as_str(), "email_exists" | "user_already_exists" | "identity_already_exists") => {
-        Err(AuthError::new(&error.code, "Ця пошта вже належить іншому обліковому запису."))
+        Err(AuthError::new(&error.code, crate::i18n::text("Ця пошта вже належить іншому обліковому запису.", "This email already belongs to another account.")))
       }
       Err(error) => Err(error),
     }
@@ -790,7 +790,7 @@ pub async fn auth_delete_account(app: AppHandle, password: String) -> Result<(),
     let auth = app.state::<Auth>();
     let current = auth.current().ok_or_else(signed_out)?;
     let reply = call(Method::Post, "token?grant_type=password", None, &json!({ "email": current.user.email, "password": password }))
-      .map_err(|error| if error.code == "invalid_credentials" { AuthError::new(&error.code, "Неправильний пароль.") } else { error })?;
+      .map_err(|error| if error.code == "invalid_credentials" { AuthError::new(&error.code, crate::i18n::text("Неправильний пароль.", "Incorrect password.")) } else { error })?;
     let checked = session_or_error(&reply, false)?;
     if checked.user.id != current.user.id {
       return Err(signed_out());
@@ -817,17 +817,17 @@ fn delete_error(status: u16, body: &Value) -> AuthError {
   match (text(body, "code").unwrap_or_default(), text(body, "message").unwrap_or_default()) {
     // Функції ще немає (SQL з інструкції не виконали) чи її не дозволено викликати.
     ("PGRST202" | "42883" | "42501", _) => {
-      AuthError::new("delete_not_configured", "Видалення облікового запису ще не налаштовано на сервері (supabase/account.sql).")
+      AuthError::new("delete_not_configured", crate::i18n::text("Видалення облікового запису ще не налаштовано на сервері (supabase/account.sql).", "Account deletion isn't set up on the server yet (supabase/account.sql)."))
     }
-    (_, "reauthentication_needed") => AuthError::new("reauthentication_needed", "Не вдалося підтвердити пароль. Спробуйте ще раз."),
-    ("PGRST301" | "PGRST303", _) => AuthError::new("session_expired", "Сеанс завершився. Увійдіть знову."),
-    _ if status >= 500 => AuthError::new("server", "Сервер облікових записів зараз недоступний. Спробуйте пізніше."),
-    (code, _) => AuthError::new(if code.is_empty() { "server" } else { code }, "Не вдалося видалити обліковий запис. Спробуйте ще раз."),
+    (_, "reauthentication_needed") => AuthError::new("reauthentication_needed", crate::i18n::text("Не вдалося підтвердити пароль. Спробуйте ще раз.", "Couldn't confirm the password. Please try again.")),
+    ("PGRST301" | "PGRST303", _) => AuthError::new("session_expired", crate::i18n::text("Сеанс завершився. Увійдіть знову.", "Your session has ended. Please sign in again.")),
+    _ if status >= 500 => AuthError::new("server", crate::i18n::text("Сервер облікових записів зараз недоступний. Спробуйте пізніше.", "The account server is unavailable right now. Please try again later.")),
+    (code, _) => AuthError::new(if code.is_empty() { "server" } else { code }, crate::i18n::text("Не вдалося видалити обліковий запис. Спробуйте ще раз.", "Couldn't delete the account. Please try again.")),
   }
 }
 
 fn unexpected() -> AuthError {
-  AuthError::new("server", "Сервер облікових записів відповів неочікувано. Спробуйте ще раз.")
+  AuthError::new("server", crate::i18n::text("Сервер облікових записів відповів неочікувано. Спробуйте ще раз.", "The account server sent an unexpected response. Please try again."))
 }
 
 /// Вихід: сеанс забувається одразу, а Supabase повідомляємо, як вийде (без інтернету — ні). Після видалення

@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { UiIcon } from '../ui-icon/ui-icon';
+import { TranslatePipe } from '../i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-window-controls',
   styleUrl: './window-controls.scss',
   templateUrl: './window-controls.html',

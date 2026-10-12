@@ -5,7 +5,8 @@ import { FormField, emailFormat, matches, minLength, required, validateFields } 
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
 import { AuthLayout } from '../auth-layout/auth-layout';
-import { Cooldown, PASSWORD_MIN_LENGTH, codeFormat, emailFromNavigation, normalizeCode } from '../auth-forms';
+import { Cooldown, PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT, codeFormat, emailFromNavigation, normalizeCode } from '../auth-forms';
+import { tr, translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * «Забули пароль?»: пошта → лист із кодом → код і новий пароль — і вхід. Supabase відповідає однаково, є такий
@@ -13,7 +14,7 @@ import { Cooldown, PASSWORD_MIN_LENGTH, codeFormat, emailFromNavigation, normali
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AuthLayout, RouterLink, UiIcon, UiInput],
+  imports: [TranslatePipe, AuthLayout, RouterLink, UiIcon, UiInput],
   selector: 'app-forgot-password',
   styleUrl: '../auth.scss',
   templateUrl: './forgot-password.html',
@@ -31,17 +32,17 @@ export class ForgotPassword {
   protected readonly cooldown = new Cooldown();
 
   protected readonly email = new FormField([
-    required('Введіть електронну пошту'),
-    emailFormat('Некоректна адреса електронної пошти'),
+    required(tr('Введіть електронну пошту')),
+    emailFormat(tr('Некоректна адреса електронної пошти')),
   ]);
-  protected readonly code = new FormField([required('Введіть код із листа'), codeFormat]);
+  protected readonly code = new FormField([required(tr('Введіть код із листа')), codeFormat]);
   protected readonly password = new FormField([
-    required('Введіть новий пароль'),
-    minLength(PASSWORD_MIN_LENGTH, `Пароль має містити щонайменше ${PASSWORD_MIN_LENGTH} символів`),
+    required(tr('Введіть новий пароль')),
+    minLength(PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT),
   ]);
   protected readonly confirmation = new FormField([
-    required('Повторіть пароль'),
-    matches(() => this.password.value(), 'Паролі не збігаються'),
+    required(tr('Повторіть пароль')),
+    matches(() => this.password.value(), tr('Паролі не збігаються')),
   ]);
 
   constructor() {
@@ -64,7 +65,7 @@ export class ForgotPassword {
     try {
       await this.auth.recover(this.email.value().trim());
       if (this.codeSent()) {
-        this.notice.set('Новий лист надіслано. Перевірте й папку «Спам».');
+        this.notice.set(translate('Новий лист надіслано. Перевірте й папку «Спам».'));
       }
       this.codeSent.set(true);
       this.cooldown.start();

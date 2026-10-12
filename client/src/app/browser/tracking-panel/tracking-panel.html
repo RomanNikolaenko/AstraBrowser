@@ -3,7 +3,7 @@
     <span class="tracking-panel__host">{{ host() }}</span>
     <span class="tracking-panel__connection" [class.tracking-panel__connection--insecure]="!secure()">
       <app-icon class="tracking-panel__connection-icon" [icon]="secure() ? 'lock' : 'alert'" />
-      {{ secure() ? 'Захищене з’єднання' : 'Незахищене з’єднання' }}
+      {{ secure() ? ('Захищене з’єднання' | t) : ('Незахищене з’єднання' | t) }}
     </span>
   </header>
 
@@ -11,16 +11,16 @@
     <div class="tracking-panel__status">
       <div class="tracking-panel__status-text">
         @if (level() === 'off') {
-          <h2 class="tracking-panel__title">Захист від стеження вимкнено</h2>
+          <h2 class="tracking-panel__title">{{ 'Захист від стеження вимкнено' | t }}</h2>
           <p class="tracking-panel__text">
-            Сайти й рекламні мережі можуть стежити за вами. Увімкнути його можна в налаштуваннях.
+            {{ 'Сайти й рекламні мережі можуть стежити за вами. Увімкнути його можна в налаштуваннях.' | t }}
           </p>
         } @else if (!protectedSite()) {
-          <h2 class="tracking-panel__title">Захист вимкнено для цього сайту</h2>
-          <p class="tracking-panel__text">Елементи стеження тут не блокуються.</p>
+          <h2 class="tracking-panel__title">{{ 'Захист вимкнено для цього сайту' | t }}</h2>
+          <p class="tracking-panel__text">{{ 'Елементи стеження тут не блокуються.' | t }}</p>
         } @else {
-          <h2 class="tracking-panel__title">Astra на сторожі</h2>
-          <p class="tracking-panel__text">Ви захищені. Елементи стеження блокуються, щойно сайт їх завантажує.</p>
+          <h2 class="tracking-panel__title">{{ 'Astra на сторожі' | t }}</h2>
+          <p class="tracking-panel__text">{{ 'Ви захищені. Елементи стеження блокуються, щойно сайт їх завантажує.' | t }}</p>
         }
       </div>
       <app-icon class="tracking-panel__shield" [icon]="protectedSite() ? 'shield-check' : 'shield-off'" />
@@ -30,7 +30,10 @@
       <div class="tracking-panel__found">
         <h3 class="tracking-panel__count">{{ count() }}</h3>
         <p class="tracking-panel__text">
-          Astra вважає, що сайти й рекламні мережі не повинні стежити за вами. Тому блокує якомога більше елементів стеження.
+          {{
+            'Astra вважає, що сайти й рекламні мережі не повинні стежити за вами. Тому блокує якомога більше елементів стеження.'
+              | t
+          }}
         </p>
         @if (trackers().length) {
           <button
@@ -39,7 +42,7 @@
             aria-controls="tracking-panel-list"
             [attr.aria-expanded]="expanded()"
             (click)="expanded.set(!expanded())">
-            {{ expanded() ? 'Сховати' : 'Показати все' }}
+            {{ expanded() ? ('Сховати' | t) : ('Показати все' | t) }}
           </button>
         }
       </div>
@@ -52,10 +55,10 @@
         <li class="tracking-panel__group">
           <div class="tracking-panel__group-head">
             <app-icon class="tracking-panel__group-icon" [icon]="group.icon" />
-            <span class="tracking-panel__group-label">{{ group.label }}</span>
+            <span class="tracking-panel__group-label">{{ group.label | t }}</span>
             <span class="tracking-panel__group-count">{{ group.hosts.length }}</span>
           </div>
-          <p class="tracking-panel__group-hint">{{ group.hint }}</p>
+          <p class="tracking-panel__group-hint">{{ group.hint | t }}</p>
           <ul class="tracking-panel__hosts">
             @for (host of group.hosts; track host) {
               <li class="tracking-panel__host-item">{{ host }}</li>
@@ -70,10 +73,10 @@
     <div class="tracking-panel__row">
       <span class="tracking-panel__row-text">
         <span class="tracking-panel__row-title" id="tracking-panel-site-name">
-          {{ protectedSite() ? 'Захист від стеження увімкнено' : 'Захист від стеження вимкнено' }}
+          {{ protectedSite() ? ('Захист від стеження увімкнено' | t) : ('Захист від стеження вимкнено' | t) }}
         </span>
         <span class="tracking-panel__row-hint" id="tracking-panel-site-hint">
-          Якщо на цьому сайті щось не працює, спробуйте вимкнути захист.
+          {{ 'Якщо на цьому сайті щось не працює, спробуйте вимкнути захист.' | t }}
         </span>
       </span>
       <app-switch
@@ -89,7 +92,7 @@
   <div class="tracking-panel__actions">
     <button class="tracking-panel__action" type="button" (click)="clearData.show()">
       <app-icon class="tracking-panel__action-icon" icon="cookie" />
-      <span>Стерти файли cookie та дані сайту</span>
+      <span>{{ 'Стерти файли cookie та дані сайту' | t }}</span>
     </button>
     <button
       class="tracking-panel__action"
@@ -98,7 +101,7 @@
       popovertargetaction="hide"
       (click)="openSettings.emit()">
       <app-icon class="tracking-panel__action-icon" icon="settings" />
-      <span>Налаштування приватності</span>
+      <span>{{ 'Налаштування приватності' | t }}</span>
     </button>
   </div>
 </app-popover>
@@ -106,7 +109,9 @@
 <app-confirm-dialog
   #clearData
   danger
-  heading="Стерти файли cookie і дані сайту?"
-  [message]="'Сайт ' + host() + ' забуде вас: ви вийдете з облікового запису на ньому, а збережені ним дані зникнуть.'"
-  confirmLabel="Стерти"
+  [heading]="'Стерти файли cookie і дані сайту?' | t"
+  [message]="
+    ('Сайт ' | t) + host() + (' забуде вас: ви вийдете з облікового запису на ньому, а збережені ним дані зникнуть.' | t)
+  "
+  [confirmLabel]="'Стерти' | t"
   (confirmed)="clearSiteData()" />

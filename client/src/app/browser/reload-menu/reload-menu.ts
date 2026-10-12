@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, output, viewChild } from '@angular/
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { ReloadMode } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 interface ReloadAction {
   readonly mode: ReloadMode;
@@ -18,7 +19,7 @@ interface ReloadAction {
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [TranslatePipe, Popover, UiIcon],
   selector: 'app-reload-menu',
   styleUrl: './reload-menu.scss',
   templateUrl: './reload-menu.html',
@@ -27,19 +28,19 @@ export class ReloadMenu {
   readonly reload = output<ReloadMode>();
 
   protected readonly actions: readonly ReloadAction[] = [
-    { mode: 'hard', icon: 'bolt', label: 'Жорстке оновлення', hint: 'Повторно завантажує все, минаючи кеш' },
-    { mode: 'cache', icon: 'trash', label: 'Очистити кеш і оновити', hint: 'Видаляє кеш цього сайту' },
+    { mode: 'hard', icon: 'bolt', label: tr('Жорстке оновлення'), hint: tr('Повторно завантажує все, минаючи кеш') },
+    { mode: 'cache', icon: 'trash', label: tr('Очистити кеш і оновити'), hint: tr('Видаляє кеш цього сайту') },
     {
       mode: 'site-data',
       icon: 'broom',
-      label: 'Очистити дані сайту й оновити',
-      hint: 'Кеш, LocalStorage, SessionStorage, IndexedDB',
+      label: tr('Очистити дані сайту й оновити'),
+      hint: tr('Кеш, LocalStorage, SessionStorage, IndexedDB'),
     },
     {
       mode: 'cookies',
       icon: 'cookie',
-      label: 'Очистити cookies і оновити',
-      hint: 'Може вийти з облікового запису на сайті',
+      label: tr('Очистити cookies і оновити'),
+      hint: tr('Може вийти з облікового запису на сайті'),
       danger: true,
     },
   ];

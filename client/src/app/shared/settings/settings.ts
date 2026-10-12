@@ -1,5 +1,6 @@
 import { Injectable, WritableSignal, computed, effect, signal } from '@angular/core';
 import { accountKey, storedSignal } from '../storage/stored-signal';
+import { tr } from '../i18n/i18n';
 
 /** Копія налаштувань облікового запису (astra.<id>.settings): з нею інший обліковий запис у цьому браузері має свої. */
 const ACCOUNT_SETTINGS_KEY = 'astra.settings';
@@ -10,12 +11,12 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 export type AccentColor = 'blue' | 'violet' | 'green' | 'orange' | 'pink' | 'teal';
 
 export const ACCENT_COLORS: readonly { readonly value: AccentColor; readonly label: string; readonly swatch: string }[] = [
-  { value: 'blue', label: 'Синій', swatch: 'linear-gradient(135deg, #2563eb, #7c3aed)' },
-  { value: 'violet', label: 'Фіолетовий', swatch: 'linear-gradient(135deg, #7c3aed, #c026d3)' },
-  { value: 'pink', label: 'Рожевий', swatch: 'linear-gradient(135deg, #db2777, #f43f5e)' },
-  { value: 'orange', label: 'Помаранчевий', swatch: 'linear-gradient(135deg, #ea580c, #f59e0b)' },
-  { value: 'green', label: 'Зелений', swatch: 'linear-gradient(135deg, #059669, #65a30d)' },
-  { value: 'teal', label: 'Бірюзовий', swatch: 'linear-gradient(135deg, #0891b2, #0d9488)' },
+  { value: 'blue', label: tr('Синій'), swatch: 'linear-gradient(135deg, #2563eb, #7c3aed)' },
+  { value: 'violet', label: tr('Фіолетовий'), swatch: 'linear-gradient(135deg, #7c3aed, #c026d3)' },
+  { value: 'pink', label: tr('Рожевий'), swatch: 'linear-gradient(135deg, #db2777, #f43f5e)' },
+  { value: 'orange', label: tr('Помаранчевий'), swatch: 'linear-gradient(135deg, #ea580c, #f59e0b)' },
+  { value: 'green', label: tr('Зелений'), swatch: 'linear-gradient(135deg, #059669, #65a30d)' },
+  { value: 'teal', label: tr('Бірюзовий'), swatch: 'linear-gradient(135deg, #0891b2, #0d9488)' },
 ];
 
 /** Фон нової вкладки: бульбашки (стандартний), один із градієнтів, без фону чи своє зображення. */
@@ -24,12 +25,12 @@ export type SearchEngine = 'google' | 'duckduckgo' | 'bing';
 
 /** Скільки днів зберігати історію переглядів; 0 — завжди. Як у Chrome, стандартно — 90. */
 export const HISTORY_RETENTION: readonly { readonly days: number; readonly label: string }[] = [
-  { days: 7, label: '7 днів' },
-  { days: 30, label: '30 днів' },
-  { days: 90, label: '90 днів' },
-  { days: 180, label: '6 місяців' },
-  { days: 365, label: '1 рік' },
-  { days: 0, label: 'Завжди' },
+  { days: 7, label: tr('7 днів') },
+  { days: 30, label: tr('30 днів') },
+  { days: 90, label: tr('90 днів') },
+  { days: 180, label: tr('6 місяців') },
+  { days: 365, label: tr('1 рік') },
+  { days: 0, label: tr('Завжди') },
 ];
 
 /** Що відкривати під час запуску: вкладки з минулого разу чи нову вкладку. */
@@ -37,12 +38,12 @@ export type StartupPage = 'restore' | 'new-tab';
 
 /** Через скільки хвилин бездіяльності фонова вкладка засинає; 0 — ніколи. */
 export const SLEEP_TABS: readonly { readonly minutes: number; readonly label: string }[] = [
-  { minutes: 5, label: '5 хвилин' },
-  { minutes: 15, label: '15 хвилин' },
-  { minutes: 30, label: '30 хвилин' },
-  { minutes: 60, label: '1 годину' },
-  { minutes: 120, label: '2 години' },
-  { minutes: 0, label: 'Ніколи' },
+  { minutes: 5, label: tr('5 хвилин') },
+  { minutes: 15, label: tr('15 хвилин') },
+  { minutes: 30, label: tr('30 хвилин') },
+  { minutes: 60, label: tr('1 годину') },
+  { minutes: 120, label: tr('2 години') },
+  { minutes: 0, label: tr('Ніколи') },
 ];
 
 /** Захист від стеження (server/src/tracking.rs): рівень. */
@@ -55,15 +56,15 @@ export const TRACKING_PROTECTION: readonly {
 }[] = [
   {
     value: 'standard',
-    label: 'Стандартний',
-    hint: 'Блокує відомі елементи стеження, криптомайнери й куки стеження. Сайти працюють як звичайно.',
+    label: tr('Стандартний'),
+    hint: tr('Блокує відомі елементи стеження, криптомайнери й куки стеження. Сайти працюють як звичайно.'),
   },
   {
     value: 'strict',
-    label: 'Суворий',
-    hint: 'Ще й елементи стеження соцмереж і більше куків стеження. Деякі сайти можуть працювати неправильно.',
+    label: tr('Суворий'),
+    hint: tr('Ще й елементи стеження соцмереж і більше куків стеження. Деякі сайти можуть працювати неправильно.'),
   },
-  { value: 'off', label: 'Вимкнено', hint: 'Сайти й рекламні мережі можуть стежити за вами з сайту на сайт.' },
+  { value: 'off', label: tr('Вимкнено'), hint: tr('Сайти й рекламні мережі можуть стежити за вами з сайту на сайт.') },
 ];
 
 export const SEARCH_ENGINES: Readonly<Record<SearchEngine, { readonly label: string; readonly url: string }>> = {

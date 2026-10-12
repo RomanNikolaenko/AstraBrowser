@@ -6,13 +6,14 @@ import { UiCheckbox } from '../../shared/ui-checkbox/ui-checkbox';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { UiInput } from '../../shared/ui-input/ui-input';
 import { AuthLayout } from '../auth-layout/auth-layout';
-import { PASSWORD_MIN_LENGTH } from '../auth-forms';
+import { PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT } from '../auth-forms';
 import { VerifyEmail } from '../verify-email/verify-email';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Реєстрація: ім'я, пошта й пароль, згода з умовами — і крок із кодом із листа (якщо Supabase просить підтвердити пошту). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AuthLayout, RouterLink, UiCheckbox, UiIcon, UiInput, VerifyEmail],
+  imports: [TranslatePipe, AuthLayout, RouterLink, UiCheckbox, UiIcon, UiInput, VerifyEmail],
   selector: 'app-sign-up',
   styleUrl: '../auth.scss',
   templateUrl: './sign-up.html',
@@ -31,18 +32,18 @@ export class SignUp {
   /** Лист із кодом надіслано — крок підтвердження пошти. */
   protected readonly verifying = signal(false);
 
-  protected readonly fullName = new FormField([required('Введіть ім’я та прізвище')]);
+  protected readonly fullName = new FormField([required(tr('Введіть ім’я та прізвище'))]);
   protected readonly email = new FormField([
-    required('Введіть електронну пошту'),
-    emailFormat('Некоректна адреса електронної пошти'),
+    required(tr('Введіть електронну пошту')),
+    emailFormat(tr('Некоректна адреса електронної пошти')),
   ]);
   protected readonly password = new FormField([
-    required('Введіть пароль'),
-    minLength(PASSWORD_MIN_LENGTH, `Пароль має містити щонайменше ${PASSWORD_MIN_LENGTH} символів`),
+    required(tr('Введіть пароль')),
+    minLength(PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT),
   ]);
   protected readonly confirmation = new FormField([
-    required('Повторіть пароль'),
-    matches(() => this.password.value(), 'Паролі не збігаються'),
+    required(tr('Повторіть пароль')),
+    matches(() => this.password.value(), tr('Паролі не збігаються')),
   ]);
 
   protected togglePasswordVisibility(): void {

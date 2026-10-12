@@ -9,6 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
+import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 let nextId = 0;
 
@@ -21,7 +22,7 @@ let nextId = 0;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-confirm-dialog',
   styleUrl: './confirm-dialog.scss',
   templateUrl: './confirm-dialog.html',
@@ -29,8 +30,8 @@ let nextId = 0;
 export class ConfirmDialog {
   readonly heading = input.required<string>();
   readonly message = input('');
-  readonly confirmLabel = input('Підтвердити');
-  readonly cancelLabel = input('Скасувати');
+  readonly confirmLabel = input(tr('Підтвердити'));
+  readonly cancelLabel = input(tr('Скасувати'));
   /** Незворотна дія: червона кнопка й значок-попередження. */
   readonly danger = input(false, { transform: booleanAttribute });
 

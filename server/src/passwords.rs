@@ -299,7 +299,7 @@ impl Passwords {
 
   /// Спершу в тимчасовий файл, потім заміна: обірваний запис не зіпсує сховище.
   fn write(&self, vault: &Vault) -> Result<(), String> {
-    let file = self.file.lock().map_err(|error| error.to_string())?.clone().ok_or("Увійдіть в обліковий запис Astra")?;
+    let file = self.file.lock().map_err(|error| error.to_string())?.clone().ok_or(crate::i18n::text("Увійдіть в обліковий запис Astra", "Sign in to your Astra account"))?;
     let file = &file;
     if let Some(dir) = file.parent() {
       fs::create_dir_all(dir).map_err(|error| error.to_string())?;
@@ -508,7 +508,7 @@ pub fn passwords_sync_apply(
   changes: Vec<SyncChange>,
 ) -> Result<SyncApplied, String> {
   deny_guest(&window)?;
-  let (key, _) = crate::auth::sync_key(&app).ok_or("Немає ключа синхронізації")?;
+  let (key, _) = crate::auth::sync_key(&app).ok_or(crate::i18n::text("Немає ключа синхронізації", "No sync key"))?;
   let key_id = secure::key_id(&key);
   let mut unreadable = Vec::new();
   passwords.change(&app, |vault| {
@@ -557,7 +557,7 @@ pub fn passwords_sync_apply(
 /// Команди паролів — не для гостьового вікна: ним користується не власник.
 fn deny_guest(window: &Window) -> Result<(), String> {
   if window.label().starts_with(GUEST_PREFIX) {
-    Err("У гостьовому режимі паролі недоступні".into())
+    Err(crate::i18n::text("У гостьовому режимі паролі недоступні", "Passwords aren't available in guest mode").into())
   } else {
     Ok(())
   }
@@ -611,7 +611,7 @@ pub fn password_prompt_answer(
 pub fn password_reveal(window: Window, passwords: State<'_, Passwords>, id: String) -> Result<String, String> {
   deny_guest(&window)?;
   let vault = passwords.vault.lock().map_err(|error| error.to_string())?;
-  let entry = vault.entries.iter().find(|entry| entry.id == id).ok_or("Такого пароля немає")?;
+  let entry = vault.entries.iter().find(|entry| entry.id == id).ok_or(crate::i18n::text("Такого пароля немає", "No such password"))?;
   decrypt(&entry.password)
 }
 
@@ -627,14 +627,14 @@ pub fn password_add(
   password: String,
 ) -> Result<(), String> {
   deny_guest(&window)?;
-  let origin = origin_from_input(&site).ok_or("Некоректна адреса сайту")?;
+  let origin = origin_from_input(&site).ok_or(crate::i18n::text("Некоректна адреса сайту", "Invalid site address"))?;
   if password.is_empty() {
-    return Err("Введіть пароль".into());
+    return Err(crate::i18n::text("Введіть пароль", "Enter a password").into());
   }
   let username = username.trim().to_string();
   passwords.change(&app, |vault| {
     if vault.find(&origin, &username).is_some() {
-      return Err("Для цього сайту вже збережено пароль із таким ім'ям".into());
+      return Err(crate::i18n::text("Для цього сайту вже збережено пароль із таким ім'ям", "A password with this username is already saved for this site").into());
     }
     vault.save(origin, username, &password)
   })
@@ -654,10 +654,10 @@ pub fn password_edit(
   deny_guest(&window)?;
   let username = username.trim().to_string();
   passwords.change(&app, |vault| {
-    let index = vault.entries.iter().position(|entry| entry.id == id).ok_or("Такого пароля немає")?;
+    let index = vault.entries.iter().position(|entry| entry.id == id).ok_or(crate::i18n::text("Такого пароля немає", "No such password"))?;
     let origin = vault.entries[index].origin.clone();
     if vault.find(&origin, &username).is_some_and(|other| other != index) {
-      return Err("Для цього сайту вже збережено пароль із таким ім'ям".into());
+      return Err(crate::i18n::text("Для цього сайту вже збережено пароль із таким ім'ям", "A password with this username is already saved for this site").into());
     }
     let encrypted = if password.is_empty() { None } else { Some(encrypt(&password)?) };
     let entry = &mut vault.entries[index];

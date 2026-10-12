@@ -6,10 +6,11 @@ import { ClearDataDialog } from '../../clear-data/clear-data-dialog';
 import { HistoryStore } from '../../data/history';
 import { SiteIcon } from '../../site-icon/site-icon';
 import { formatTime, groupByDay, hostname, matchesQuery } from '../internal-pages';
+import { TranslatePipe } from '../../../shared/i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ClearDataDialog, MiddleClick, SiteIcon, UiIcon, UiInput],
+  imports: [TranslatePipe, ClearDataDialog, MiddleClick, SiteIcon, UiIcon, UiInput],
   selector: 'app-history-page',
   styleUrls: ['../internal-page.scss'],
   templateUrl: './history-page.html',

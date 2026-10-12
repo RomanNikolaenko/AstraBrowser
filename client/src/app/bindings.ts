@@ -20,6 +20,8 @@ export const commands = {
 	pageSetZoom: (label: string, scale: number | null) => __TAURI_INVOKE<null>("page_set_zoom", { label, scale }),
 	pageFocus: (label: string) => __TAURI_INVOKE<null>("page_focus", { label }),
 	pagePrint: (label: string) => __TAURI_INVOKE<null>("page_print", { label }),
+	/**  Інструменти розробника сайту (DevTools WebView2) — окремим вікном. */
+	pageOpenDevtools: (label: string) => __TAURI_INVOKE<null>("page_open_devtools", { label }),
 	pageClose: (label: string) => __TAURI_INVOKE<null>("page_close", { label }),
 	/**
 	 *  Пошук тексту на сторінці через window.find: виділяє наступний (чи попередній) збіг і каже, чи він знайшовся.
@@ -169,6 +171,8 @@ export const commands = {
 	appUpdateInstall: () => __TAURI_INVOKE<null>("app_update_install"),
 	/**  Посилання, з якими браузер запустили (віддаються один раз). */
 	launchUrls: () => __TAURI_INVOKE<string[]>("launch_urls"),
+	/**  Мова інтерфейсу змінилася (чи інтерфейс щойно запустився): `uk` чи `en`. */
+	appSetLanguage: (language: string) => __TAURI_INVOKE<void>("app_set_language", { language }),
 	/**  Помилка інтерфейсу (Angular ErrorHandler, client/src/app/shared/logging). */
 	appLogError: (message: string) => __TAURI_INVOKE<void>("app_log_error", { message }),
 	/**  Показати файл журналу в Провіднику (чи теку, якщо записів ще не було). */

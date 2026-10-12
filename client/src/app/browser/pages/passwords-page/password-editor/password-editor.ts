@@ -5,6 +5,7 @@ import { UiInput } from '../../../../shared/ui-input/ui-input';
 import { PasswordsStore, SavedPassword, generatePassword } from '../../../data/passwords';
 import { SiteIcon } from '../../../site-icon/site-icon';
 import { hostname } from '../../internal-pages';
+import { tr, translate, TranslatePipe } from '../../../../shared/i18n/i18n';
 
 /**
  * Вікно «Додати пароль» / «Змінити пароль» сторінки «Паролі». Сайт задається лише при додаванні;
@@ -14,7 +15,7 @@ import { hostname } from '../../internal-pages';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SiteIcon, UiIcon, UiInput],
+  imports: [TranslatePipe, SiteIcon, UiIcon, UiInput],
   selector: 'app-password-editor',
   styleUrl: './password-editor.scss',
   templateUrl: './password-editor.html',
@@ -24,9 +25,9 @@ export class PasswordEditor {
 
   /** Запис, який змінюють; null — додають новий. */
   protected readonly editing = signal<SavedPassword | null>(null);
-  protected readonly site = new FormField([required('Введіть адресу сайту'), urlFormat('Некоректна адреса сайту')]);
+  protected readonly site = new FormField([required(tr('Введіть адресу сайту')), urlFormat(tr('Некоректна адреса сайту'))]);
   protected readonly username = signal('');
-  protected readonly password = new FormField([required('Введіть пароль')]);
+  protected readonly password = new FormField([required(tr('Введіть пароль'))]);
   protected readonly passwordVisible = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly saving = signal(false);
@@ -69,7 +70,7 @@ export class PasswordEditor {
       }
       this.close();
     } catch (error) {
-      this.error.set(typeof error === 'string' ? error : 'Не вдалося зберегти пароль');
+      this.error.set(typeof error === 'string' ? error : translate('Не вдалося зберегти пароль'));
     } finally {
       this.saving.set(false);
     }

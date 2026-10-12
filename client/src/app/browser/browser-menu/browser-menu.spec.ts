@@ -9,16 +9,20 @@ import { BrowserMenu } from './browser-menu';
   imports: [BrowserMenu],
   template: `<app-browser-menu
     [(zoom)]="zoom"
+    [siteOpen]="siteOpen()"
     (newTab)="events.push('new-tab')"
     (newWindow)="events.push('new-window')"
     (privateWindow)="events.push('private-window')"
     (openPage)="events.push($event)"
     (find)="events.push('find')"
     (print)="events.push('print')"
+    (viewSource)="events.push('view-source')"
+    (devTools)="events.push('devtools')"
     (fullscreen)="events.push('fullscreen')" />`,
 })
 class Host {
   readonly zoom = signal(100);
+  readonly siteOpen = signal(true);
   readonly events: string[] = [];
 }
 
@@ -93,6 +97,8 @@ describe('BrowserMenu', () => {
       'Закладки',
       'Знайти на сторінці',
       'Друк',
+      'Переглянути джерело сторінки',
+      'Інструменти розробника',
       'Розширення',
       'Налаштування',
       'Довідка',
@@ -111,11 +117,25 @@ describe('BrowserMenu', () => {
       'bookmarks',
       'find',
       'print',
+      'view-source',
+      'devtools',
       'extensions',
       'settings',
       'help',
       'fullscreen',
     ]);
+  });
+
+  it('should offer the page source and developer tools only for a site', async () => {
+    const { fixture, item } = await setup();
+    expect(item('Інструменти розробника')?.getAttribute('aria-keyshortcuts')).toBe('F12');
+
+    fixture.componentInstance.siteOpen.set(false);
+    await fixture.whenStable();
+
+    expect(item('Переглянути джерело сторінки')?.disabled).toBe(true);
+    expect(item('Інструменти розробника')?.disabled).toBe(true);
+    expect(item('Друк')?.disabled).toBe(false);
   });
 
   it('should announce every shown shortcut to assistive technology', async () => {

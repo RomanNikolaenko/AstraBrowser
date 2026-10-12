@@ -3,6 +3,7 @@ import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { PERMISSION_INFO, PermissionRequest, PermissionsStore, PermissionState } from '../data/permissions';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
+import { translate, TranslatePipe } from '../../shared/i18n/i18n';
 
 /**
  * «Сайт хоче: використовувати камеру» — під адресним рядком, як у Chrome. «Дозволити цього разу» діє, поки відкрита
@@ -11,7 +12,7 @@ import { Popover } from '../popover/popover';
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Popover, UiIcon],
+  imports: [TranslatePipe, Popover, UiIcon],
   selector: 'app-permission-prompt',
   styleUrl: './permission-prompt.scss',
   templateUrl: './permission-prompt.html',
@@ -33,7 +34,7 @@ export class PermissionPrompt {
     try {
       return new URL(this.request()?.origin ?? '').host;
     } catch {
-      return 'Сайт';
+      return translate('Сайт');
     }
   });
   /** Запит, на який уже відповіли кнопкою, — закриття панелі після цього не означає «ні». */

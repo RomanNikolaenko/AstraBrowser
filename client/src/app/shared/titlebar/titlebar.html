@@ -13,12 +13,12 @@
   @if (isPrivate) {
     <span class="titlebar__private" data-drag-region>
       <app-icon icon="private" />
-      Приватне вікно
+      {{ 'Приватне вікно' | t }}
     </span>
   } @else if (isGuest) {
     <span class="titlebar__private" data-drag-region>
       <app-icon icon="guest" />
-      Гостьовий режим
+      {{ 'Гостьовий режим' | t }}
     </span>
   }
   <app-window-controls />

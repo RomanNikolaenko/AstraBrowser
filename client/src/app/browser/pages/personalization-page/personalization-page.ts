@@ -3,6 +3,7 @@ import { resizeImage } from '../../../shared/images/resize-image';
 import { ACCENT_COLORS, SettingsStore, ThemePreference } from '../../../shared/settings/settings';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { NEW_TAB_BACKGROUNDS, newTabBackgroundCss } from '../../new-tab/new-tab-backgrounds';
+import { tr, translate, TranslatePipe } from '../../../shared/i18n/i18n';
 
 /** Найбільший розмір свого фону: досить для екрана й не забагато для localStorage. */
 const IMAGE_WIDTH = 1920;
@@ -14,7 +15,7 @@ const IMAGE_HEIGHT = 1200;
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiIcon],
+  imports: [TranslatePipe, UiIcon],
   selector: 'app-personalization-page',
   styleUrls: ['../internal-page.scss', './personalization-page.scss'],
   templateUrl: './personalization-page.html',
@@ -23,9 +24,9 @@ export class PersonalizationPage {
   protected readonly settings = inject(SettingsStore);
 
   protected readonly themes: readonly { readonly value: ThemePreference; readonly label: string; readonly icon: string }[] = [
-    { value: 'system', label: 'Як у системі', icon: 'monitor' },
-    { value: 'light', label: 'Світла', icon: 'sun' },
-    { value: 'dark', label: 'Темна', icon: 'moon' },
+    { value: 'system', label: tr('Як у системі'), icon: 'monitor' },
+    { value: 'light', label: tr('Світла'), icon: 'sun' },
+    { value: 'dark', label: tr('Темна'), icon: 'moon' },
   ];
   protected readonly accents = ACCENT_COLORS;
   protected readonly backgrounds = NEW_TAB_BACKGROUNDS;
@@ -44,7 +45,7 @@ export class PersonalizationPage {
       this.settings.newTabImage.set(await resizeImage(file, IMAGE_WIDTH, IMAGE_HEIGHT, 'contain', 0.82));
       this.settings.newTabBackground.set('custom');
     } catch {
-      this.imageError.set('Не вдалося відкрити це зображення. Виберіть картинку у форматі JPEG, PNG чи WebP.');
+      this.imageError.set(translate('Не вдалося відкрити це зображення. Виберіть картинку у форматі JPEG, PNG чи WebP.'));
     }
   }
 

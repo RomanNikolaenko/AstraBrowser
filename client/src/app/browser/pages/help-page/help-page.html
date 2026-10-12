@@ -1,14 +1,14 @@
 <section class="page">
   <header class="page__header">
-    <h1 class="page__title">Довідка</h1>
+    <h1 class="page__title">{{ 'Довідка' | t }}</h1>
   </header>
 
-  <h2 class="page__group">Гарячі клавіші</h2>
+  <h2 class="page__group">{{ 'Гарячі клавіші' | t }}</h2>
   <table class="page__list help-table">
     <tbody>
       @for (shortcut of shortcuts; track shortcut.action) {
         <tr class="help-table__row">
-          <th class="help-table__action" scope="row">{{ shortcut.action }}</th>
+          <th class="help-table__action" scope="row">{{ shortcut.action | t }}</th>
           <td class="help-table__keys">
             @for (key of shortcut.keys; track key; let last = $last) {
               <kbd>{{ key }}</kbd>
@@ -22,35 +22,35 @@
     </tbody>
   </table>
 
-  <h2 class="page__group">Про програму</h2>
+  <h2 class="page__group">{{ 'Про програму' | t }}</h2>
   <dl class="page__list help-about">
     <div class="help-about__row">
       <dt>Astra Browser</dt>
-      <dd>{{ appVersion() ? 'Версія ' + appVersion() : 'Версія розробки' }}</dd>
+      <dd>{{ appVersion() ? ('Версія ' | t) + appVersion() : ('Версія розробки' | t) }}</dd>
     </div>
     <div class="help-about__row">
       <dt>Tauri</dt>
       <dd>{{ tauriVersion() ?? '—' }}</dd>
     </div>
     <div class="help-about__row">
-      <dt>Рушій</dt>
+      <dt>{{ 'Рушій' | t }}</dt>
       <dd>{{ engineVersion ? 'Chromium ' + engineVersion : '—' }}</dd>
     </div>
   </dl>
 
   @if (inApp) {
-    <h2 class="page__group">Журнал помилок</h2>
+    <h2 class="page__group">{{ 'Журнал помилок' | t }}</h2>
     <div class="page__list help-log">
       <span class="help-log__text">
-        <span class="page__name">Якщо щось не працює</span>
+        <span class="page__name">{{ 'Якщо щось не працює' | t }}</span>
         <span class="page__meta">
-          Браузер записує свої помилки у файл на цьому комп’ютері. Його можна надіслати, коли просите про допомогу.
+          {{ 'Браузер записує свої помилки у файл на цьому комп’ютері. Його можна надіслати, коли просите про допомогу.' | t }}
         </span>
       </span>
-      <button class="page__button" type="button" (click)="openLog()">Відкрити журнал</button>
+      <button class="page__button" type="button" (click)="openLog()">{{ 'Відкрити журнал' | t }}</button>
     </div>
     @if (logError(); as message) {
-      <p class="help-log__error" role="alert">{{ message }}</p>
+      <p class="help-log__error" role="alert">{{ message | t }}</p>
     }
   }
 </section>

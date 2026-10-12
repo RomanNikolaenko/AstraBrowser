@@ -1,6 +1,6 @@
 <app-popover class="popup-blocked" popoverId="popup-blocked" align="end" caret>
-  <h2 class="popup-blocked__title">Спливне вікно заблоковано</h2>
-  <p class="popup-blocked__text">{{ host() }} хотів відкрити вікно без вашого кліку:</p>
+  <h2 class="popup-blocked__title">{{ 'Спливне вікно заблоковано' | t }}</h2>
+  <p class="popup-blocked__text">{{ '{0} хотів відкрити вікно без вашого кліку:' | t: [host()] }}</p>
   <ul class="popup-blocked__list">
     @for (url of popups(); track url) {
       <li>
@@ -13,9 +13,9 @@
   </ul>
   <label class="popup-blocked__allow">
     <input type="checkbox" name="allow-popups" [checked]="allowed()" (change)="setAllowed($event)" />
-    Завжди дозволяти спливні вікна з {{ host() }}
+    {{ 'Завжди дозволяти спливні вікна з {0}' | t: [host()] }}
   </label>
   <div class="popup-blocked__actions">
-    <button class="popup-blocked__button" type="button" (click)="close()">Готово</button>
+    <button class="popup-blocked__button" type="button" (click)="close()">{{ 'Готово' | t }}</button>
   </div>
 </app-popover>

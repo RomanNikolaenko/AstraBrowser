@@ -170,6 +170,11 @@ fn is_web(url: &Url) -> bool {
   matches!(url.scheme(), "http" | "https")
 }
 
+/// Адреса, яку показує вкладка: сайт чи його код (view-source:https://…, Ctrl+U).
+fn is_page_url(url: &Url) -> bool {
+  is_web(url) || url.as_str().strip_prefix("view-source:").and_then(|inner| Url::parse(inner).ok()).is_some_and(|inner| is_web(&inner))
+}
+
 /// Іконка з вебу або невелика вбудована картинка (data:image/…), щоб не роздувати сховище інтерфейсу.
 #[cfg(windows)]
 fn is_icon_url(icon: &str) -> bool {
@@ -178,7 +183,7 @@ fn is_icon_url(icon: &str) -> bool {
 
 fn web_url(raw: &str) -> Result<Url, String> {
   let url = Url::parse(raw).map_err(|error| error.to_string())?;
-  if is_web(&url) {
+  if is_page_url(&url) {
     Ok(url)
   } else {
     Err(format!("Unsupported URL scheme: {}", url.scheme()))
@@ -280,6 +285,8 @@ pub async fn page_open(
     // У приватному вікні сторінки теж без збережених cookies, кешу й сховища.
     .incognito(ui.starts_with("private-") || ui.starts_with(GUEST_PREFIX))
     .focused(!background)
+    // Інструменти розробника (F12, «Перевірити» в меню) — сайтам; інтерфейсу браузера в релізі — ні (main.rs).
+    .devtools(true)
     // Перетягування на сайтах (файли в пошту, картки в Trello) — самому сайту, а не обробникові Tauri,
     // який у Windows його перехоплює.
     .disable_drag_drop_handler()
@@ -289,7 +296,7 @@ pub async fn page_open(
     .on_navigation({
       let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
       move |url| {
-        if is_web(url) || url.as_str() == "about:blank" {
+        if is_page_url(url) || url.as_str() == "about:blank" {
           return true;
         }
         if crate::external::scheme_of(url).is_some() {
@@ -371,7 +378,7 @@ pub async fn page_open(
       let Ok(parsed) = Url::parse(&url) else {
         return;
       };
-      if is_web(&parsed) {
+      if is_page_url(&parsed) {
         let _ = app.emit_to(&ui, "page://new-tab", NewTabEvent { label: label.clone(), url, user_initiated });
       } else if crate::external::scheme_of(&parsed).is_some() {
         let _ = app.emit_to(&ui, "page://external", ExternalEvent { label: label.clone(), url });
@@ -594,6 +601,14 @@ pub fn page_print(window: Window, label: String) -> Result<(), String> {
   page(&window, &label)?.print().map_err(|error| error.to_string())
 }
 
+/// Інструменти розробника сайту (DevTools WebView2) — окремим вікном.
+#[tauri::command]
+#[specta::specta]
+pub fn page_open_devtools(window: Window, label: String) -> Result<(), String> {
+  page(&window, &label)?.open_devtools();
+  Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label: String) -> Result<(), String> {
@@ -810,4 +825,20 @@ pub async fn page_set_autoplay(window: Window, label: String, autoplay: Autoplay
   let (reply, receiver) = mpsc::channel();
   webview2::set_autoplay(&webview, page_origin(&webview)?, autoplay, reply).map_err(|error| error.to_string())?;
   receive(receiver).await?
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn tabs_show_sites_and_their_source_only() {
+    let url = |raw: &str| Url::parse(raw).unwrap();
+    assert!(is_page_url(&url("https://example.com/")));
+    assert!(is_page_url(&url("http://localhost:4200/")));
+    assert!(is_page_url(&url("view-source:https://example.com/a?b=1")));
+    assert!(!is_page_url(&url("view-source:file:///C:/secret.txt")));
+    assert!(!is_page_url(&url("file:///C:/secret.txt")));
+    assert!(web_url("view-source:javascript:alert(1)").is_err());
+  }
 }

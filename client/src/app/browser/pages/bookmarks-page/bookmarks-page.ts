@@ -6,10 +6,11 @@ import { UiInput } from '../../../shared/ui-input/ui-input';
 import { BookmarksStore } from '../../data/bookmarks';
 import { SiteIcon } from '../../site-icon/site-icon';
 import { hostname, internalPageFor, matchesQuery } from '../internal-pages';
+import { tr, TranslatePipe } from '../../../shared/i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MiddleClick, SiteIcon, UiIcon, UiInput],
+  imports: [TranslatePipe, MiddleClick, SiteIcon, UiIcon, UiInput],
   selector: 'app-bookmarks-page',
   styleUrls: ['../internal-page.scss', './bookmarks-page.scss'],
   templateUrl: './bookmarks-page.html',
@@ -24,8 +25,8 @@ export class BookmarksPage {
   protected readonly query = signal('');
   protected readonly adding = signal(false);
 
-  protected readonly title = new FormField([required('Введіть назву')]);
-  protected readonly url = new FormField([required('Введіть адресу'), urlFormat('Некоректна адреса сайту')]);
+  protected readonly title = new FormField([required(tr('Введіть назву'))]);
+  protected readonly url = new FormField([required(tr('Введіть адресу')), urlFormat(tr('Некоректна адреса сайту'))]);
 
   protected readonly visible = computed(() => {
     const query = this.query();
