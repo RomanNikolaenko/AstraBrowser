@@ -8,11 +8,14 @@
 // - account-deleted — обліковий запис щойно видалено: токен перевіряється за підписом (JWKS проєкту),
 //   а користувача справді вже не має бути.
 //
+// Мова листа — `language` із запиту (мова інтерфейсу застосунку), інакше user_metadata.language облікового запису,
+// інакше українська.
+//
 // Шаблони — templates.ts, його пише server/examples/email_templates.rs. Як розгорнути — README.md поруч.
 
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5.9.6";
-import { TEMPLATES, type Template } from "./templates.ts";
+import { TEMPLATES, type Language, type Template } from "./templates.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -53,14 +56,14 @@ Deno.serve(async (request) => {
   );
   const body = await request.json().catch(() => null);
   const kind = typeof body?.kind === "string" ? body.kind : "";
-  const device = clean(body?.device, 80) || "Невідомий пристрій";
+  const requested = languageOf(body?.language);
   const ip = clientIp(request);
-  const values = {
-    Date: now(),
-    Device: device,
-    Ip: ip || "невідомо",
-    Location: location(request),
-  };
+  const values = (language: Language) => ({
+    Date: now(language),
+    Device: clean(body?.device, 80) || text(language, "Невідомий пристрій", "Unknown device"),
+    Ip: ip || text(language, "невідомо", "unknown"),
+    Location: location(request, language),
+  });
 
   if (kind === "account-deleted") {
     const claims = await verified(token);
@@ -70,7 +73,8 @@ Deno.serve(async (request) => {
     if (await userExists(claims.sub)) {
       return reply(409, "not_deleted");
     }
-    await send("account-deleted", claims.email, values);
+    const language = requested ?? claims.language ?? "uk";
+    await send("account-deleted", language, claims.email, values(language));
     return reply(200, "sent");
   }
   if (!["welcome", "new-device", "sign-in"].includes(kind)) {
@@ -109,9 +113,22 @@ Deno.serve(async (request) => {
   if (!template) {
     return reply(200, "skipped");
   }
-  await send(template, user.email, { ...values, Name: displayName(user) });
+  const language = requested ?? languageOf(user.user_metadata?.language) ?? "uk";
+  await send(template, language, user.email, {
+    ...values(language),
+    Name: displayName(user),
+  });
   return reply(200, "sent");
 });
+
+/** Мова листа, якщо це одна з мов шаблонів. */
+function languageOf(value: unknown): Language | null {
+  return value === "uk" || value === "en" ? value : null;
+}
+
+function text(language: Language, uk: string, en: string): string {
+  return language === "en" ? en : uk;
+}
 
 function reply(status: number, result: string): Response {
   return Response.json({ result }, { status });
@@ -140,30 +157,31 @@ function clientIp(request: Request): string {
   );
 }
 
-/** Країна за заголовком мережі, якщо він є; інакше «Не визначено». */
-function location(request: Request): string {
+/** Країна за заголовком мережі, якщо він є, — мовою листа; інакше «Не визначено». */
+function location(request: Request, language: Language): string {
   const country =
     request.headers.get("cf-ipcountry") ??
     request.headers.get("x-country-code");
   if (country && /^[A-Z]{2}$/.test(country) && country !== "XX") {
     try {
       return (
-        new Intl.DisplayNames(["uk"], { type: "region" }).of(country) ?? country
+        new Intl.DisplayNames([language], { type: "region" }).of(country) ??
+        country
       );
     } catch {
       return country;
     }
   }
-  return "Не визначено";
+  return text(language, "Не визначено", "Unknown");
 }
 
-function now(): string {
-  const date = new Intl.DateTimeFormat("uk-UA", {
+function now(language: Language): string {
+  const date = new Intl.DateTimeFormat(language === "en" ? "en-US" : "uk-UA", {
     dateStyle: "long",
     timeStyle: "short",
     timeZone: TIME_ZONE,
   }).format(new Date());
-  return `${date} (за Києвом)`;
+  return `${date} ${text(language, "(за Києвом)", "(Kyiv time)")}`;
 }
 
 function displayName(user: User): string {
@@ -178,11 +196,12 @@ function escapeHtml(text: string): string {
 
 async function send(
   template: Template,
+  language: Language,
   email: string,
   values: Record<string, string>,
 ): Promise<void> {
   const variables: Record<string, string> = { ...values, Email: email };
-  const { subject, html } = TEMPLATES[template];
+  const { subject, html } = TEMPLATES[template][language];
   await mailer.sendMail({
     from: Deno.env.get("SMTP_FROM"),
     to: email,
@@ -235,15 +254,22 @@ async function updateAppMetadata(
 /** Токен видаленого користувача: Supabase його вже не прийме, тож перевіряємо підпис самі (ключі проєкту, JWKS). */
 async function verified(
   token: string,
-): Promise<{ sub: string; email: string } | null> {
+): Promise<{ sub: string; email: string; language: Language | null } | null> {
   try {
     const { payload } = await jwtVerify(token, jwks, {
       issuer: `${SUPABASE_URL}/auth/v1`,
     });
+    const metadata = payload.user_metadata as
+      | Record<string, unknown>
+      | undefined;
     return typeof payload.sub === "string" &&
       typeof payload.email === "string" &&
       payload.email
-      ? { sub: payload.sub, email: payload.email }
+      ? {
+          sub: payload.sub,
+          email: payload.email,
+          language: languageOf(metadata?.language),
+        }
       : null;
   } catch {
     // Немає асиметричних ключів (старий спільний секрет JWT), підпис чи термін не той — листа немає.

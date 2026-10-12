@@ -101,8 +101,12 @@
       </div>
     </form>
     <app-checkbox class="auth__consent" inputName="terms" [(checked)]="terms"
-      >{{ 'Я погоджуюся з' | t }} <a class="auth__link" href="#terms">{{ 'умовами користування' | t }}</a> {{ 'та' | t }}
-      <a class="auth__link" href="#privacy">{{ 'політикою конфіденційності' | t }}</a></app-checkbox
+      >{{ 'Я погоджуюся з' | t }}
+      <button class="auth__link" type="button" (click)="legal.show('terms')">{{ 'умовами користування' | t }}</button>
+      {{ 'та' | t }}
+      <button class="auth__link" type="button" (click)="legal.show('privacy')">
+        {{ 'політикою конфіденційності' | t }}
+      </button></app-checkbox
     >
     @if (submitted() && !terms()) {
       <p class="auth__consent-error" role="alert">
@@ -118,4 +122,5 @@
       }}</span>
     </div>
   }
+  <app-legal-dialog #legal />
 </app-auth-layout>

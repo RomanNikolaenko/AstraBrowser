@@ -548,6 +548,9 @@ export const EN: Readonly<Record<string, string>> = {
   'Браузер записує свої помилки у файл на цьому комп’ютері. Його можна надіслати, коли просите про допомогу.':
     'The browser writes its errors to a file on this computer. You can send it when asking for help.',
   'Відкрити журнал': 'Open log',
+  Документи: 'Documents',
+  'Умови користування': 'Terms of Use',
+  'Політика конфіденційності': 'Privacy Policy',
   'Не вдалося відкрити теку з журналом.': 'Couldn’t open the log folder.',
   'Відновити закриту вкладку': 'Reopen closed tab',
   'Картинка в картинці (відео YouTube)': 'Picture in picture (YouTube videos)',

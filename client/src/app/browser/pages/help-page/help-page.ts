@@ -4,9 +4,11 @@ import { isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../../bindings';
 import { SHORTCUTS } from '../internal-pages';
 import { translate, TranslatePipe } from '../../../shared/i18n/i18n';
+import { UiIcon } from '../../../shared/ui-icon/ui-icon';
+import { LegalDialog } from '../../../legal/legal-dialog/legal-dialog';
 
 @Component({
-  imports: [TranslatePipe],
+  imports: [LegalDialog, TranslatePipe, UiIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-help-page',
   styleUrls: ['../internal-page.scss', './help-page.scss'],

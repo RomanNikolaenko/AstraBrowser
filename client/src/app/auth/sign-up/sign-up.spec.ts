@@ -64,6 +64,22 @@ describe('SignUp', () => {
     expect(auth.signUp).not.toHaveBeenCalled();
   });
 
+  it('should open the terms and the privacy policy without ticking the consent', async () => {
+    const link = (label: string) =>
+      [...element.querySelectorAll<HTMLButtonElement>('.auth__consent .auth__link')].find((button) =>
+        button.textContent?.includes(label)
+      );
+
+    link('умовами користування')?.click();
+    await fixture.whenStable();
+    expect(element.querySelector('.legal-dialog__title')?.textContent?.trim()).toBe('Умови користування');
+
+    link('політикою конфіденційності')?.click();
+    await fixture.whenStable();
+    expect(element.querySelector('.legal-dialog__title')?.textContent?.trim()).toBe('Політика конфіденційності');
+    expect(element.querySelector<HTMLInputElement>('input[name="terms"]')?.checked).toBe(false);
+  });
+
   it('should create the account and ask for the code from the email', async () => {
     fillForm();
     acceptTerms();

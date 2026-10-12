@@ -41,11 +41,20 @@ fn pick(english: bool, uk: &'static str, en: &'static str) -> &'static str {
   }
 }
 
-/// Мова інтерфейсу змінилася (чи інтерфейс щойно запустився): `uk` чи `en`.
+/// Код мови інтерфейсу: `uk` чи `en`.
+pub fn code() -> &'static str {
+  pick(english(), "uk", "en")
+}
+
+/// Мова інтерфейсу змінилася (чи інтерфейс щойно запустився): `uk` чи `en`. Нею ж — і листи облікового запису.
 #[tauri::command]
 #[specta::specta]
-pub fn app_set_language(language: String) {
+pub fn app_set_language(app: tauri::AppHandle, language: String) {
   ENGLISH.store(language == "en", Ordering::Relaxed);
+  #[cfg(windows)]
+  crate::auth::sync_language(&app);
+  #[cfg(not(windows))]
+  let _ = app;
 }
 
 #[cfg(test)]

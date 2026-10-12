@@ -8,12 +8,13 @@ import { UiInput } from '../../shared/ui-input/ui-input';
 import { AuthLayout } from '../auth-layout/auth-layout';
 import { PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT } from '../auth-forms';
 import { VerifyEmail } from '../verify-email/verify-email';
+import { LegalDialog } from '../../legal/legal-dialog/legal-dialog';
 import { tr, TranslatePipe } from '../../shared/i18n/i18n';
 
 /** Реєстрація: ім'я, пошта й пароль, згода з умовами — і крок із кодом із листа (якщо Supabase просить підтвердити пошту). */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, AuthLayout, RouterLink, UiCheckbox, UiIcon, UiInput, VerifyEmail],
+  imports: [TranslatePipe, AuthLayout, LegalDialog, RouterLink, UiCheckbox, UiIcon, UiInput, VerifyEmail],
   selector: 'app-sign-up',
   styleUrl: '../auth.scss',
   templateUrl: './sign-up.html',

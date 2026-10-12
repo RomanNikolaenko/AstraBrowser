@@ -1,0 +1,37 @@
+<dialog #dialog class="legal-dialog" [attr.aria-labelledby]="headingId" [attr.lang]="i18n.language()" closedby="any">
+  <div class="legal-dialog__panel">
+    <header class="legal-dialog__header">
+      <div class="legal-dialog__heading">
+        <h2 class="legal-dialog__title" [id]="headingId">{{ document().title }}</h2>
+        <p class="legal-dialog__updated">{{ document().updated }}</p>
+      </div>
+      <button
+        class="legal-dialog__close"
+        type="button"
+        [attr.aria-label]="'Закрити' | t"
+        [title]="'Закрити' | t"
+        (click)="hide()">
+        <app-icon icon="close" />
+      </button>
+    </header>
+    <!-- Фокус — на тексті: його одразу можна гортати клавішами. -->
+    <div #body class="legal-dialog__body" tabindex="0" autofocus>
+      @for (section of sections(); track $index) {
+        @if (section.heading) {
+          <h3 class="legal-dialog__section">{{ section.heading }}</h3>
+        }
+        @for (block of section.blocks; track $index) {
+          @if (isList(block)) {
+            <ul class="legal-dialog__list">
+              @for (item of block; track $index) {
+                <li>{{ item }}</li>
+              }
+            </ul>
+          } @else {
+            <p class="legal-dialog__paragraph">{{ block }}</p>
+          }
+        }
+      }
+    </div>
+  </div>
+</dialog>

@@ -69,6 +69,9 @@ struct Session {
   /// новішого пароля, а давніший ключ (пароль відтоді змінили) синхронізувати паролі вже не може.
   #[serde(default)]
   sync_key_at: u64,
+  /// Мова листів облікового запису (user_metadata.language): `uk`, `en` чи порожньо, якщо ще не записано.
+  #[serde(default)]
+  language: String,
 }
 
 /// Що бачить інтерфейс: користувач або `None`, якщо не ввійшли.
@@ -265,6 +268,11 @@ fn weak_password(body: &Value) -> AuthError {
   AuthError::new("weak_password", message)
 }
 
+/// Мова листів з даних облікового запису (user_metadata.language).
+fn language_of(user: &Value) -> String {
+  user.get("user_metadata").and_then(|metadata| text(metadata, "language")).unwrap_or_default().to_string()
+}
+
 fn user_of(value: &Value) -> Option<User> {
   let metadata = value.get("user_metadata");
   let name = metadata.and_then(|metadata| text(metadata, "name").or_else(|| text(metadata, "full_name")));
@@ -289,6 +297,7 @@ fn session_of(value: &Value, remember: bool) -> Option<Session> {
     remember,
     sync_key: None,
     sync_key_at: 0,
+    language: language_of(value.get("user")?),
   })
 }
 
@@ -349,6 +358,10 @@ impl Auth {
     };
     if switched {
       activate(app, state.user.as_ref().map(|user| user.id.as_str()));
+      // Щойно ввійшли — листи облікового запису тією ж мовою, що й інтерфейс.
+      if state.user.is_some() {
+        sync_language(app);
+      }
     }
     if changed {
       let _ = app.emit("auth://changed", state.clone());
@@ -423,6 +436,29 @@ impl Auth {
   fn access_token(&self, app: &AppHandle) -> Result<String, AuthError> {
     self.refresh(app, false)?.map(|session| session.access_token).ok_or_else(signed_out)
   }
+}
+
+/// Мова листів (user_metadata.language) — як мова інтерфейсу: нею пишуть шаблони Supabase (supabase/templates) і
+/// функція notify. У фоні; без зв'язку — наступного разу.
+pub fn sync_language(app: &AppHandle) {
+  let app = app.clone();
+  thread::spawn(move || {
+    let auth = app.state::<Auth>();
+    let language = crate::i18n::code();
+    if auth.current().is_none_or(|session| session.language == language) {
+      return;
+    }
+    let Ok(token) = auth.access_token(&app) else {
+      return;
+    };
+    match call(Method::Put, "user", Some(&token), &json!({ "data": { "language": language } })) {
+      Ok(_) => {
+        log::info!("auth: мова листів облікового запису — {language}");
+        auth.modify(&app, |session| session.language = language.to_string());
+      }
+      Err(error) => log::warn!("auth: не вдалося записати мову листів: {}", error.code),
+    }
+  });
 }
 
 fn signed_out() -> AuthError {
@@ -543,15 +579,17 @@ fn signed_in(app: &AppHandle, session: Session, created: bool) -> AuthState {
 fn notify(token: String, kind: &'static str) {
   thread::spawn(move || {
     let url = format!("{SUPABASE_URL}/functions/v1/notify");
-    let _ = request(Method::Post, &url, Some(&token), &json!({ "kind": kind, "device": device_name() }));
+    let body = json!({ "kind": kind, "device": device_name(), "language": crate::i18n::code() });
+    let _ = request(Method::Post, &url, Some(&token), &body);
   });
 }
 
-/// Як назвати цей комп'ютер у листі: «Astra Browser на Windows (ROMAN-PC)».
+/// Як назвати цей комп'ютер у листі (мовою інтерфейсу, як і сам лист): «Astra Browser на Windows (ROMAN-PC)».
 fn device_name() -> String {
+  let device = crate::i18n::text("Astra Browser на Windows", "Astra Browser on Windows");
   match std::env::var("COMPUTERNAME").ok().filter(|name| !name.trim().is_empty()) {
-    Some(computer) => format!("Astra Browser на Windows ({})", computer.trim()),
-    None => "Astra Browser на Windows".to_string(),
+    Some(computer) => format!("{device} ({})", computer.trim()),
+    None => device.to_string(),
   }
 }
 
@@ -563,7 +601,12 @@ pub async fn auth_sign_up(app: AppHandle, name: String, email: String, password:
       Method::Post,
       "signup",
       None,
-      &json!({ "email": clean_email(&email), "password": password, "data": { "name": name.trim() } }),
+      &json!({
+        "email": clean_email(&email),
+        "password": password,
+        // Мова листів (і першого — з кодом підтвердження) — як інтерфейсу.
+        "data": { "name": name.trim(), "language": crate::i18n::code() },
+      }),
     )?;
     // Підтвердження пошти вимкнено — Supabase одразу дає сеанс.
     if let Some(mut session) = session_of(&reply, true) {
@@ -694,7 +737,11 @@ pub async fn auth_update_name(app: AppHandle, name: String) -> Result<AuthState,
     let token = auth.access_token(&app)?;
     let reply = call(Method::Put, "user", Some(&token), &json!({ "data": { "name": name.trim() } }))?;
     let user = user_of(&reply).ok_or_else(unexpected)?;
-    Ok(auth.modify(&app, |session| session.user = user))
+    let language = language_of(&reply);
+    Ok(auth.modify(&app, |session| {
+      session.user = user;
+      session.language = language;
+    }))
   })
   .await
 }
@@ -709,7 +756,11 @@ pub async fn auth_reload_user(app: AppHandle) -> Result<AuthState, AuthError> {
     match call(Method::Get, "user", Some(&token), &Value::Null) {
       Ok(reply) => {
         let user = user_of(&reply).ok_or_else(unexpected)?;
-        Ok(auth.modify(&app, |session| session.user = user))
+        let language = language_of(&reply);
+        Ok(auth.modify(&app, |session| {
+          session.user = user;
+          session.language = language;
+        }))
       }
       Err(error) if is_session_gone(&error) => {
         auth.set(&app, None);
@@ -861,11 +912,14 @@ mod tests {
       "refresh_token": "refresh",
       "expires_in": 3600,
       "expires_at": 2_000_000_000u64,
-      "user": { "id": "u1", "email": "user@example.com", "user_metadata": { "name": " Роман " } }
+      "user": { "id": "u1", "email": "user@example.com", "user_metadata": { "name": " Роман ", "language": "en" } }
     });
     let session = session_of(&reply, true).expect("session");
     assert_eq!(session.expires_at, 2_000_000_000);
     assert_eq!(session.user, User { id: "u1".into(), email: "user@example.com".into(), name: "Роман".into() });
+    // Мова листів облікового запису — щоб не записувати її на сервер щоразу.
+    assert_eq!(session.language, "en");
+    assert_eq!(language_of(&json!({ "id": "u2" })), "");
 
     // Відповідь на реєстрацію з підтвердженням пошти — лише користувач, без токенів.
     assert!(session_of(&json!({ "id": "u1", "email": "user@example.com" }), true).is_none());

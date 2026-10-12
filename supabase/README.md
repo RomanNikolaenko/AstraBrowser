@@ -8,3 +8,5 @@
 | Видалення облікового запису | SQL Editor → виконати [account.sql](account.sql) |
 | Листи Supabase (коди) | Authentication → Emails — шаблони з [templates](templates/README.md) |
 | Листи «нашого сервера» | Edge Function [notify](functions/notify/README.md) |
+
+Що з цього вже налаштовано — `node supabase/check.mjs` (лише читає: нікуди не входить і листів не надсилає).

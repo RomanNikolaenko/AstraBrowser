@@ -171,7 +171,7 @@ export const commands = {
 	appUpdateInstall: () => __TAURI_INVOKE<null>("app_update_install"),
 	/**  Посилання, з якими браузер запустили (віддаються один раз). */
 	launchUrls: () => __TAURI_INVOKE<string[]>("launch_urls"),
-	/**  Мова інтерфейсу змінилася (чи інтерфейс щойно запустився): `uk` чи `en`. */
+	/**  Мова інтерфейсу змінилася (чи інтерфейс щойно запустився): `uk` чи `en`. Нею ж — і листи облікового запису. */
 	appSetLanguage: (language: string) => __TAURI_INVOKE<void>("app_set_language", { language }),
 	/**  Помилка інтерфейсу (Angular ErrorHandler, client/src/app/shared/logging). */
 	appLogError: (message: string) => __TAURI_INVOKE<void>("app_log_error", { message }),

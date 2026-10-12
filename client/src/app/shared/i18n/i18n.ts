@@ -1,4 +1,4 @@
-import { Injectable, Pipe, PipeTransform, computed, effect, inject } from '@angular/core';
+import { DestroyRef, Injectable, Pipe, PipeTransform, computed, effect, inject } from '@angular/core';
 import { isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../bindings';
 import { storedSignal } from '../storage/stored-signal';
@@ -107,6 +107,12 @@ export class I18n {
   constructor() {
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- один сервіс мови на вікно, для функцій поза компонентами
     active = this;
+    // Знищений сервіс (між тестами) більше не задає мову: функції поза компонентами повертаються до української.
+    inject(DestroyRef).onDestroy(() => {
+      if (active === this) {
+        active = null;
+      }
+    });
     effect(() => {
       const language = this.language();
       document.documentElement.lang = language;

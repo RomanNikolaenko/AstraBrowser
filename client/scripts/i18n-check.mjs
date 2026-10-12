@@ -19,6 +19,8 @@ import ts from 'typescript';
 const app = resolve(import.meta.dirname, '../src/app');
 const dictionary = join(app, 'shared/i18n/en.ts');
 const SKIP = new Set(['bindings.ts', 'en.ts', 'i18n.ts']);
+/** Умови й політика конфіденційності: кожною мовою написані окремо (legal-document.ts), а не через словник. */
+const SKIP_DIRS = ['legal/texts/'];
 const CYRILLIC = /[Ѐ-ӿ]/;
 /** Виклики, перший аргумент яких — ключ перекладу. */
 const TRANSLATING = /(^|\.)(tr|translate|t)$/;
@@ -167,7 +169,8 @@ function checkCode(file, source) {
 
 for (const file of files(app)) {
   const name = file.split(/[\\/]/).at(-1);
-  if (name.endsWith('.spec.ts') || SKIP.has(name)) {
+  const path = relative(app, file).replaceAll('\\', '/');
+  if (name.endsWith('.spec.ts') || SKIP.has(name) || SKIP_DIRS.some((dir) => path.startsWith(dir))) {
     continue;
   }
   const source = readFileSync(file, 'utf8');

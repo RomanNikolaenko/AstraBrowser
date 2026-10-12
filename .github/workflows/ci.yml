@@ -1,0 +1,98 @@
+# Перевірки на кожен пуш у main і pull request: форматування, лінтери, переклад, тести й збірка інтерфейсу,
+# тести й clippy Rust (обидва профілі). Секретів не потрібно — ключа підпису тут немає.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Новий пуш у ту саму гілку скасовує ще не завершену перевірку попереднього.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    name: Інтерфейс
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Залежності
+        run: npm ci
+
+      - name: Форматування
+        run: npm run format:check
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Stylelint
+        run: npm run lint:styles
+
+      # Кожен текст інтерфейсу має англійський переклад (client/src/app/shared/i18n/en.ts).
+      - name: Переклад
+        run: npm run i18n:check
+
+      - name: Тести
+        run: npx ng test --watch=false
+
+      - name: Збірка
+        run: npm run build
+
+  server:
+    name: Rust
+    # Більшість коду — лише для Windows (WebView2, реєстр, DPAPI).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Кеш Rust
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            server/target
+          key: cargo-ci-${{ runner.os }}-${{ hashFiles('server/Cargo.lock') }}
+          restore-keys: cargo-ci-${{ runner.os }}-
+
+      # generate_context! вбудовує зібраний інтерфейс (frontendDist): без нього Rust не компілюється.
+      - name: Збірка інтерфейсу
+        working-directory: client
+        run: |
+          npm ci
+          npm run build
+
+      # Серед тестів — і перевірка, що client/src/app/bindings.ts відповідає командам Rust.
+      - name: Тести
+        working-directory: server
+        run: cargo test
+
+      - name: Clippy
+        working-directory: server
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Частина коду — лише в релізі (скажімо, інструменти розробника закриті для інтерфейсу браузера).
+      - name: Clippy (реліз)
+        working-directory: server
+        run: cargo clippy --release -- -D warnings

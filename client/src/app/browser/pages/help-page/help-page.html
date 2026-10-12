@@ -38,6 +38,19 @@
     </div>
   </dl>
 
+  <h2 class="page__group">{{ 'Документи' | t }}</h2>
+  <div class="page__list">
+    <button class="help-legal" type="button" (click)="legal.show('terms')">
+      <span>{{ 'Умови користування' | t }}</span>
+      <app-icon class="help-legal__icon" icon="chevron-right" />
+    </button>
+    <button class="help-legal" type="button" (click)="legal.show('privacy')">
+      <span>{{ 'Політика конфіденційності' | t }}</span>
+      <app-icon class="help-legal__icon" icon="chevron-right" />
+    </button>
+  </div>
+  <app-legal-dialog #legal />
+
   @if (inApp) {
     <h2 class="page__group">{{ 'Журнал помилок' | t }}</h2>
     <div class="page__list help-log">
