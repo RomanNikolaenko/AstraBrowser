@@ -329,20 +329,24 @@ struct PromptEvent {
 
 /// Місце поля на сторінці — у фізичних пікселях від лівого верхнього кута сайту.
 #[derive(Clone, Copy, Default, Serialize, Deserialize)]
-struct Rect {
+pub(crate) struct Rect {
   x: f64,
   y: f64,
   width: f64,
   height: f64,
 }
 
-/// Що робити зі списком адрес над сайтом (інтерфейсові): show — показати під полем `rect` адреси `ids`; move — поле
-/// зсунулося; hide — сховати; blur — сайт утратив фокус (сховати, якщо не в сам інтерфейс); key — клавіша в полі.
+/// Що робити зі списком над сайтом (інтерфейсові): show — показати під полем `rect` адреси чи картки (`form`) `ids`;
+/// move — поле зсунулося; hide — сховати; blur — сайт утратив фокус (сховати, якщо не в сам інтерфейс); key — клавіша
+/// в полі. Картки показує cards.rs тією самою подією.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AutofillEvent {
+pub(crate) struct AutofillEvent {
   label: String,
   action: &'static str,
+  /// address чи card.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  form: Option<&'static str>,
   #[serde(skip_serializing_if = "Option::is_none")]
   kind: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -355,8 +359,34 @@ struct AutofillEvent {
 
 impl AutofillEvent {
   fn new(label: &str, action: &'static str) -> Self {
-    Self { label: label.to_string(), action, kind: None, rect: None, ids: Vec::new(), key: None }
+    Self { label: label.to_string(), action, form: None, kind: None, rect: None, ids: Vec::new(), key: None }
   }
+
+  /// Показати список `ids` виду `form` під полем `rect` виду `kind`; без жодного — сховати.
+  pub(crate) fn show(label: &str, form: &'static str, kind: String, rect: Rect, ids: Vec<String>) -> Self {
+    if ids.is_empty() {
+      return Self::new(label, "hide");
+    }
+    Self { form: Some(form), kind: Some(kind), rect: Some(rect), ids, ..Self::new(label, "show") }
+  }
+}
+
+/// Поле, у яке став користувач (повідомлення focus від autofill-page.js): вид поля, види полів його частини форми
+/// й місце на сторінці.
+pub(crate) fn focused_field(message: &Value) -> Option<(String, Vec<String>, Rect)> {
+  let kind = message.get("kind")?.as_str()?.to_string();
+  let kinds = message
+    .get("kinds")
+    .and_then(Value::as_array)
+    .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
+    .unwrap_or_default();
+  let rect = message.get("rect").and_then(|rect| serde_json::from_value::<Rect>(rect.clone()).ok()).unwrap_or_default();
+  Some((kind, kinds, rect))
+}
+
+/// Відповідь сторінці на focus: чи показано список (без того, що в ньому).
+pub(crate) fn shown_reply(message: &Value, shown: bool) -> Value {
+  json!({ "astra": "autofill", "type": "shown", "seq": message.get("seq"), "on": shown })
 }
 
 #[derive(Default)]
@@ -425,7 +455,7 @@ impl Addresses {
     fs::rename(&temporary, &file).map_err(|error| error.to_string())
   }
 
-  fn emit(app: &AppHandle, ui: &str, event: AutofillEvent) {
+  pub(crate) fn emit(app: &AppHandle, ui: &str, event: AutofillEvent) {
     let _ = app.emit_to(ui, "page://autofill", event);
   }
 }
@@ -476,13 +506,7 @@ pub fn on_page_message(app: &AppHandle, ui: &str, label: &str, token: &str, sour
   let addresses = app.state::<Addresses>();
   match message.get("type")?.as_str()? {
     "focus" => {
-      let kind = message.get("kind")?.as_str()?.to_string();
-      let kinds: Vec<String> = message
-        .get("kinds")
-        .and_then(Value::as_array)
-        .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
-        .unwrap_or_default();
-      let rect = message.get("rect").and_then(|rect| serde_json::from_value::<Rect>(rect.clone()).ok()).unwrap_or_default();
+      let (kind, kinds, rect) = focused_field(message)?;
       let ids = {
         let book = addresses.book.lock().ok()?;
         if book.settings.autofill { book.suggestions(&kind) } else { Vec::new() }
@@ -491,13 +515,8 @@ pub fn on_page_message(app: &AppHandle, ui: &str, label: &str, token: &str, sour
       if let Ok(mut forms) = addresses.forms.lock() {
         forms.insert(label.to_string(), kinds);
       }
-      let event = if shown {
-        AutofillEvent { kind: Some(kind), rect: Some(rect), ids, ..AutofillEvent::new(label, "show") }
-      } else {
-        AutofillEvent::new(label, "hide")
-      };
-      Addresses::emit(app, ui, event);
-      Some(json!({ "astra": "autofill", "type": "shown", "seq": message.get("seq"), "on": shown }))
+      Addresses::emit(app, ui, AutofillEvent::show(label, "address", kind, rect, ids));
+      Some(shown_reply(message, shown))
     }
     "move" => {
       let rect = serde_json::from_value::<Rect>(message.get("rect")?.clone()).ok()?;

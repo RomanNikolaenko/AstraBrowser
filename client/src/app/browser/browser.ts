@@ -32,6 +32,7 @@ import { AutoplayStore } from './data/autoplay';
 import { DownloadsStore } from './data/downloads';
 import { ExternalAppsStore, schemeOf } from './data/external-apps';
 import { AddressesStore } from './data/addresses';
+import { CardsStore } from './data/cards';
 import { PasswordsStore } from './data/passwords';
 import { BlockedTracker, TrackingStore } from './data/tracking';
 import { DownloadPrompt } from './download-prompt/download-prompt';
@@ -44,6 +45,7 @@ import { Translator } from './translator/translator';
 import { ZoomBadge } from './zoom-badge/zoom-badge';
 import { PasswordPrompt } from './password-prompt/password-prompt';
 import { AddressPrompt } from './address-prompt/address-prompt';
+import { CardPrompt } from './card-prompt/card-prompt';
 import { AutofillPopup } from './autofill-popup/autofill-popup';
 import { DownloadsMenu } from './downloads-menu/downloads-menu';
 import { ExtensionsMenu } from './extensions-menu/extensions-menu';
@@ -84,6 +86,7 @@ import { PersonalizationPage } from './pages/personalization-page/personalizatio
 import { ProfilePage } from './pages/profile-page/profile-page';
 import { PasswordsPage } from './pages/passwords-page/passwords-page';
 import { AddressesPage } from './pages/addresses-page/addresses-page';
+import { CardsPage } from './pages/cards-page/cards-page';
 import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor, isPageUrl, viewSourceUrl } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
 import { PageCrashed } from './page-crashed/page-crashed';
@@ -191,6 +194,8 @@ interface BrowserTab {
     PasswordsPage,
     AddressesPage,
     AddressPrompt,
+    CardPrompt,
+    CardsPage,
     AutofillPopup,
     PersonalizationPage,
     PageCrashed,
@@ -226,6 +231,7 @@ export class Browser {
   private readonly downloads = inject(DownloadsStore);
   private readonly passwords = inject(PasswordsStore);
   private readonly addresses = inject(AddressesStore);
+  private readonly cards = inject(CardsStore);
   /** Збережені адреси над полем форми на сайті (server/src/addresses.rs). */
   private readonly autofillPopup = viewChild(AutofillPopup);
   private readonly favicons = inject(FaviconStore);
@@ -636,6 +642,7 @@ export class Browser {
         this.pageViews.on('page://password-prompt', (event) => this.passwords.ask(event)),
         this.pageViews.on('page://passwords-manage', () => this.openPage('passwords')),
         this.pageViews.on('page://address-prompt', (event) => this.addresses.ask(event)),
+        this.pageViews.on('page://card-prompt', (event) => this.cards.ask(event)),
         this.pageViews.on('page://autofill', (event) => this.onPageAutofill(event)),
       ];
       destroyRef.onDestroy(() => {
@@ -2025,7 +2032,7 @@ export class Browser {
     switch (event.action) {
       case 'show':
         if (event.rect) {
-          popup.show(event.label, event.kind ?? 'name', event.ids ?? [], event.rect, this.pageBounds());
+          popup.show(event.label, event.form ?? 'address', event.kind ?? 'name', event.ids ?? [], event.rect, this.pageBounds());
         }
         break;
       case 'move':

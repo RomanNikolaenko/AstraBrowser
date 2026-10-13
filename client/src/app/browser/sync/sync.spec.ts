@@ -69,7 +69,8 @@ describe('SyncService', () => {
           return server.push(payload.items);
         case 'passwords_sync_items':
         case 'addresses_sync_items':
-          // Сеанс без ключа: паролі й адреси не синхронізуються, поки не введуть пароль облікового запису.
+        case 'cards_sync_items':
+          // Сеанс без ключа: паролі, адреси й картки не синхронізуються, поки не введуть пароль облікового запису.
           return { keyId: null, keyTime: 0, items: {} };
         case 'auth_reload_user':
           return { user: null };
@@ -192,6 +193,7 @@ describe('SyncService', () => {
         case 'sync_push':
           return server.push(payload.items);
         case 'passwords_sync_items':
+        case 'cards_sync_items':
           return { keyId: 'k1', keyTime: 1, items: {} };
         case 'addresses_sync_items':
           return { keyId: 'k1', keyTime: 1, items: { ...addresses } };
@@ -202,6 +204,7 @@ describe('SyncService', () => {
           }
           return { unreadable: [] };
         case 'passwords_sync_apply':
+        case 'cards_sync_apply':
           return { unreadable: [] };
         case 'auth_reload_user':
           return { user: null };

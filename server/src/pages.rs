@@ -234,8 +234,8 @@ fn zoom_script(token: &str) -> String {
   format!("({})({});", include_str!("zoom-page.js"), serde_json::Value::from(token))
 }
 
-/// Повідомлення скриптів сторінки: паролі — до passwords.rs, адреси — до addresses.rs, переклад виділеного — до
-/// translate.rs, крок масштабу — інтерфейсу вікна як гаряча клавіша.
+/// Повідомлення скриптів сторінки: паролі — до passwords.rs, адреси — до addresses.rs, банківські картки — до
+/// cards.rs, переклад виділеного — до translate.rs, крок масштабу — інтерфейсу вікна як гаряча клавіша.
 #[cfg(windows)]
 fn on_page_message(
   app: &AppHandle,
@@ -256,6 +256,10 @@ fn on_page_message(
       None
     }
     "translate" if message.get("token")?.as_str()? == token => crate::translate::on_page_message(app, label, message),
+    // Поля банківської картки — до cards.rs, решта автозаповнення (адреси, рух і клавіші списку) — до addresses.rs.
+    "autofill" if message.get("form").and_then(serde_json::Value::as_str) == Some("card") => {
+      crate::cards::on_page_message(app, ui, label, token, source, message)
+    }
     "autofill" => crate::addresses::on_page_message(app, ui, label, token, source, message),
     // Сторінка виходить із повного екрана: спершу вікно й сайт на місце, тоді — їй відповідь, що можна.
     "fullscreen-exit" if message.get("token")?.as_str()? == token => {
@@ -352,7 +356,8 @@ pub async fn page_open(
     // Файл зберігається в «Завантаження» Windows, а власне вікно завантажень WebView2 сховане:
     // перебіг показує інтерфейс (webview2::watch_downloads).
     .on_download(|_, _| true);
-  // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу. Адреси — так само у формах.
+  // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу. Адреси й картки — так само у
+  // формах (один скрипт, autofill-page.js).
   // Global Privacy Control: navigator.globalPrivacyControl (а заголовок Sec-GPC додає webview2::block_ads).
   #[cfg(windows)]
   let builder = if privacy.gpc { builder.initialization_script_for_all_frames(crate::tracking::page_script(true)) } else { builder };

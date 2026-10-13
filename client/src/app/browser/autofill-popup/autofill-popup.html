@@ -4,7 +4,7 @@
   class="autofill"
   popover="manual"
   role="listbox"
-  [attr.aria-label]="'Збережені адреси' | t"
+  [attr.aria-label]="form() === 'card' ? ('Збережені картки' | t) : ('Збережені адреси' | t)"
   (pointerdown)="$event.preventDefault()">
   @for (item of suggestions(); track item.id; let index = $index) {
     <button
@@ -16,7 +16,7 @@
       [attr.aria-selected]="index === selected()"
       (pointermove)="selected.set(index)"
       (click)="pick(index)">
-      <app-icon class="autofill__icon" icon="location" />
+      <app-icon class="autofill__icon" [icon]="form() === 'card' ? 'card' : 'location'" />
       <span class="autofill__text">
         <span class="autofill__value">{{ item.value }}</span>
         @if (item.detail) {
@@ -33,6 +33,6 @@
     [class.autofill__item--selected]="selected() === suggestions().length"
     (pointermove)="selected.set(suggestions().length)"
     (click)="openManage()">
-    {{ 'Керувати адресами…' | t }}
+    {{ form() === 'card' ? ('Керувати картками…' | t) : ('Керувати адресами…' | t) }}
   </button>
 </div>

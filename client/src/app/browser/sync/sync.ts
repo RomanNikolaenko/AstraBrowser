@@ -25,7 +25,7 @@ export interface SyncStatus {
   readonly at?: number;
   readonly message?: string;
   /**
-   * Паролі сайтів і адреси (зашифровані): ok — синхронізуються; locked — немає ключа (сеанс давніший за
+   * Паролі сайтів, адреси й картки (зашифровані): ok — синхронізуються; locked — немає ключа (сеанс давніший за
    * синхронізацію); stale — пароль облікового запису змінили на іншому комп'ютері, а тут ключ ще від старого.
    */
   readonly passwords: 'ok' | 'locked' | 'stale';
@@ -60,8 +60,9 @@ function emptyState(): SyncState {
 }
 
 /**
- * Синхронізація даних облікового запису: закладки, нотатки, історія, профіль, налаштування, паролі сайтів і адреси
- * (останні два зашифровані на комп'ютері ключем із пароля облікового запису) — через таблицю sync_items у Supabase.
+ * Синхронізація даних облікового запису: закладки, нотатки, історія, профіль, налаштування, паролі сайтів, адреси й
+ * банківські картки (останні три зашифровані на комп'ютері ключем із пароля облікового запису) — через таблицю
+ * sync_items у Supabase.
  *
  * Кожен запис колекції синхронізується окремо: що змінилося, видно з відбитків записів, які вже на сервері
  * (`base`). З двох змін одного запису перемагає пізніша (сервер приймає лише новішу й повертає відхилені).
@@ -89,6 +90,11 @@ export class SyncService {
       'addresses',
       () => commands.addressesSyncItems(),
       (changes) => commands.addressesSyncApply(changes)
+    ),
+    new SealedCollection(
+      'cards',
+      () => commands.cardsSyncItems(),
+      (changes) => commands.cardsSyncApply(changes)
     ),
   ];
   private readonly collections: readonly SyncCollection[] = syncCollections(this.settings, this.sealed);
@@ -165,7 +171,7 @@ export class SyncService {
         this.schedule(CHANGE_DELAY);
       }
     });
-    const sealedChanged = ['passwords://changed', 'addresses://changed'].map((event) =>
+    const sealedChanged = ['passwords://changed', 'addresses://changed', 'cards://changed'].map((event) =>
       listen(event, () => this.schedule(CHANGE_DELAY))
     );
     const interval = setInterval(() => this.schedule(0), INTERVAL);

@@ -147,6 +147,23 @@ export const commands = {
 	addressesSyncItems: () => __TAURI_INVOKE<SyncItems>("addresses_sync_items"),
 	/**  Записи з сервера: нові й змінені адреси — у книгу, видалені — геть. Зашифровані іншим ключем лишаються як є. */
 	addressesSyncApply: (changes: SyncChange[]) => __TAURI_INVOKE<SyncApplied>("addresses_sync_apply", { changes }),
+	cardsState: () => __TAURI_INVOKE<CardsState>("cards_state"),
+	/**  Нова картка (`id` — None) чи нові дані збереженої. */
+	cardSave: (id: string | null, card: CardInput) => __TAURI_INVOKE<null>("card_save", { id, card }),
+	cardRemove: (id: string) => __TAURI_INVOKE<null>("card_remove", { id }),
+	cardsSetSettings: (offer: boolean, autofill: boolean, verify: boolean) => __TAURI_INVOKE<null>("cards_set_settings", { offer, autofill, verify }),
+	/**  Відповідь на «Зберегти картку?»: `save` — зберегти (чи оновити збережену), інакше — не зараз. */
+	cardPromptAnswer: (id: number, save: boolean) => __TAURI_INVOKE<null>("card_prompt_answer", { id, save }),
+	/**
+	 *  Користувач вибрав картку `id` у списку над сайтом `label`. Якщо так налаштовано й Windows Hello є — спершу
+	 *  підтвердження особи; тоді сторінка отримує дані картки для полів своєї форми (CVV/CVC — ніколи), а фокус
+	 *  повертається в поле. false — підтвердження не пройшло (скасували).
+	 */
+	cardAutofill: (label: string, id: string) => __TAURI_INVOKE<boolean>("card_autofill", { label, id }),
+	/**  Усі картки облікового запису, зашифровані для синхронізації. */
+	cardsSyncItems: () => __TAURI_INVOKE<SyncItems>("cards_sync_items"),
+	/**  Записи з сервера: нові й змінені картки — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є. */
+	cardsSyncApply: (changes: SyncChange[]) => __TAURI_INVOKE<SyncApplied>("cards_sync_apply", { changes }),
 	windowFillMonitor: () => __TAURI_INVOKE<null>("window_fill_monitor"),
 	windowStartDrag: () => __TAURI_INVOKE<null>("window_start_drag"),
 	/**  Значок сайту з адресою `url` (беремо його головну сторінку); `None` — не знайшли. */
@@ -325,6 +342,46 @@ export type Bounds = {
 export type BrowsingDataSizes = {
 	siteData: number,
 	cache: number,
+};
+
+/**  Картка для інтерфейсу — без номера. */
+export type CardInfo = {
+	id: string,
+	/**  visa, mastercard, amex, prostir, maestro, unionpay, jcb, discover, diners чи card (невідома). */
+	brand: string,
+	last4: string,
+	holder: string,
+	month: number,
+	year: number,
+	nickname: string,
+	created: number,
+	updated: number,
+	/**  Коли карткою востаннє заповнили форму. */
+	used: number | null,
+};
+
+/**  Картка з вікна «Додати картку» / «Змінити картку». Порожній номер під час зміни — номер лишається той самий. */
+export type CardInput = {
+	number: string,
+	holder: string,
+	month: number,
+	year: number,
+	nickname: string,
+};
+
+/**  Налаштування для інтерфейсу: ті самі, але без serde(default) — у TypeScript поля обов'язкові. */
+export type CardSettings = {
+	offer: boolean,
+	autofill: boolean,
+	verify: boolean,
+};
+
+/**  Усе, що показує сторінка «Банківські картки»; надсилається й подією cards://changed. */
+export type CardsState = {
+	entries: CardInfo[],
+	settings: CardSettings,
+	/**  Чи налаштовано Windows Hello: без нього підтверджувати нічим. */
+	hello: boolean,
 };
 
 /**  Що очистити в діалозі «Очистити дані перегляду». */

@@ -1,8 +1,10 @@
 (token) => {
-  // Автозаповнення адрес (server/src/addresses.rs). Користувач став у поле адреси (ім'я, вулиця, місто, телефон…) —
-  // браузер показує над сайтом збережені адреси. Список малює інтерфейс браузера, а не ця сторінка, тож скрипти сайту
-  // адрес не бачать; вибрали одну — браузер передає значення лише для полів цієї форми, і скрипт заповнює ними її
-  // частину з полем. Після надсилання форми з адресою — просить браузер запропонувати зберегти її.
+  // Автозаповнення адрес (server/src/addresses.rs) і банківських карток (server/src/cards.rs). Користувач став у поле
+  // адреси (ім'я, вулиця, місто, телефон…) чи картки (номер, ім'я власника, термін дії) — браузер показує над сайтом
+  // збережені адреси чи картки. Список малює інтерфейс браузера, а не ця сторінка, тож скрипти сайту їх не бачать;
+  // вибрали одну — браузер передає значення лише для полів цієї форми, і скрипт заповнює ними її частину з полем.
+  // CVV/CVC не заповнюється й не читається ніколи. Після надсилання форми з адресою чи карткою — просить браузер
+  // запропонувати зберегти її.
   // З браузером говорить лише через chrome.webview і з токеном цієї сторінки. Усе потрібне береться одразу,
   // ще до скриптів сайту, тож підмінити це сайт уже не може.
   if (window.top !== window || !window.chrome || !window.chrome.webview) {
@@ -73,12 +75,18 @@
     tel: 'phone',
     'tel-national': 'phone',
     email: 'email',
+    'cc-number': 'cc-number',
+    'cc-name': 'cc-name',
+    'cc-exp': 'cc-exp',
+    'cc-exp-month': 'cc-exp-month',
+    'cc-exp-year': 'cc-exp-year',
+    'cc-csc': 'cc-csc',
   };
-  // Поля з цим призначенням — не адреса: вхід, банківські картки, одноразові коди.
+  // Поля з цим призначенням — ні адреса, ні картка: вхід, одноразові коди, частини імені власника картки тощо.
   const FOREIGN =
     /^(username|current-password|new-password|one-time-code|cc-|transaction-|bday|sex|url|photo|impp|webauthn|additional-name|honorific)/;
 
-  /** Вид поля за autocomplete: рядок — вид, null — точно не адреса, undefined — не сказано. */
+  /** Вид поля за autocomplete: рядок — вид, null — точно не адреса й не картка, undefined — не сказано. */
   function byAutocomplete(field) {
     const tokens = (field.getAttribute('autocomplete') || '').toLowerCase().trim().split(/\s+/);
     const last = tokens[tokens.length - 1];
@@ -88,9 +96,26 @@
     return FOREIGN.test(last) ? null : undefined;
   }
 
-  // Вид поля за його назвою, id, підказкою й підписом. Порядок важить: вужчі — раніше.
+  // Поля картки — за назвою, id, підказкою й підписом, ще до типу поля: номер картки часто має type="tel".
+  const CARD_PATTERNS = [
+    ['cc-csc', /cvv|cvc|csc|cvn|security ?code|код безпеки|секретний код/],
+    [
+      'cc-number',
+      /card ?(number|no\b|num)|cardnumber|ccnumber|\bcc ?num|\bpan\b|номер (банківської )?(картки|карти|карты)|(\d{4}|x{4}|•{4}|\*{4})([ -](\d{4}|x{4}|•{4}|\*{4})){2}/,
+    ],
+    [
+      'cc-name',
+      /card ?holder|holder ?name|name ?on ?(the )?card|власник картки|ім.?я (власника|на картці)|владелец карты|имя (владельца|на карте)/,
+    ],
+    // «exp mm» без «/yy» далі — лише місяць; «MM/YY» — увесь термін (cc-exp нижче).
+    ['cc-exp-month', /exp\w* ?(date )?mon|\bcc ?month|card ?month|exp ?mm\b(?! ?\/)/],
+    ['cc-exp-year', /exp\w* ?(date )?y(ea)?r|\bcc ?year|card ?year|exp ?yy/],
+    ['cc-exp', /expir|exp ?date|\bexp\b|valid ?(thru|through|until)|mm ?\/ ?yy|мм ?\/ ?(рр|гг)|термін дії|срок действия|дійсна до/],
+  ];
+
+  // Вид поля адреси за тим самим. Порядок важить: вужчі — раніше.
   const PATTERNS = [
-    [null, /user ?name|login|логін|логин|captcha|coupon|promo|купон|промокод|search|пошук|поиск|card|картк|cvv|cvc|password|пароль/],
+    [null, /user ?name|login|логін|логин|captcha|coupon|promo|купон|промокод|search|пошук|поиск|card|картк|password|пароль/],
     ['email', /e ?mail|пошт|почт/],
     ['phone', /phone|\btel\b|mobile|телефон|мобільн|мобильн/],
     ['postal', /\bzip|postal|post ?code|індекс|индекс/],
@@ -121,7 +146,9 @@
       .replace(/[_\-.[\]]+/g, ' ');
   }
 
-  /** Вид поля (TOKENS) і чи задав його сам сайт (autocomplete); null — не адреса. */
+  const isCardKind = (kind) => kind.startsWith('cc-');
+
+  /** Вид поля (TOKENS) і чи задав його сам сайт (autocomplete); null — ні адреса, ні картка. */
   function kindOf(field) {
     if (!isField(field)) {
       return null;
@@ -130,14 +157,18 @@
     if (declared !== undefined) {
       return declared && { kind: declared, declared: true };
     }
+    const description = describe(field);
+    const card = CARD_PATTERNS.find(([, pattern]) => pattern.test(description));
+    if (card) {
+      return { kind: card[0], declared: false };
+    }
     if (field.type === 'email') {
       return { kind: 'email', declared: false };
     }
     if (field.type === 'tel') {
       return { kind: 'phone', declared: false };
     }
-    const text = describe(field);
-    const found = PATTERNS.find(([, pattern]) => pattern.test(text));
+    const found = PATTERNS.find(([, pattern]) => pattern.test(description));
     return found && found[0] ? { kind: found[0], declared: false } : null;
   }
 
@@ -169,8 +200,9 @@
   const sectionWith = (field) => sectionsIn(field.form).find((section) => section.some((item) => item.field === field)) || [];
 
   /**
-   * Вид поля, для якого варто показати адреси, — лише текстові поля в частині форми, схожій на адресу: вид задав сам
-   * сайт або в ній щонайменше три різні поля адреси. Пошта у формі з паролем — це вхід, там свої підказки.
+   * Поле, для якого варто показати адреси чи картки, — лише текстові поля. Картки — у формі з номером картки (CVV/CVC —
+   * ніколи); адреси — у частині форми, схожій на адресу: вид задав сам сайт або в ній щонайменше три різні поля адреси.
+   * Пошта у формі з паролем — це вхід, там свої підказки. `kinds` — види полів того самого роду в цій частині форми.
    */
   function suggestible(field) {
     if (!isInput(field) || !visible(field)) {
@@ -178,23 +210,31 @@
     }
     const section = sectionWith(field);
     const item = section.find((entry) => entry.field === field);
-    if (!item || (!item.declared && new Set(section.map((entry) => entry.kind)).size < 3)) {
+    if (!item) {
+      return null;
+    }
+    const card = isCardKind(item.kind);
+    const kinds = [...new Set(section.map((entry) => entry.kind))].filter((kind) => isCardKind(kind) === card);
+    if (card) {
+      return item.kind !== 'cc-csc' && kinds.includes('cc-number') ? { form: 'card', kind: item.kind, kinds } : null;
+    }
+    if (!item.declared && kinds.length < 3) {
       return null;
     }
     const scope = field.form || document;
     if (item.kind === 'email' && scope.querySelector('input[type=password]')) {
       return null;
     }
-    return { kind: item.kind, kinds: [...new Set(section.map((entry) => entry.kind))] };
+    return { form: 'address', kind: item.kind, kinds };
   }
 
-  // ——— Список адрес над полем ———
+  // ——— Список адрес чи карток над полем ———
 
   /** Поле, для якого показано (чи запитано) список. */
   let field = null;
   let seq = 0;
   let shown = false;
-  /** Користувач ходив списком стрілками — тоді Enter вибирає адресу, а не надсилає форму. */
+  /** Користувач ходив списком стрілками — тоді Enter вибирає адресу чи картку, а не надсилає форму. */
   let navigated = false;
 
   function rectOf(target) {
@@ -212,7 +252,7 @@
     field = target;
     shown = false;
     navigated = false;
-    send({ type: 'focus', seq: ++seq, kind: found.kind, kinds: found.kinds, rect: rectOf(target) });
+    send({ type: 'focus', form: found.form, seq: ++seq, kind: found.kind, kinds: found.kinds, rect: rectOf(target) });
   }
 
   /** Сховати список, але пам'ятати поле: клік у нього чи порожнє поле покаже список знову. */
@@ -386,6 +426,40 @@
     );
   }
 
+  /** Число в тексті пункту чи поля: «07 — липень» — 7, «2028» — 2028; без числа — NaN. */
+  const numberIn = (text) => Number((String(text).match(/\d+/) || [''])[0] || NaN);
+
+  /** Пункт списку місяця чи року терміну дії: те саме число (рік — і двома цифрами). */
+  function optionByNumber(select, value, kind) {
+    const wanted = Number(value);
+    const short = kind === 'cc-exp-year' ? wanted % 100 : wanted;
+    return (
+      [...optionsOf.call(select)].find((option) =>
+        [option.value, option.text].some((text) => numberIn(text) === wanted || numberIn(text) === short)
+      ) || null
+    );
+  }
+
+  /**
+   * Термін дії картки так, як просить поле: MM/YY, MM/YYYY (підказка з YYYY), MMYY (поле на 4 символи) чи MM / YY (з
+   * пробілами, як у підказці). `value` — MM/YYYY від браузера; для окремого поля року — YY чи YYYY.
+   */
+  function expiryText(target, kind, value) {
+    const hint = (target.getAttribute('placeholder') || '').toLowerCase();
+    const long = /yyyy|рррр|гггг/.test(hint);
+    if (kind === 'cc-exp-year') {
+      return long || (target.maxLength !== 2 && !/^(yy|рр|гг)$/.test(hint.trim())) ? value : value.slice(-2);
+    }
+    const [month, year] = value.split('/');
+    if (long) {
+      return `${month}/${year}`;
+    }
+    if (target.maxLength === 4) {
+      return `${month}${year.slice(-2)}`;
+    }
+    return /\s\/\s/.test(hint) ? `${month} / ${year.slice(-2)}` : `${month}/${year.slice(-2)}`;
+  }
+
   /** Поле порожнє: нічого не введено, а в списку вибрано заглушку («Оберіть…»). */
   function isBlank(target) {
     if (target instanceof HTMLSelectElement) {
@@ -397,13 +471,17 @@
 
   function put(target, kind, value) {
     if (target instanceof HTMLSelectElement) {
-      const option = optionFor(target, value, kind);
+      const option =
+        kind === 'cc-exp-month' || kind === 'cc-exp-year' ? optionByNumber(target, value, kind) : optionFor(target, value, kind);
       if (!option || option.selected) {
         return;
       }
       selectedIndexOf.set.call(target, option.index);
     } else {
       let text = kind === 'street' && !(target instanceof HTMLTextAreaElement) ? value.replace(/\s*\n\s*/g, ', ') : value;
+      if (kind === 'cc-exp' || kind === 'cc-exp-year') {
+        text = expiryText(target, kind, value);
+      }
       if (target.type === 'number') {
         text = text.replace(/\D/g, '');
       }
@@ -416,7 +494,10 @@
     target.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  /** Вибрана адреса: поле, з якого вибирали, — завжди, а решта полів його частини форми — якщо ще порожні. */
+  /**
+   * Вибрана адреса чи картка: поле, з якого вибирали, — завжди, а решта полів його частини форми — якщо ще порожні.
+   * Браузер дає значення лише для полів свого роду (адреса чи картка), і без CVV/CVC.
+   */
   function fill(values) {
     const anchor = field;
     if (!anchor || !anchor.isConnected) {
@@ -432,30 +513,60 @@
     navigated = false;
   }
 
-  // ——— Збереження адреси після надсилання форми ———
+  // ——— Збереження адреси чи картки після надсилання форми ———
 
-  /** Що ввели в поля адреси: частина форми, де заповнено найбільше. */
+  /** Що в полі: текст чи вибраний пункт списку (його текст, а для чисел — значення). */
+  function textOf(item, numeric) {
+    if (!(item instanceof HTMLSelectElement)) {
+      return valueOf(item).trim();
+    }
+    if (isBlank(item)) {
+      return '';
+    }
+    const option = optionsOf.call(item)[selectedIndexOf.get.call(item)];
+    return (numeric && !Number.isNaN(numberIn(option.value)) ? option.value : option.text).trim();
+  }
+
+  /** Картка з частини форми: номер, ім'я власника, місяць і рік. CVV/CVC не читається. Без номера — null. */
+  function cardOf(section) {
+    const value = (kind) => {
+      const item = section.find((entry) => entry.kind === kind);
+      return item ? textOf(item.field, kind !== 'cc-name' && kind !== 'cc-number') : '';
+    };
+    const number = value('cc-number').replace(/[\s-]/g, '');
+    if (!/^\d{12,19}$/.test(number)) {
+      return null;
+    }
+    const expiry = value('cc-exp').match(/(\d{1,2})\s*[/\-.]?\s*(\d{2,4})/);
+    const month = expiry ? expiry[1] : String(numberIn(value('cc-exp-month')) || '');
+    const year = expiry ? expiry[2] : String(numberIn(value('cc-exp-year')) || '');
+    return { number, holder: value('cc-name'), month, year };
+  }
+
+  /** Що ввели у форму: адреса — з частини, де заповнено найбільше полів адреси, і картка, якщо є. */
   function entered(target) {
     const form = target.form || (target.closest && target.closest('form')) || null;
     let best = null;
+    let card = null;
     for (const section of sectionsIn(form)) {
       const values = {};
       for (const { field: item, kind } of section) {
-        const value =
-          item instanceof HTMLSelectElement
-            ? isBlank(item)
-              ? ''
-              : optionsOf.call(item)[selectedIndexOf.get.call(item)].text
-            : valueOf(item);
-        if (value.trim() && !values[kind]) {
-          values[kind] = value.trim();
+        const value = isCardKind(kind) ? '' : textOf(item, false);
+        if (value && !values[kind]) {
+          values[kind] = value;
         }
       }
       if (!best || Object.keys(values).length > Object.keys(best.values).length) {
         best = { values, input: section[0].field };
       }
+      card = card || cardOf(section);
     }
-    return best && Object.keys(best.values).length >= 3 ? best : null;
+    const values = best && Object.keys(best.values).length >= 3 ? best.values : null;
+    if (!values && !card) {
+      return null;
+    }
+    const input = (card && sectionsIn(form).find((section) => cardOf(section))[0].field) || best.input;
+    return { values, card, input };
   }
 
   let pending = null;
@@ -464,7 +575,7 @@
   /** Надсилання форми. Вдалося — якщо сторінка пішла чи поля зникли; лишилися кілька секунд — найпевніше, помилка. */
   function attempt(target) {
     const found = entered(target);
-    if (!found || (pending && toJson(pending.values) === toJson(found.values))) {
+    if (!found || (pending && toJson([pending.values, pending.card]) === toJson([found.values, found.card]))) {
       return;
     }
     pending = found;
@@ -486,13 +597,18 @@
     if (!pending) {
       return;
     }
-    const { values } = pending;
+    const { values, card } = pending;
     pending = null;
-    if (sent === toJson(values)) {
+    if (sent === toJson([values, card])) {
       return;
     }
-    sent = toJson(values);
-    send({ type: 'submitted', values });
+    sent = toJson([values, card]);
+    if (values) {
+      send({ type: 'submitted', values });
+    }
+    if (card) {
+      send({ type: 'submitted', form: 'card', values: card });
+    }
   }
 
   listen(document, 'submit', (event) => event.isTrusted && attempt(targetOf(event)));

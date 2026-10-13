@@ -197,7 +197,8 @@ export interface SealedSnapshot {
 }
 
 /**
- * Колекція, яку шифрує Rust ключем із пароля облікового запису: паролі сайтів (passwords.rs) і адреси (addresses.rs).
+ * Колекція, яку шифрує Rust ключем із пароля облікового запису: паролі сайтів (passwords.rs), адреси (addresses.rs)
+ * і банківські картки (cards.rs).
  * Сервер бачить лише шифр. Зміни приходять подіями Rust, а не через localStorage.
  */
 export class SealedCollection implements SyncCollection {

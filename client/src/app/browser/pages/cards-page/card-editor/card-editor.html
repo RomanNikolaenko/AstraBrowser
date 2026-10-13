@@ -1,0 +1,77 @@
+<!-- Той самий вигляд, що й «Додати адресу» (address-editor.scss). -->
+<dialog #dialog class="address-editor" aria-labelledby="card-editor-title" closedby="any" (close)="onClose()">
+  <form class="address-editor__panel" novalidate (submit)="save($event)">
+    <h2 class="address-editor__title" id="card-editor-title">
+      {{ editing() ? ('Змінити картку' | t) : ('Додати картку' | t) }}
+    </h2>
+
+    <div class="address-editor__grid">
+      <div class="address-editor__item address-editor__item--wide">
+        <label class="address-editor__label" for="card-editor-number">{{ 'Номер картки' | t }}</label>
+        <app-input
+          #numberInput
+          class="address-editor__field"
+          inputId="card-editor-number"
+          inputName="card-number"
+          autocomplete="off"
+          [spellcheck]="false"
+          [placeholder]="numberHint()"
+          [(value)]="number" />
+      </div>
+      <div class="address-editor__item address-editor__item--wide">
+        <label class="address-editor__label" for="card-editor-holder">{{ "Ім'я на картці" | t }}</label>
+        <app-input
+          class="address-editor__field"
+          inputId="card-editor-holder"
+          inputName="card-holder"
+          autocomplete="off"
+          [spellcheck]="false"
+          placeholder="IVAN PETRENKO"
+          [(value)]="holder" />
+      </div>
+      <div class="address-editor__item">
+        <span class="address-editor__label" id="card-editor-month-label">{{ 'Місяць' | t }}</span>
+        <app-select
+          class="card-editor__select"
+          selectId="card-editor-month"
+          selectName="card-month"
+          ariaLabelledby="card-editor-month-label"
+          [options]="months"
+          [(value)]="month" />
+      </div>
+      <div class="address-editor__item">
+        <span class="address-editor__label" id="card-editor-year-label">{{ 'Рік' | t }}</span>
+        <app-select
+          class="card-editor__select"
+          selectId="card-editor-year"
+          selectName="card-year"
+          ariaLabelledby="card-editor-year-label"
+          [options]="years()"
+          [(value)]="year" />
+      </div>
+      <div class="address-editor__item address-editor__item--wide">
+        <label class="address-editor__label" for="card-editor-nickname">{{ 'Назва (необов’язково)' | t }}</label>
+        <app-input
+          class="address-editor__field"
+          inputId="card-editor-nickname"
+          inputName="card-nickname"
+          autocomplete="off"
+          [placeholder]="'Наприклад, «Зарплатна»' | t"
+          [(value)]="nickname" />
+      </div>
+    </div>
+
+    <p class="card-editor__note">{{ 'CVV/CVC браузер не зберігає: його щоразу вводять на сайті.' | t }}</p>
+
+    @if (error()) {
+      <p class="address-editor__error" role="alert">{{ error() | t }}</p>
+    }
+
+    <div class="address-editor__actions">
+      <button class="address-editor__button" type="button" (click)="close()">{{ 'Скасувати' | t }}</button>
+      <button class="address-editor__button address-editor__button--primary" type="submit" [disabled]="saving()">
+        {{ 'Зберегти' | t }}
+      </button>
+    </div>
+  </form>
+</dialog>

@@ -1,0 +1,13 @@
+@use '../../../browser-ui' as *;
+
+.card-editor {
+  &__select {
+    @include select-colors;
+  }
+
+  &__note {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+}

@@ -1,0 +1,12 @@
+.cards {
+  // Прострочена картка — тьмяніше: нею вже не заплатиш, але видалити чи змінити термін можна.
+  &__row--expired {
+    opacity: 0.6;
+  }
+
+  &__note {
+    margin: 1.5rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+}

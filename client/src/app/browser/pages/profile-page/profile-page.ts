@@ -13,6 +13,7 @@ import { bookmarksToHtml, countImported, parseBookmarksHtml } from '../../data/b
 import { HistoryStore } from '../../data/history';
 import { NotesStore } from '../../data/notes';
 import { AddressesStore } from '../../data/addresses';
+import { CardsStore } from '../../data/cards';
 import { PasswordsStore } from '../../data/passwords';
 import { AVATAR_COLORS, ProfileStore } from '../../data/profile';
 import { PageViews } from '../../page-views/page-views';
@@ -60,6 +61,7 @@ export class ProfilePage {
   private readonly notes = inject(NotesStore);
   private readonly passwords = inject(PasswordsStore);
   private readonly addresses = inject(AddressesStore);
+  private readonly cards = inject(CardsStore);
   private readonly pageViews = inject(PageViews);
   private readonly windows = inject(BrowserWindows);
 
@@ -147,6 +149,7 @@ export class ProfilePage {
     { icon: 'star', label: translate('Закладки'), value: this.bookmarks.entries().length },
     { icon: 'key', label: translate('Паролі'), value: this.passwords.entries().length },
     { icon: 'location', label: translate('Адреси'), value: this.addresses.entries().length },
+    { icon: 'card', label: translate('Банківські картки'), value: this.cards.entries().length },
     { icon: 'notes', label: translate('Нотатки'), value: this.notes.entries().length },
     { icon: 'clock', label: translate('Записи історії'), value: this.history.entries().length },
   ]);

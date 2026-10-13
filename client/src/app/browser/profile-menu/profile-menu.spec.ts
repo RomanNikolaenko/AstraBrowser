@@ -35,10 +35,10 @@ describe('ProfileMenu', () => {
     expect(element.querySelector('.profile-menu__name')?.textContent?.trim()).toBe('Роман');
     expect(element.querySelector('.profile-menu__avatar .avatar__initials')?.textContent).toBe('Р');
 
-    for (const label of ['Керування профілем', 'Паролі', 'Адреси', 'Персоналізація', 'Гостьовий режим']) {
+    for (const label of ['Керування профілем', 'Паролі', 'Адреси', 'Банківські картки', 'Персоналізація', 'Гостьовий режим']) {
       item(label)?.click();
     }
-    expect(events).toEqual(['profile', 'passwords', 'addresses', 'personalization', 'guest']);
+    expect(events).toEqual(['profile', 'passwords', 'addresses', 'cards', 'personalization', 'guest']);
   });
 
   it('should only offer to leave the guest mode in a guest window', async () => {

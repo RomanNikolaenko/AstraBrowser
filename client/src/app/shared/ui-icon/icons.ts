@@ -9,6 +9,7 @@ import bellSvg from '../../../assets/icons/bell.svg';
 import boltSvg from '../../../assets/icons/bolt.svg';
 import broomSvg from '../../../assets/icons/broom.svg';
 import cameraSvg from '../../../assets/icons/camera.svg';
+import cardSvg from '../../../assets/icons/card.svg';
 import checkSvg from '../../../assets/icons/check.svg';
 import chevronDownSvg from '../../../assets/icons/chevron-down.svg';
 import chevronRightSvg from '../../../assets/icons/chevron-right.svg';
@@ -89,6 +90,7 @@ export const ICONS: Readonly<Record<string, string>> = {
   bolt: boltSvg,
   broom: broomSvg,
   camera: cameraSvg,
+  card: cardSvg,
   check: checkSvg,
   'chevron-down': chevronDownSvg,
   'chevron-right': chevronRightSvg,

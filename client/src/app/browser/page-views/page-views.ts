@@ -4,6 +4,7 @@ import { commands } from '../../bindings';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { AddressPromptRequest, AutofillKind } from '../data/addresses';
+import type { CardPromptRequest } from '../data/cards';
 import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
 import { PasswordPromptRequest } from '../data/passwords';
 import type { PermissionKind, PermissionState } from '../data/permissions';
@@ -157,6 +158,14 @@ export interface PagePasswordsManageEvent {
   readonly label: string;
 }
 
+/** Список над полем форми на сайті: адреси чи банківські картки. */
+export type AutofillForm = 'address' | 'card';
+
+/** Оплатили на сайті новою карткою — «Зберегти картку?» (server/src/cards.rs). */
+export interface PageCardPromptEvent extends CardPromptRequest {
+  readonly label: string;
+}
+
 /** Надіслали форму з адресою — «Зберегти адресу?» (server/src/addresses.rs). */
 export interface PageAddressPromptEvent extends AddressPromptRequest {
   readonly label: string;
@@ -170,7 +179,10 @@ export interface PageAddressPromptEvent extends AddressPromptRequest {
 export interface PageAutofillEvent {
   readonly label: string;
   readonly action: 'show' | 'move' | 'hide' | 'blur' | 'key';
-  readonly kind?: AutofillKind;
+  /** Що показати: адреси (server/src/addresses.rs) чи банківські картки (server/src/cards.rs). */
+  readonly form?: AutofillForm;
+  /** Вид поля: адреси чи картки (cc-number, cc-name, cc-exp…). */
+  readonly kind?: AutofillKind | `cc-${'number' | 'name' | 'exp' | 'exp-month' | 'exp-year'}`;
   readonly rect?: PageBounds;
   readonly ids?: readonly string[];
   readonly key?: 'ArrowDown' | 'ArrowUp' | 'Enter' | 'Escape';
@@ -209,6 +221,7 @@ interface PageEvents {
   'page://passwords-manage': PagePasswordsManageEvent;
   'page://address-prompt': PageAddressPromptEvent;
   'page://autofill': PageAutofillEvent;
+  'page://card-prompt': PageCardPromptEvent;
 }
 
 /**

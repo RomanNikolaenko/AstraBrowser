@@ -1,0 +1,128 @@
+<section class="page">
+  <header class="page__header">
+    <h1 class="page__title">{{ 'Банківські картки' | t }}</h1>
+    @if (cards.state() && !guest) {
+      <button class="page__button" type="button" (click)="editor.add()">
+        <app-icon class="addresses__add-icon" icon="plus" />
+        {{ 'Додати' | t }}
+      </button>
+    }
+  </header>
+
+  @if (guest) {
+    <div class="page__empty">
+      <span class="page__empty-icon"><app-icon icon="guest" /></span>
+      <h2 class="page__empty-title">{{ 'Картки недоступні в гостьовому режимі' | t }}</h2>
+      <p>{{ 'Гість не бачить збережених карток, а нові картки в цьому вікні не зберігаються.' | t }}</p>
+    </div>
+  } @else {
+    @if (cards.settings(); as settings) {
+      <div class="page__list addresses__settings">
+        <div class="addresses__setting">
+          <span class="page__text">
+            <span class="page__name" id="cards-offer-name">{{ 'Пропонувати зберігати картки' | t }}</span>
+            <span class="page__meta" id="cards-offer-hint">{{
+              'Після оплати на сайті новою карткою браузер запитає, чи зберегти її' | t
+            }}</span>
+          </span>
+          <app-switch
+            inputId="cards-offer"
+            inputName="cards-offer"
+            ariaLabelledby="cards-offer-name"
+            ariaDescribedby="cards-offer-hint"
+            [checked]="settings.offer"
+            (checkedChange)="setSetting('offer', $event)" />
+        </div>
+        <div class="addresses__setting">
+          <span class="page__text">
+            <span class="page__name" id="cards-autofill-name">{{ 'Автозаповнення форм оплати' | t }}</span>
+            <span class="page__meta" id="cards-autofill-hint">
+              {{ 'Показувати збережені картки в полях форм оплати на захищених сайтах (https)' | t }}
+            </span>
+          </span>
+          <app-switch
+            inputId="cards-autofill"
+            inputName="cards-autofill"
+            ariaLabelledby="cards-autofill-name"
+            ariaDescribedby="cards-autofill-hint"
+            [checked]="settings.autofill"
+            (checkedChange)="setSetting('autofill', $event)" />
+        </div>
+        <div class="addresses__setting">
+          <span class="page__text">
+            <span class="page__name" id="cards-verify-name">{{ 'Підтверджувати через Windows Hello' | t }}</span>
+            <span class="page__meta" id="cards-verify-hint">
+              @if (cards.hello()) {
+                {{ 'Перш ніж заповнити картку, браузер попросить PIN, відбиток чи обличчя' | t }}
+              } @else {
+                {{ 'Windows Hello не налаштовано на цьому комп’ютері — картки заповнюються без підтвердження' | t }}
+              }
+            </span>
+          </span>
+          <app-switch
+            inputId="cards-verify"
+            inputName="cards-verify"
+            ariaLabelledby="cards-verify-name"
+            ariaDescribedby="cards-verify-hint"
+            [disabled]="!cards.hello()"
+            [checked]="settings.verify && cards.hello()"
+            (checkedChange)="setSetting('verify', $event)" />
+        </div>
+      </div>
+    }
+
+    @if (!cards.entries().length) {
+      <div class="page__empty">
+        <span class="page__empty-icon"><app-icon icon="card" /></span>
+        <h2 class="page__empty-title">{{ 'Карток ще немає' | t }}</h2>
+        <p>
+          {{ 'Коли ви оплачуєте на сайті новою карткою, браузер запропонує зберегти її. Додати картку можна й вручну.' | t }}
+        </p>
+      </div>
+    } @else {
+      <h2 class="page__group">{{ 'Збережені картки · {0}' | t: [cards.entries().length] }}</h2>
+      <ul class="page__list">
+        @for (card of cards.entries(); track card.id) {
+          @let name = title(card);
+          <li class="page__row" [class.cards__row--expired]="expired(card)">
+            <app-icon class="page__favicon" icon="card" />
+            <span class="page__text addresses__entry">
+              <span class="page__name">{{ name }}</span>
+              @if (details(card); as detail) {
+                <span class="page__meta">{{ detail }}</span>
+              }
+            </span>
+            <button
+              class="page__remove"
+              type="button"
+              [attr.aria-label]="('Змінити картку' | t) + ' ' + name"
+              [title]="'Змінити' | t"
+              (click)="editor.edit(card)">
+              <app-icon icon="edit" />
+            </button>
+            <button
+              class="page__remove"
+              type="button"
+              [attr.aria-label]="('Видалити картку' | t) + ' ' + name"
+              [title]="'Видалити' | t"
+              (click)="askRemove(card)">
+              <app-icon icon="trash" />
+            </button>
+          </li>
+        }
+      </ul>
+    }
+    <p class="cards__note">
+      {{ 'Номери карток зберігаються зашифрованими, а CVV/CVC браузер не зберігає ніколи.' | t }}
+    </p>
+  }
+
+  <app-confirm-dialog
+    #confirmRemove
+    [heading]="'Видалити картку?' | t"
+    [message]="removeMessage()"
+    [confirmLabel]="'Видалити' | t"
+    danger
+    (confirmed)="remove()" />
+  <app-card-editor #editor />
+</section>

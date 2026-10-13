@@ -2,6 +2,8 @@
 
 #[cfg(windows)]
 mod addresses;
+#[cfg(windows)]
+mod cards;
 mod adblock;
 mod audio;
 #[cfg(windows)]
@@ -18,6 +20,8 @@ mod external;
 mod favicons;
 #[cfg(windows)]
 mod fullscreen;
+#[cfg(windows)]
+mod hello;
 mod i18n;
 mod ipc;
 mod launch;
@@ -111,6 +115,8 @@ fn main() {
 				downloads::start(app.handle());
 				tauri::Manager::manage(app, passwords::Passwords::default());
 				tauri::Manager::manage(app, addresses::Addresses::default());
+				tauri::Manager::manage(app, cards::Cards::default());
+				cards::start(app.handle());
 				tauri::Manager::manage(app, auth::Auth::default());
 				auth::start(app.handle());
 			}

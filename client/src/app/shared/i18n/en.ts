@@ -328,10 +328,10 @@ export const EN: Readonly<Record<string, string>> = {
   'Видалити назавжди': 'Delete permanently',
   Синхронізація: 'Sync',
   'Синхронізувати зараз': 'Sync now',
-  "Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів і адреси.":
-    'The account password was changed on another computer. Enter the new one to keep syncing site passwords and addresses.',
-  "Щоб синхронізувати паролі сайтів і адреси, введіть пароль облікового запису: з нього створюється ключ, яким вони шифруються ще на цьому комп'ютері.":
-    'To sync site passwords and addresses, enter your account password: it’s used to create the key that encrypts them right on this computer.',
+  "Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів, адреси й картки.":
+    'The account password was changed on another computer. Enter the new one to keep syncing site passwords, addresses and cards.',
+  "Щоб синхронізувати паролі сайтів, адреси й картки, введіть пароль облікового запису: з нього створюється ключ, яким вони шифруються ще на цьому комп'ютері.":
+    'To sync site passwords, addresses and cards, enter your account password: it’s used to create the key that encrypts them right on this computer.',
   'Синхронізувати паролі': 'Sync passwords',
   'Імпорт з іншого браузера': 'Import from another browser',
   'Файл закладок HTML: у Chrome чи Edge — «Закладки → Диспетчер закладок → ⋯ → Експортувати закладки»':
@@ -682,6 +682,58 @@ export const EN: Readonly<Record<string, string>> = {
     'The browser will fill in forms on sites with it. You can edit or delete it on the Addresses page.',
   'Збережені адреси': 'Saved addresses',
   'Керувати адресами…': 'Manage addresses…',
+
+  // Банківські картки
+  'Банківські картки': 'Bank cards',
+  Картка: 'Card',
+  ПРОСТІР: 'PROSTIR',
+  'Збережені картки': 'Saved cards',
+  'Керувати картками…': 'Manage cards…',
+  'Термін дії минув': 'Expired',
+  'до {0}': 'until {0}',
+  'Зберегти картку?': 'Save card?',
+  'Оновити картку?': 'Update card?',
+  'Термін дії {0}': 'Expires {0}',
+  'Номер зберігається зашифрованим, а CVV/CVC браузер не зберігає ніколи.':
+    'The number is stored encrypted, and the browser never stores the CVV/CVC.',
+  'Додати картку': 'Add card',
+  'Змінити картку': 'Edit card',
+  'Номер картки': 'Card number',
+  "Ім'я на картці": 'Name on card',
+  Місяць: 'Month',
+  Рік: 'Year',
+  'Назва (необов’язково)': 'Nickname (optional)',
+  'Наприклад, «Зарплатна»': 'For example, “Salary”',
+  'CVV/CVC браузер не зберігає: його щоразу вводять на сайті.':
+    'The browser doesn’t store the CVV/CVC: you enter it on the site each time.',
+  '•••• {0} — лишіть порожнім, щоб не змінювати': '•••• {0} — leave empty to keep it',
+  'Введіть номер картки': 'Enter the card number',
+  'Вкажіть термін дії картки': 'Enter the card’s expiry date',
+  'Не вдалося зберегти картку': 'Couldn’t save the card',
+  'Картки недоступні в гостьовому режимі': 'Cards aren’t available in guest mode',
+  'Гість не бачить збережених карток, а нові картки в цьому вікні не зберігаються.':
+    'Guests can’t see saved cards, and new cards aren’t saved in this window.',
+  'Пропонувати зберігати картки': 'Offer to save cards',
+  'Після оплати на сайті новою карткою браузер запитає, чи зберегти її':
+    'After you pay on a site with a new card, the browser asks whether to save it',
+  'Автозаповнення форм оплати': 'Payment form autofill',
+  'Показувати збережені картки в полях форм оплати на захищених сайтах (https)':
+    'Show saved cards in payment form fields on secure sites (https)',
+  'Підтверджувати через Windows Hello': 'Confirm with Windows Hello',
+  'Перш ніж заповнити картку, браузер попросить PIN, відбиток чи обличчя':
+    'Before filling in a card, the browser asks for your PIN, fingerprint or face',
+  'Windows Hello не налаштовано на цьому комп’ютері — картки заповнюються без підтвердження':
+    'Windows Hello isn’t set up on this computer, so cards are filled in without confirmation',
+  'Карток ще немає': 'No cards yet',
+  'Коли ви оплачуєте на сайті новою карткою, браузер запропонує зберегти її. Додати картку можна й вручну.':
+    'When you pay on a site with a new card, the browser offers to save it. You can also add one manually.',
+  'Збережені картки · {0}': 'Saved cards · {0}',
+  'Видалити картку': 'Delete card',
+  'Видалити картку?': 'Delete card?',
+  'Картку «{0}» буде видалено з браузера. Скасувати це не вийде.':
+    'The card “{0}” will be deleted from the browser. This can’t be undone.',
+  'Номери карток зберігаються зашифрованими, а CVV/CVC браузер не зберігає ніколи.':
+    'Card numbers are stored encrypted, and the browser never stores the CVV/CVC.',
 
   // Персоналізація
   'Тема й колір': 'Theme and color',

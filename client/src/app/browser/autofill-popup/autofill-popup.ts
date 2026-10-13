@@ -10,12 +10,13 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { TranslatePipe } from '../../shared/i18n/i18n';
+import { translate, TranslatePipe } from '../../shared/i18n/i18n';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
 import { AddressesStore, AutofillKind, addressLine, addressValue, fullName } from '../data/addresses';
-import type { PageBounds } from '../page-views/page-views';
+import { CardInfo, CardsStore, brandName, cardExpired, cardExpiry, cardTitle } from '../data/cards';
+import type { AutofillForm, PageBounds } from '../page-views/page-views';
 
-/** Пункт списку: що адреса дасть полю і чим вона ще впізнавана. */
+/** Пункт списку: що адреса чи картка дасть полю і чим вона ще впізнавана. */
 interface Suggestion {
   readonly id: string;
   readonly value: string;
@@ -32,9 +33,10 @@ const MAX_WIDTH = 420;
 const BLUR_CHECK_MS = 150;
 
 /**
- * Збережені адреси над полем форми на сайті (server/src/addresses.rs, autofill-page.js). Список малює інтерфейс, а не
- * сторінка: сайт адрес не бачить, доки користувач не вибрав одну. Фокус лишається в полі сайту, тож стрілки, Enter
- * і Esc приходять від сторінки (`key`). Вибрали адресу — сторінка заповнює нею форму (AddressesStore.fill).
+ * Збережені адреси чи банківські картки над полем форми на сайті (server/src/addresses.rs, server/src/cards.rs,
+ * autofill-page.js). Список малює інтерфейс, а не сторінка: сайт їх не бачить, доки користувач не вибрав одну. Фокус
+ * лишається в полі сайту, тож стрілки, Enter і Esc приходять від сторінки (`key`). Вибрали — сторінка заповнює форму
+ * (AddressesStore.fill, CardsStore.fill — картку після Windows Hello, якщо так налаштовано).
  *
  * Показує, зсуває й ховає список браузер (page://autofill): `show`, `move`, `hide`, `blur`. Поле — у фізичних
  * пікселях від кута сайту, а сайт — у межах `page` (координати вікна).
@@ -48,21 +50,34 @@ const BLUR_CHECK_MS = 150;
 })
 export class AutofillPopup {
   private readonly addresses = inject(AddressesStore);
+  private readonly cards = inject(CardsStore);
   private readonly changes = inject(ChangeDetectorRef);
 
-  /** «Керувати адресами…». */
-  readonly manage = output<void>();
+  /** «Керувати адресами…» чи «Керувати картками…». */
+  readonly manage = output<AutofillForm>();
   /** Список став деінде: регіон інтерфейсу над сайтом треба оновити. */
   readonly moved = output<void>();
 
   /** Сайт, над полем якого показано список; null — список сховано. */
   protected readonly label = signal<string | null>(null);
-  private readonly kind = signal<AutofillKind>('name');
+  /** Що в списку: адреси чи картки. */
+  protected readonly form = signal<AutofillForm>('address');
+  private readonly kind = signal<AutofillKind | CardKind>('name');
   private readonly ids = signal<readonly string[]>([]);
   /** Вибраний стрілками пункт; дорівнює кількості адрес — «Керувати адресами…». */
   protected readonly selected = signal(-1);
   protected readonly suggestions = computed<Suggestion[]>(() => {
     const kind = this.kind();
+    if (this.form() === 'card') {
+      const cards = this.cards.entries();
+      return this.ids().flatMap((id) => {
+        const card = cards.find((item) => item.id === id);
+        return card ? [cardSuggestion(card, kind)] : [];
+      });
+    }
+    if (isCardKind(kind)) {
+      return [];
+    }
     const entries = this.addresses.entries();
     return this.ids().flatMap((id) => {
       const entry = entries.find((item) => item.id === id);
@@ -101,9 +116,17 @@ export class AutofillPopup {
     });
   }
 
-  show(label: string, kind: AutofillKind, ids: readonly string[], field: PageBounds, page: PageBounds): void {
+  show(
+    label: string,
+    form: AutofillForm,
+    kind: AutofillKind | CardKind,
+    ids: readonly string[],
+    field: PageBounds,
+    page: PageBounds
+  ): void {
     clearTimeout(this.blurTimer);
     this.label.set(label);
+    this.form.set(form);
     this.kind.set(kind);
     this.ids.set(ids);
     this.selected.set(-1);
@@ -188,15 +211,18 @@ export class AutofillPopup {
   protected pick(index: number): void {
     const label = this.label();
     const suggestion = this.suggestions()[index];
+    const form = this.form();
     this.hide();
     if (label && suggestion) {
-      void this.addresses.fill(label, suggestion.id).catch(() => undefined);
+      const filled = form === 'card' ? this.cards.fill(label, suggestion.id) : this.addresses.fill(label, suggestion.id);
+      void filled.catch(() => undefined);
     }
   }
 
   protected openManage(): void {
+    const form = this.form();
     this.hide();
-    this.manage.emit();
+    this.manage.emit(form);
   }
 
   /**
@@ -227,4 +253,24 @@ export class AutofillPopup {
     panel.dataset['layerMargins'] = JSON.stringify(below ? [GAP, 24, 32, 24] : [24, 24, GAP, 24]);
     this.moved.emit();
   }
+}
+
+/** Вид поля картки (autofill-page.js). */
+type CardKind = 'cc-number' | 'cc-name' | 'cc-exp' | 'cc-exp-month' | 'cc-exp-year';
+
+function isCardKind(kind: AutofillKind | CardKind): kind is CardKind {
+  return kind.startsWith('cc-');
+}
+
+/**
+ * Картка в списку: у полі імені — ім'я власника, деінде — назва чи «Visa •••• 4242»; під ним — картка й власник (що
+ * не вгорі) і термін дії.
+ */
+function cardSuggestion(card: CardInfo, kind: AutofillKind | CardKind): Suggestion {
+  const face = `${brandName(card.brand)} •••• ${card.last4}`;
+  const value = kind === 'cc-name' && card.holder ? card.holder : cardTitle(card);
+  const expiry = cardExpiry(card);
+  const term = !expiry ? '' : cardExpired(card) ? translate('Термін дії минув') : translate('до {0}', [expiry]);
+  const others = [face, card.holder].filter((part) => part && part !== value);
+  return { id: card.id, value, detail: [...others, term].filter(Boolean).join(' · ') };
 }

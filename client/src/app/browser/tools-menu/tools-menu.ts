@@ -34,6 +34,7 @@ export class ToolsMenu {
     { label: tr('Закладки'), icon: 'star', page: 'bookmarks' },
     { label: tr('Паролі'), icon: 'key', page: 'passwords' },
     { label: tr('Адреси'), icon: 'location', page: 'addresses' },
+    { label: tr('Банківські картки'), icon: 'card', page: 'cards' },
     { label: tr('Розширення'), icon: 'puzzle', page: 'extensions' },
     { label: tr('Нотатки'), icon: 'notes', page: 'notes' },
     { label: tr('Перекладач'), icon: 'translate', action: 'translate' },

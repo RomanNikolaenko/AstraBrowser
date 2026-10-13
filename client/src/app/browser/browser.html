@@ -82,7 +82,8 @@
 <app-screenshot />
 <app-password-prompt />
 <app-address-prompt />
-<app-autofill-popup (manage)="openPage('addresses')" (moved)="scheduleInputRegion()" />
+<app-card-prompt />
+<app-autofill-popup (manage)="openPage($event === 'card' ? 'cards' : 'addresses')" (moved)="scheduleInputRegion()" />
 
 <div class="chrome" (dblclick)="onChromeDoubleClick($event)">
   <div class="toolbar">
@@ -344,6 +345,11 @@
       @case ('addresses') {
         @defer (on immediate) {
           <app-addresses-page />
+        }
+      }
+      @case ('cards') {
+        @defer (on immediate) {
+          <app-cards-page />
         }
       }
       @case ('notes') {
