@@ -1757,8 +1757,8 @@ export class Browser {
   }
 
   /**
-   * Присипляє фонові вкладки, яких не відкривали довше, ніж вибрано в налаштуваннях. Не засинають ті, що грають
-   * звук, вантажаться, впали чи ще не завантажені.
+   * Присипляє фонові вкладки, яких не відкривали довше, ніж вибрано в налаштуваннях, а ті, що проспали понад
+   * UNLOAD_AFTER_MS, вивантажує зовсім. Не засинають ті, що грають звук, вантажаться, впали чи ще не завантажені.
    */
   protected sleepInactiveTabs(now = Date.now()): void {
     const minutes = this.settings.sleepTabsAfter();
@@ -1768,12 +1768,18 @@ export class Browser {
     const active = this.activeTab().id;
     for (const tab of this.tabs()) {
       const site = tab.site;
-      if (tab.id === active || !site || site.pending || site.sleeping || site.crashed || site.playing || site.loading) {
+      if (tab.id === active || !site || site.pending || site.crashed || site.playing || site.loading) {
         continue;
       }
       const seen = this.lastSeen.get(site.label);
       if (seen === undefined) {
         this.lastSeen.set(site.label, now);
+        continue;
+      }
+      if (site.sleeping) {
+        if (now - seen >= UNLOAD_AFTER_MS && !tab.pinned && !site.muted) {
+          this.unloadTab(tab, site);
+        }
         continue;
       }
       if (now - seen < minutes * 60_000) {
@@ -1788,6 +1794,26 @@ export class Browser {
         })
         .catch(() => undefined);
     }
+  }
+
+  /**
+   * Вкладку, що давно спить, вивантажуємо зовсім: її webview закривається разом із процесом сторінки (сплячий усе ще
+   * тримає пам'ять), а вкладка лишається, як відновлена після перезапуску, — сайт завантажиться знову, щойно її
+   * відкриють. Запис історії той самий: повторне завантаження не дублює його. Закріплені вкладки (пошта, месенджери) і
+   * вкладки з вимкненим звуком (новий webview був би зі звуком) не вивантажуються.
+   */
+  private unloadTab(tab: BrowserTab, site: Site): void {
+    this.lastSeen.delete(site.label);
+    this.ignore(this.pageViews.close(site.label));
+    this.replaceTab({
+      ...tab,
+      site: {
+        ...emptySite(this.newPageLabel(tab), site.url),
+        title: site.title,
+        historyEntry: site.historyEntry,
+        pending: true,
+      },
+    });
   }
 
   /** Нова адреса (і без перезавантаження) — запис в історії; «Назад» і «Вперед» — як каже WebView2. */
@@ -2166,6 +2192,9 @@ function isYouTubeVideo(url: string): boolean {
     return false;
   }
 }
+
+/** Скільки вкладка має проспати, щоб її вивантажили зовсім (sleepInactiveTabs). */
+const UNLOAD_AFTER_MS = 6 * 60 * 60_000;
 
 /** Скільки тримати кнопку «Оновити», щоб відкрилося меню оновлення. */
 const RELOAD_HOLD_MS = 500;

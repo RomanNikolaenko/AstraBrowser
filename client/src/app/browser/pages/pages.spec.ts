@@ -72,6 +72,54 @@ describe('internal pages', () => {
       expect(text('.page__name')).toEqual(['YouTube']);
     });
 
+    it('should show a long history in portions as the list is scrolled to its end', { timeout: 20_000 }, async () => {
+      // jsdom не має IntersectionObserver: «кінець списку видно» — коли тест так скаже.
+      const observers = new Set<{ callback: IntersectionObserverCallback; target?: Element }>();
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          private readonly entry: { callback: IntersectionObserverCallback; target?: Element };
+          constructor(callback: IntersectionObserverCallback) {
+            this.entry = { callback };
+            observers.add(this.entry);
+          }
+          observe(target: Element) {
+            this.entry.target = target;
+          }
+          disconnect() {
+            observers.delete(this.entry);
+          }
+        }
+      );
+      const reachEnd = async () => {
+        for (const { callback, target } of [...observers]) {
+          callback([{ isIntersecting: true, target } as IntersectionObserverEntry], {} as IntersectionObserver);
+        }
+        await fixture.whenStable();
+      };
+      seed(
+        'astra.history',
+        Array.from({ length: 250 }, (_, index) => ({
+          id: `${index}`,
+          url: `https://site${index}.example/`,
+          title: `Сайт ${index}`,
+          visitedAt: Date.now() - index * 1000,
+        }))
+      );
+      const { fixture, element, type } = await render(HistoryPage);
+      const rows = () => element.querySelectorAll('.page__open').length;
+
+      expect(rows()).toBe(200);
+      await reachEnd();
+      expect(rows()).toBe(250);
+      expect(element.querySelector('.page__end')).toBeNull();
+
+      // Новий пошук — знову з першої порції.
+      await type('history-search', 'Сайт');
+      expect(rows()).toBe(200);
+      vi.unstubAllGlobals();
+    });
+
     it('should open a history entry here or, with the middle button, in a new tab', async () => {
       seed('astra.history', [{ id: '1', url: 'https://github.com/', title: 'GitHub', visitedAt: Date.now() }]);
       const { fixture, element } = await render(HistoryPage);

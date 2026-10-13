@@ -58,5 +58,8 @@
         }
       </ul>
     }
+    @if (hasMore()) {
+      <div #end class="page__end" aria-hidden="true"></div>
+    }
   }
 </section>

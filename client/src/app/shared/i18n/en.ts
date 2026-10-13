@@ -697,8 +697,8 @@ export const EN: Readonly<Record<string, string>> = {
     'Show the folder before each download and let you choose another one',
   Продуктивність: 'Performance',
   'Присипляти неактивні вкладки': 'Put inactive tabs to sleep',
-  'Фонова вкладка засинає, щоб звільнити пам’ять і процесор, а відкриєте — прокинеться з тим самим вмістом. Вкладки, що грають звук, не засинають.':
-    'A background tab goes to sleep to free up memory and CPU, and wakes up with the same content when you open it. Tabs playing sound don’t sleep.',
+  'Фонова вкладка засинає, щоб звільнити пам’ять і процесор, а відкриєте — прокинеться з тим самим вмістом. Та, що проспала понад 6 годин, вивантажується зовсім і завантажиться знову, щойно її відкриєте (крім закріплених). Вкладки, що грають звук, не засинають.':
+    'A background tab goes to sleep to free up memory and CPU, and wakes up with the same content when you open it. One asleep for over 6 hours is unloaded completely and loads again when you open it (except pinned tabs). Tabs playing sound don’t sleep.',
   Конфіденційність: 'Privacy',
   'Захист від стеження для цього сайту вимкнено': 'Tracking protection is off for this site',
   'Захист від небезпечних сайтів і файлів': 'Protection from dangerous sites and files',
@@ -720,8 +720,8 @@ export const EN: Readonly<Record<string, string>> = {
     'History ({0}), cookies, cache, form data and site settings',
   'Очистити…': 'Clear…',
   'Зберігати історію': 'Keep history',
-  'Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації':
-    'Older entries are removed automatically, both on this computer and in sync',
+  'Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації. Щонайбільше — {0} останніх записів':
+    'Older entries are removed automatically, both on this computer and in sync. At most the latest {0} entries are kept',
   'Не вдалося відкрити «Параметри Windows».': 'Couldn’t open Windows Settings.',
   'Не вдалося зберегти налаштування DNS.': 'Couldn’t save the DNS settings.',
   '7 днів': '7 days',

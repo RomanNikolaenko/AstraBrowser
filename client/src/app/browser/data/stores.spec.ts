@@ -3,7 +3,7 @@ import { SettingsStore } from '../../shared/settings/settings';
 import { BookmarkItem, BookmarksStore } from './bookmarks';
 import { DownloadsStore } from './downloads';
 import { FaviconStore } from './favicons';
-import { HistoryStore } from './history';
+import { HISTORY_LIMIT, HistoryStore } from './history';
 
 describe('browser data stores', () => {
   beforeEach(() => localStorage.clear());
@@ -38,6 +38,21 @@ describe('browser data stores', () => {
     TestBed.inject(SettingsStore).historyDays.set(30);
     TestBed.tick();
     expect(history.entries().map((entry) => entry.title)).toEqual(['Сьогодні']);
+  });
+
+  it('should keep only the latest entries of a history kept forever', () => {
+    TestBed.inject(SettingsStore).historyDays.set(0);
+    const history = TestBed.inject(HistoryStore);
+    for (let index = 0; index < HISTORY_LIMIT; index++) {
+      history.record(`https://site${index}.example`, `${index}`, 1000 + index);
+    }
+    expect(history.entries()).toHaveLength(HISTORY_LIMIT);
+
+    history.record('https://newest.example', 'Найновіший', 1000 + HISTORY_LIMIT);
+
+    expect(history.entries()).toHaveLength(HISTORY_LIMIT);
+    expect(history.entries()[0].title).toBe('Найновіший');
+    expect(history.entries().at(-1)?.title).toBe('1');
   });
 
   it('should follow a download while it runs and record how it ended', () => {

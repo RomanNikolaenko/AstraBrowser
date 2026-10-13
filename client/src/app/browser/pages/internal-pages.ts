@@ -73,7 +73,12 @@ export function groupByDay<T>(
         : time >= startOfToday - DAY
           ? translate('Вчора')
           : formatDate(time, { day: 'numeric', month: 'long', year: 'numeric' });
-    groups.set(label, [...(groups.get(label) ?? []), item]);
+    const group = groups.get(label);
+    if (group) {
+      group.push(item);
+    } else {
+      groups.set(label, [item]);
+    }
   }
   return [...groups].map(([label, groupItems]) => ({ label, items: groupItems }));
 }

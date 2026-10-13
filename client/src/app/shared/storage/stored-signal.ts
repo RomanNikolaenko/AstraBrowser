@@ -56,12 +56,32 @@ export function removeAccountData(id: string): void {
 
 /** Сигнали цього вікна за ключами — щоб синхронізація оновлювала їх, а не лише localStorage. */
 const signals = new Map<string, WritableSignal<unknown>>();
+/**
+ * Що лежить у localStorage під ключем, наскільки відомо цьому вікну (востаннє прочитане чи записане). Із ним і
+ * порівнюється нове значення — а не з перечитаним зі сховища: історія чи нотатки можуть важити мегабайти.
+ */
+const savedValues = new Map<string, string | null>();
 /** Хто стежить за змінами збережених значень (своїми й з інших вікон). */
 const listeners = new Set<(key: string) => void>();
 
 /** Сигнал цього вікна для ключа, якщо його вже створено. */
 export function storedSignalFor<T>(key: string): WritableSignal<T> | undefined {
   return signals.get(key) as WritableSignal<T> | undefined;
+}
+
+/**
+ * Нове значення одразу в localStorage (інші вікна отримають подію storage) і в сигнал цього вікна, якщо він є, — без
+ * сповіщення слухачів: так пише синхронізація, якій не треба бачити свої ж записи як зміни.
+ */
+export function writeStored(key: string, value: unknown): void {
+  const raw = JSON.stringify(value);
+  try {
+    localStorage.setItem(key, raw);
+    savedValues.set(key, raw);
+  } catch {
+    // Сховище переповнене — лишається в пам'яті цього вікна.
+  }
+  storedSignalFor(key)?.set(value);
 }
 
 /** Слухати зміни збережених значень: записи сигналів цього вікна й зміни з інших вікон. Повертає відписку. */
@@ -79,6 +99,7 @@ export function storedSignal<T>(key: string, fallback: T): WritableSignal<T> {
   const read = (): T => {
     try {
       const raw = localStorage.getItem(key);
+      savedValues.set(key, raw);
       return raw === null ? fallback : (JSON.parse(raw) as T);
     } catch {
       return fallback;
@@ -90,11 +111,12 @@ export function storedSignal<T>(key: string, fallback: T): WritableSignal<T> {
 
   effect(() => {
     const value = JSON.stringify(state());
+    if (savedValues.get(key) === value) {
+      return;
+    }
     try {
-      if (localStorage.getItem(key) === value) {
-        return;
-      }
       localStorage.setItem(key, value);
+      savedValues.set(key, value);
     } catch {
       // Сховище недоступне чи переповнене: дані лишаються лише в пам'яті цього вікна.
       return;

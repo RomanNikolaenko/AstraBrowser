@@ -7,6 +7,7 @@ import {
   removeAccountData,
   setStorageAccount,
   storedSignal,
+  writeStored,
 } from './stored-signal';
 
 describe('storedSignal', () => {
@@ -22,6 +23,37 @@ describe('storedSignal', () => {
     TestBed.tick();
 
     expect(JSON.parse(localStorage.getItem('test.items') ?? 'null')).toEqual(['a', 'b']);
+  });
+
+  it('should not read the whole value back from storage on every change', () => {
+    const state = create('test.items', ['a']);
+    const read = vi.spyOn(Storage.prototype, 'getItem');
+
+    state.set(['a', 'b']);
+    TestBed.tick();
+    state.set(['a', 'b']);
+    TestBed.tick();
+
+    expect(read).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('test.items') ?? 'null')).toEqual(['a', 'b']);
+    read.mockRestore();
+  });
+
+  it('should take a value written by sync without reporting it as a change', () => {
+    const state = create('test.items', ['a']);
+    const changes: string[] = [];
+    const stop = onStoredChange((key) => changes.push(key));
+
+    writeStored('test.items', ['from the server']);
+    TestBed.tick();
+    expect(state()).toEqual(['from the server']);
+    expect(changes).toEqual([]);
+
+    state.set(['here']);
+    TestBed.tick();
+    expect(changes).toEqual(['test.items']);
+    expect(JSON.parse(localStorage.getItem('test.items') ?? 'null')).toEqual(['here']);
+    stop();
   });
 
   it('should restore the saved value', () => {

@@ -63,8 +63,54 @@ function hostOf(url: string): string {
 
 /** Чи підходить запис до введеного: кожне слово є в назві чи адресі. */
 function matches(words: readonly string[], title: string, url: string): boolean {
-  const haystack = `${title} ${displayUrl(url)}`.toLowerCase();
-  return words.every((word) => haystack.includes(word));
+  return contains(searchText(title, url), words);
+}
+
+/** Те, в чому шукають введене: назва й адреса так, як її друкують. */
+function searchText(title: string, url: string): string {
+  return `${title} ${displayUrl(url)}`.toLowerCase();
+}
+
+function contains(text: string, words: readonly string[]): boolean {
+  return words.every((word) => text.includes(word));
+}
+
+/** Сайт з історії: скільки разів і коли востаннє відвідували, і в чому шукати. */
+interface Visit {
+  readonly url: string;
+  title: string;
+  count: number;
+  last: number;
+  text: string;
+}
+
+/**
+ * Історія по адресах — одна на кожен її стан, а не на кожну натиснуту клавішу: записів можуть бути тисячі.
+ * `history` — від найновіших записів, тож назва — з найсвіжішого запису, де вона є.
+ */
+const visitsByHistory = new WeakMap<readonly HistoryEntry[], readonly Visit[]>();
+
+function visitsOf(history: readonly HistoryEntry[]): readonly Visit[] {
+  let visits = visitsByHistory.get(history);
+  if (!visits) {
+    const byUrl = new Map<string, Visit>();
+    for (const entry of history) {
+      const visit = byUrl.get(entry.url);
+      if (visit) {
+        visit.count++;
+        visit.title ||= entry.title;
+        visit.last = Math.max(visit.last, entry.visitedAt);
+      } else if (/^https?:/i.test(entry.url)) {
+        byUrl.set(entry.url, { url: entry.url, title: entry.title, count: 1, last: entry.visitedAt, text: '' });
+      }
+    }
+    visits = [...byUrl.values()];
+    for (const visit of visits) {
+      visit.text = searchText(visit.title, visit.url);
+    }
+    visitsByHistory.set(history, visits);
+  }
+  return visits;
 }
 
 /** Наскільки запис підходить: сайт, що починається з введеного, — найвище, далі частіші й свіжіші. */
@@ -140,19 +186,9 @@ export function localSuggestions(input: string, sources: SuggestionSources, now 
     }
   }
   // Історія — по адресах: скільки разів і коли востаннє відвідували.
-  const visits = new Map<string, { title: string; count: number; last: number }>();
-  for (const entry of sources.history) {
-    const visit = visits.get(entry.url);
-    if (visit) {
-      visit.count++;
-      visit.title ||= entry.title;
-      visit.last = Math.max(visit.last, entry.visitedAt);
-    } else {
-      visits.set(entry.url, { title: entry.title, count: 1, last: entry.visitedAt });
-    }
-  }
-  for (const [address, visit] of visits) {
-    if (!seen.has(address) && /^https?:/i.test(address) && matches(words, visit.title, address)) {
+  for (const visit of visitsOf(sources.history)) {
+    const address = visit.url;
+    if (!seen.has(address) && contains(visit.text, words)) {
       seen.add(address);
       local.push({
         suggestion: {

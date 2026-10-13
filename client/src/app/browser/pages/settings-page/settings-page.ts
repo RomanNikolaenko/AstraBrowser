@@ -17,9 +17,18 @@ import { ClearDataDialog } from '../../clear-data/clear-data-dialog';
 import { DefaultBrowserStore } from '../../data/default-browser';
 import { DNS_MODES, DNS_PROVIDERS, DnsMode, DnsProvider, DnsSettings, DnsStore } from '../../data/dns';
 import { DownloadSettingsStore } from '../../data/download-settings';
-import { HistoryStore } from '../../data/history';
+import { HISTORY_LIMIT, HistoryStore } from '../../data/history';
 import { TrackingStore } from '../../data/tracking';
-import { I18n, LANGUAGE_NAMES, LanguagePreference, plural, tr, translate, TranslatePipe } from '../../../shared/i18n/i18n';
+import {
+  I18n,
+  LANGUAGE_NAMES,
+  LanguagePreference,
+  formatNumber,
+  plural,
+  tr,
+  translate,
+  TranslatePipe,
+} from '../../../shared/i18n/i18n';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -116,6 +125,8 @@ export class SettingsPage {
     }
   }
 
+  /** Межа історії числом, як пишуть мовою інтерфейсу (10 000 чи 10,000). */
+  protected readonly historyLimit = () => formatNumber(HISTORY_LIMIT);
   protected readonly retention = HISTORY_RETENTION.map((option) => ({ value: `${option.days}`, label: option.label }));
 
   protected setHistoryDays(value: string | undefined): void {

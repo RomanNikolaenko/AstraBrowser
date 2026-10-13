@@ -726,6 +726,46 @@ describe('Browser with sites', () => {
     expect(pages.called('set-background').at(-1)).toEqual([label(1), false]);
   });
 
+  it('should unload a tab that has slept for hours and load it again when opened', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+    pages.emit('page://navigation', { label: label(1), url: 'https://example.com/', canGoBack: false, canGoForward: false });
+    pages.emit('page://title', { label: label(1), title: 'Example' });
+    const history = () => TestBed.inject(HistoryStore).entries();
+    button('Нова вкладка').click();
+    await stable();
+    await typeInOmnibox('github.com');
+    const browser = fixture.debugElement.query(By.directive(Browser)).componentInstance as unknown as {
+      sleepInactiveTabs(now: number): void;
+    };
+    const now = Date.now();
+    browser.sleepInactiveTabs(now + 31 * 60_000);
+    await new Promise((resolve) => setTimeout(resolve));
+    await stable();
+    expect(pages.called('close')).toEqual([]);
+
+    // Проспала понад 6 годин — webview закрито, а вкладка лишилася з тією самою назвою.
+    browser.sleepInactiveTabs(now + 7 * 60 * 60_000);
+    await stable();
+    expect(pages.called('close')).toEqual([[label(1)]]);
+    const tab = () =>
+      [...element.querySelectorAll<HTMLElement>('.tab__select')].find((item) => item.textContent?.includes('Example'));
+    expect(tab()).toBeTruthy();
+
+    const visits = history().length;
+    const opened = pages.called('open').length;
+    tab()?.click();
+    await stable();
+    const [reopened, url] = pages.called('open').at(-1) as [string, string];
+    expect(pages.called('open').length).toBe(opened + 1);
+    expect(reopened).not.toBe(label(1));
+    expect(url).toBe('https://example.com/');
+    // Той самий сайт — без нового запису в історії.
+    pages.emit('page://navigation', { label: reopened, url: 'https://example.com/', canGoBack: false, canGoForward: false });
+    await stable();
+    expect(history().length).toBe(visits);
+  });
+
   describe('tabs', () => {
     const tabItem = (title: string) =>
       [...element.querySelectorAll<HTMLElement>('.tab')].find(

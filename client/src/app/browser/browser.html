@@ -309,6 +309,10 @@
   [class.viewport--docked]="findOpen() && activeTab().page === 'web'"
   (wheel)="onViewportWheel($event)">
   <div class="content" #content [style.zoom]="zoom() / 100">
+    <!--
+      Внутрішні сторінки, крім нової вкладки, — окремими частинами: запуск їх не чекає, а вантажаться вони з диска,
+      щойно сторінку відкрили.
+    -->
     @switch (activeTab().page) {
       @case ('web') {
         @if (activeTab().site?.crashed; as failure) {
@@ -316,34 +320,54 @@
         }
       }
       @case ('history') {
-        <app-history-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
+        @defer (on immediate) {
+          <app-history-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
+        }
       }
       @case ('downloads') {
-        <app-downloads-page />
+        @defer (on immediate) {
+          <app-downloads-page />
+        }
       }
       @case ('bookmarks') {
-        <app-bookmarks-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
+        @defer (on immediate) {
+          <app-bookmarks-page (openUrl)="openLink($event)" (openUrlInNewTab)="openLinkInNewTab($event)" />
+        }
       }
       @case ('passwords') {
-        <app-passwords-page />
+        @defer (on immediate) {
+          <app-passwords-page />
+        }
       }
       @case ('notes') {
-        <app-notes-page />
+        @defer (on immediate) {
+          <app-notes-page />
+        }
       }
       @case ('profile') {
-        <app-profile-page />
+        @defer (on immediate) {
+          <app-profile-page />
+        }
       }
       @case ('personalization') {
-        <app-personalization-page />
+        @defer (on immediate) {
+          <app-personalization-page />
+        }
       }
       @case ('extensions') {
-        <app-extensions-page />
+        @defer (on immediate) {
+          <app-extensions-page />
+        }
       }
       @case ('settings') {
-        <app-settings-page />
+        @defer (on immediate) {
+          <app-settings-page />
+        }
       }
       @case ('help') {
-        <app-help-page />
+        @defer (on immediate) {
+          <app-help-page />
+        }
       }
       @default {
         <!-- Своя сторінка для кожної нової вкладки (за id): автофокус і порожній пошук — і при переході між ними. -->

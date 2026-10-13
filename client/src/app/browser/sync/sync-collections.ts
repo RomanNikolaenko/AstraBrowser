@@ -1,6 +1,6 @@
 import { Envelope, commands } from '../../bindings';
 import { SettingsStore } from '../../shared/settings/settings';
-import { accountKey, storedSignalFor } from '../../shared/storage/stored-signal';
+import { accountKey, storedSignalFor, writeStored } from '../../shared/storage/stored-signal';
 
 /** Записи колекції: id → дані. */
 export type SyncItems = ReadonlyMap<string, unknown>;
@@ -32,19 +32,6 @@ function readStored<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-/**
- * Нове значення одразу в localStorage (інші вікна отримають подію storage) і в сигнал цього вікна, якщо він є.
- * Одразу, а не через effect сигналу: наступне читання синхронізації вже має бачити нове.
- */
-function writeStored(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Сховище переповнене — лишається в пам'яті цього вікна.
-  }
-  storedSignalFor(key)?.set(value);
 }
 
 interface Identified {
