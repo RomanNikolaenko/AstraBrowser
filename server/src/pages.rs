@@ -234,8 +234,8 @@ fn zoom_script(token: &str) -> String {
   format!("({})({});", include_str!("zoom-page.js"), serde_json::Value::from(token))
 }
 
-/// Повідомлення скриптів сторінки: паролі — до passwords.rs, переклад виділеного — до translate.rs, крок масштабу —
-/// інтерфейсу вікна як гаряча клавіша.
+/// Повідомлення скриптів сторінки: паролі — до passwords.rs, адреси — до addresses.rs, переклад виділеного — до
+/// translate.rs, крок масштабу — інтерфейсу вікна як гаряча клавіша.
 #[cfg(windows)]
 fn on_page_message(
   app: &AppHandle,
@@ -256,6 +256,7 @@ fn on_page_message(
       None
     }
     "translate" if message.get("token")?.as_str()? == token => crate::translate::on_page_message(app, label, message),
+    "autofill" => crate::addresses::on_page_message(app, ui, label, token, source, message),
     // Сторінка виходить із повного екрана: спершу вікно й сайт на місце, тоді — їй відповідь, що можна.
     "fullscreen-exit" if message.get("token")?.as_str()? == token => {
       // Дозвіл прийде, коли під затемненням вікно й сайт уже на місці; не на весь екран — одразу.
@@ -304,7 +305,7 @@ pub async fn page_open(
   };
   #[cfg(windows)]
   let address = url.to_string();
-  // Токен скриптів цієї сторінки (паролі, масштаб коліщатком, переклад виділеного): повідомлення без нього
+  // Токен скриптів цієї сторінки (паролі, адреси, масштаб коліщатком, переклад виділеного): повідомлення без нього
   // не приймаються, тож скрипти самого сайту не можуть ні просити паролів, ні крутити масштаб, ні перекладати.
   #[cfg(windows)]
   let page_token = crate::passwords::new_token();
@@ -351,13 +352,14 @@ pub async fn page_open(
     // Файл зберігається в «Завантаження» Windows, а власне вікно завантажень WebView2 сховане:
     // перебіг показує інтерфейс (webview2::watch_downloads).
     .on_download(|_, _| true);
-  // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу.
+  // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу. Адреси — так само у формах.
   // Global Privacy Control: navigator.globalPrivacyControl (а заголовок Sec-GPC додає webview2::block_ads).
   #[cfg(windows)]
   let builder = if privacy.gpc { builder.initialization_script_for_all_frames(crate::tracking::page_script(true)) } else { builder };
   #[cfg(windows)]
   let builder = builder
     .initialization_script(crate::passwords::page_script(&page_token))
+    .initialization_script(crate::addresses::page_script(&page_token))
     .initialization_script(zoom_script(&page_token))
     .initialization_script(fullscreen_script(&page_token))
     .initialization_script(crate::translate::page_script(&page_token));
@@ -407,6 +409,8 @@ pub async fn page_open(
   webview2::set_tracking_prevention(&webview, privacy.level).map_err(|error| error.to_string())?;
   #[cfg(windows)]
   crate::page_events::set_smart_screen(&webview, privacy.smart_screen).map_err(|error| error.to_string())?;
+  #[cfg(windows)]
+  crate::page_events::disable_general_autofill(&webview).map_err(|error| error.to_string())?;
 
   // Посилання з target="_blank" і window.open — новою вкладкою, а не окремим вікном; спливні вікна без дії
   // користувача інтерфейс може заблокувати. Посилання на програми (mailto:…) — після запитання.

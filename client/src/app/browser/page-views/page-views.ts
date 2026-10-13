@@ -3,6 +3,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../bindings';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import type { AddressPromptRequest, AutofillKind } from '../data/addresses';
 import { DownloadProgress, DownloadPromptRequest } from '../data/downloads';
 import { PasswordPromptRequest } from '../data/passwords';
 import type { PermissionKind, PermissionState } from '../data/permissions';
@@ -156,6 +157,25 @@ export interface PagePasswordsManageEvent {
   readonly label: string;
 }
 
+/** Надіслали форму з адресою — «Зберегти адресу?» (server/src/addresses.rs). */
+export interface PageAddressPromptEvent extends AddressPromptRequest {
+  readonly label: string;
+}
+
+/**
+ * Список адрес над полем форми на сайті (server/src/addresses.rs, AutofillEvent): show — показати під полем `rect`
+ * (фізичні пікселі від кута сайту) адреси `ids`; move — поле зсунулося; hide — сховати; blur — сайт утратив фокус
+ * (сховати, якщо фокус не в інтерфейсі); key — клавіша в полі.
+ */
+export interface PageAutofillEvent {
+  readonly label: string;
+  readonly action: 'show' | 'move' | 'hide' | 'blur' | 'key';
+  readonly kind?: AutofillKind;
+  readonly rect?: PageBounds;
+  readonly ids?: readonly string[];
+  readonly key?: 'ArrowDown' | 'ArrowUp' | 'Enter' | 'Escape';
+}
+
 /** Дозвіл сайту на автовідтворення; `default` у WebView2 теж дозволяє. */
 export type AutoplayPermission = 'allow' | 'block' | 'default';
 
@@ -187,6 +207,8 @@ interface PageEvents {
   'page://shortcut': PageShortcutEvent;
   'page://password-prompt': PagePasswordPromptEvent;
   'page://passwords-manage': PagePasswordsManageEvent;
+  'page://address-prompt': PageAddressPromptEvent;
+  'page://autofill': PageAutofillEvent;
 }
 
 /**

@@ -68,7 +68,8 @@ describe('SyncService', () => {
         case 'sync_push':
           return server.push(payload.items);
         case 'passwords_sync_items':
-          // Сеанс без ключа: паролі не синхронізуються, поки не введуть пароль облікового запису.
+        case 'addresses_sync_items':
+          // Сеанс без ключа: паролі й адреси не синхронізуються, поки не введуть пароль облікового запису.
           return { keyId: null, keyTime: 0, items: {} };
         case 'auth_reload_user':
           return { user: null };
@@ -173,13 +174,63 @@ describe('SyncService', () => {
     expect(server.item('notes', 'n1')?.data).toEqual(note('n1', 'Перша (змінена)'));
   });
 
+  it('should sync addresses encrypted with the passwords key and take all of them the first time', async () => {
+    const envelope = (h: string) => ({ k: 'k1', n: 'n', c: 'c', h });
+    const addresses: Record<string, unknown> = { a1: envelope('h1') };
+    const applied: unknown[] = [];
+    clearMocks();
+    mockIPC((command, args) => {
+      const payload = args as {
+        after: number;
+        collection: string | null;
+        items: SyncRow[];
+        changes: { id: string; data: unknown }[];
+      };
+      switch (command) {
+        case 'sync_pull':
+          return server.pull(payload.after, payload.collection);
+        case 'sync_push':
+          return server.push(payload.items);
+        case 'passwords_sync_items':
+          return { keyId: 'k1', keyTime: 1, items: {} };
+        case 'addresses_sync_items':
+          return { keyId: 'k1', keyTime: 1, items: { ...addresses } };
+        case 'addresses_sync_apply':
+          for (const change of payload.changes) {
+            applied.push(change);
+            addresses[change.id] = change.data;
+          }
+          return { unreadable: [] };
+        case 'passwords_sync_apply':
+          return { unreadable: [] };
+        case 'auth_reload_user':
+          return { user: null };
+        default:
+          return null;
+      }
+    });
+    // Цей комп'ютер синхронізував паролі цим ключем ще до адрес, а адресу з іншого комп'ютера тоді пропустив.
+    server.write('addresses', 'a2', envelope('h2'), 1000);
+    localStorage.setItem(
+      'astra.sync',
+      JSON.stringify({ revision: 1, base: {}, keyMarker: { id: 'k1', at: 1000 }, passwordsKey: 'k1' })
+    );
+
+    await sync.sync();
+
+    expect(applied).toEqual([{ id: 'a2', data: envelope('h2') }]);
+    expect(server.item('addresses', 'a1')?.data).toEqual(envelope('h1'));
+    expect(server.item('addresses', 'a2')?.deleted).toBe(false);
+    expect(sync.status().passwords).toBe('ok');
+  });
+
   it('should say when the server is not set up for sync', async () => {
     clearMocks();
     mockIPC((command) => {
       if (command === 'sync_pull') {
         return Promise.reject({ code: 'sync_not_configured', message: 'Синхронізацію ще не налаштовано на сервері.' });
       }
-      return command === 'passwords_sync_items' ? { keyId: null, keyTime: 0, items: {} } : [];
+      return command.endsWith('_sync_items') ? { keyId: null, keyTime: 0, items: {} } : [];
     });
 
     await sync.sync();

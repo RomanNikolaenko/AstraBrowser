@@ -328,10 +328,10 @@ export const EN: Readonly<Record<string, string>> = {
   'Видалити назавжди': 'Delete permanently',
   Синхронізація: 'Sync',
   'Синхронізувати зараз': 'Sync now',
-  "Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів.":
-    'The account password was changed on another computer. Enter the new one to keep syncing site passwords.',
-  "Щоб синхронізувати паролі сайтів, введіть пароль облікового запису: з нього створюється ключ, яким паролі шифруються ще на цьому комп'ютері.":
-    'To sync site passwords, enter your account password: it’s used to create the key that encrypts passwords right on this computer.',
+  "Пароль облікового запису змінили на іншому комп'ютері. Введіть новий, щоб і далі синхронізувати паролі сайтів і адреси.":
+    'The account password was changed on another computer. Enter the new one to keep syncing site passwords and addresses.',
+  "Щоб синхронізувати паролі сайтів і адреси, введіть пароль облікового запису: з нього створюється ключ, яким вони шифруються ще на цьому комп'ютері.":
+    'To sync site passwords and addresses, enter your account password: it’s used to create the key that encrypts them right on this computer.',
   'Синхронізувати паролі': 'Sync passwords',
   'Імпорт з іншого браузера': 'Import from another browser',
   'Файл закладок HTML: у Chrome чи Edge — «Закладки → Диспетчер закладок → ⋯ → Експортувати закладки»':
@@ -643,6 +643,45 @@ export const EN: Readonly<Record<string, string>> = {
   "Пароль зберігається зашифрованим лише на цьому комп'ютері.": 'The password is stored encrypted only on this computer.',
   'Ніколи для цього сайту': 'Never for this site',
   'Не зараз': 'Not now',
+
+  // Адреси
+  Адреси: 'Addresses',
+  'Пошук адрес': 'Search addresses',
+  'Адреси недоступні в гостьовому режимі': 'Addresses aren’t available in guest mode',
+  'Гість не бачить збережених адрес, а нові адреси в цьому вікні не зберігаються.':
+    'Guests can’t see saved addresses, and new addresses aren’t saved in this window.',
+  'Пропонувати зберігати адреси': 'Offer to save addresses',
+  'Після надсилання форми з адресою браузер запитає, чи зберегти її':
+    'After you submit a form with an address, the browser asks whether to save it',
+  'Автозаповнення форм': 'Form autofill',
+  'Показувати збережені адреси в полях форм на сайтах': 'Show saved addresses in form fields on sites',
+  'Адрес ще немає': 'No addresses yet',
+  'Коли ви надсилаєте форму з адресою, браузер запропонує зберегти її. Додати адресу можна й вручну.':
+    'When you submit a form with an address, the browser offers to save it. You can also add one manually.',
+  'Збережені адреси · {0}': 'Saved addresses · {0}',
+  'Змінити адресу': 'Edit address',
+  'Видалити адресу': 'Delete address',
+  'Видалити адресу?': 'Delete address?',
+  'Адресу «{0}» буде видалено з браузера. Скасувати це не вийде.':
+    'The address “{0}” will be deleted from the browser. This can’t be undone.',
+  'Додати адресу': 'Add address',
+  Прізвище: 'Last name',
+  Організація: 'Organization',
+  'Вулиця й будинок': 'Street and house number',
+  "Квартира, офіс, під'їзд": 'Apartment, office, entrance',
+  Місто: 'City',
+  Область: 'Region',
+  'Поштовий індекс': 'Postal code',
+  Країна: 'Country',
+  Телефон: 'Phone',
+  'Заповніть хоча б одне поле': 'Fill in at least one field',
+  'Не вдалося зберегти адресу': 'Couldn’t save the address',
+  'Зберегти адресу?': 'Save address?',
+  'Оновити адресу?': 'Update address?',
+  'Браузер заповнюватиме нею форми на сайтах. Змінити чи видалити її можна на сторінці «Адреси».':
+    'The browser will fill in forms on sites with it. You can edit or delete it on the Addresses page.',
+  'Збережені адреси': 'Saved addresses',
+  'Керувати адресами…': 'Manage addresses…',
 
   // Персоналізація
   'Тема й колір': 'Theme and color',

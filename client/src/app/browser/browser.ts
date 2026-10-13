@@ -31,6 +31,7 @@ import { Bookmark, BookmarksStore } from './data/bookmarks';
 import { AutoplayStore } from './data/autoplay';
 import { DownloadsStore } from './data/downloads';
 import { ExternalAppsStore, schemeOf } from './data/external-apps';
+import { AddressesStore } from './data/addresses';
 import { PasswordsStore } from './data/passwords';
 import { BlockedTracker, TrackingStore } from './data/tracking';
 import { DownloadPrompt } from './download-prompt/download-prompt';
@@ -42,6 +43,8 @@ import { DEFAULT_ZOOM, WheelZoom, zoomIn, zoomOut } from './zoom';
 import { Translator } from './translator/translator';
 import { ZoomBadge } from './zoom-badge/zoom-badge';
 import { PasswordPrompt } from './password-prompt/password-prompt';
+import { AddressPrompt } from './address-prompt/address-prompt';
+import { AutofillPopup } from './autofill-popup/autofill-popup';
 import { DownloadsMenu } from './downloads-menu/downloads-menu';
 import { ExtensionsMenu } from './extensions-menu/extensions-menu';
 import { FaviconStore } from './data/favicons';
@@ -68,6 +71,7 @@ import {
   PageNewTabEvent,
   PageShortcutEvent,
   PageTitleEvent,
+  PageAutofillEvent,
   PageViews,
 } from './page-views/page-views';
 import { BookmarksPage } from './pages/bookmarks-page/bookmarks-page';
@@ -79,6 +83,7 @@ import { NotesPage } from './pages/notes-page/notes-page';
 import { PersonalizationPage } from './pages/personalization-page/personalization-page';
 import { ProfilePage } from './pages/profile-page/profile-page';
 import { PasswordsPage } from './pages/passwords-page/passwords-page';
+import { AddressesPage } from './pages/addresses-page/addresses-page';
 import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor, isPageUrl, viewSourceUrl } from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
 import { PageCrashed } from './page-crashed/page-crashed';
@@ -184,6 +189,9 @@ interface BrowserTab {
     OmniboxSuggestions,
     PasswordPrompt,
     PasswordsPage,
+    AddressesPage,
+    AddressPrompt,
+    AutofillPopup,
     PersonalizationPage,
     PageCrashed,
     ProfileMenu,
@@ -217,6 +225,9 @@ export class Browser {
   private readonly history = inject(HistoryStore);
   private readonly downloads = inject(DownloadsStore);
   private readonly passwords = inject(PasswordsStore);
+  private readonly addresses = inject(AddressesStore);
+  /** Збережені адреси над полем форми на сайті (server/src/addresses.rs). */
+  private readonly autofillPopup = viewChild(AutofillPopup);
   private readonly favicons = inject(FaviconStore);
   private readonly autoplay = inject(AutoplayStore);
   private readonly tracking = inject(TrackingStore);
@@ -624,6 +635,8 @@ export class Browser {
         this.pageViews.on('page://shortcut', (event) => this.onPageShortcut(event)),
         this.pageViews.on('page://password-prompt', (event) => this.passwords.ask(event)),
         this.pageViews.on('page://passwords-manage', () => this.openPage('passwords')),
+        this.pageViews.on('page://address-prompt', (event) => this.addresses.ask(event)),
+        this.pageViews.on('page://autofill', (event) => this.onPageAutofill(event)),
       ];
       destroyRef.onDestroy(() => {
         for (const listener of listeners) {
@@ -1590,6 +1603,10 @@ export class Browser {
   }
 
   private onPageLoad({ label, url, loading }: PageLoadEvent): void {
+    // Сторінка пішла — разом із полем, над яким був список адрес.
+    if (loading) {
+      this.autofillPopup()?.hide(label);
+    }
     const tab = this.tabByLabel(label);
     // Порожній документ нового webview, поки сайт ще не відкрився, — не сайт.
     if (tab?.site && isPageUrl(url)) {
@@ -1970,6 +1987,10 @@ export class Browser {
 
   private async showPage(label: string | null): Promise<void> {
     const previous = this.shownPage;
+    // Список адрес — лише над полем сайту, який видно.
+    if (label !== previous) {
+      this.autofillPopup()?.hide();
+    }
     this.shownPage = label;
     let shown = false;
     if (label) {
@@ -1988,8 +2009,44 @@ export class Browser {
     }
   }
 
+  /**
+   * Список адрес над полем форми на сайті (server/src/addresses.rs): лише над сайтом, який видно, і не над сайтом
+   * на весь екран.
+   */
+  private onPageAutofill(event: PageAutofillEvent): void {
+    const popup = this.autofillPopup();
+    if (!popup) {
+      return;
+    }
+    if (event.label !== this.visiblePage() || this.fullscreenPage()) {
+      popup.hide(event.label);
+      return;
+    }
+    switch (event.action) {
+      case 'show':
+        if (event.rect) {
+          popup.show(event.label, event.kind ?? 'name', event.ids ?? [], event.rect, this.pageBounds());
+        }
+        break;
+      case 'move':
+        if (event.rect) {
+          popup.move(event.label, event.rect, this.pageBounds());
+        }
+        break;
+      case 'hide':
+        popup.hide(event.label);
+        break;
+      case 'blur':
+        popup.blur(event.label);
+        break;
+      case 'key':
+        popup.key(event.label, event.key);
+        break;
+    }
+  }
+
   /** Регіон — раз на кадр: панель, що з'являється, змінюється кілька разів поспіль. */
-  private scheduleInputRegion(): void {
+  protected scheduleInputRegion(): void {
     cancelAnimationFrame(this.regionFrame);
     this.regionFrame = requestAnimationFrame(() => void this.updateInputRegion());
   }
@@ -2179,15 +2236,31 @@ const LAYER_FADE_SLACK_MS = 40;
 /** Запас довкола панелі в регіоні інтерфейсу, px: її тінь (--browser-popover-shadow) і зсув під час появи. */
 const LAYER_MARGIN = 56;
 
-/** Місце панелі чи вікна в регіоні інтерфейсу — разом із тінню. */
+/**
+ * Місце панелі чи вікна в регіоні інтерфейсу — разом із тінню. Панель може задати свої відступи (data-layer-margins:
+ * [згори, справа, знизу, зліва]), як список адрес, що не має лягати на поле сайту під ним.
+ */
 function layerArea(layer: Element): PageBounds {
   const rect = layer.getBoundingClientRect();
+  const margins = layer instanceof HTMLElement ? layerMargins(layer) : null;
+  const [top, right, bottom, left] = margins ?? [LAYER_MARGIN, LAYER_MARGIN, LAYER_MARGIN, LAYER_MARGIN];
   return {
-    x: Math.floor(rect.left - LAYER_MARGIN),
-    y: Math.floor(rect.top - LAYER_MARGIN),
-    width: Math.ceil(rect.width + LAYER_MARGIN * 2),
-    height: Math.ceil(rect.height + LAYER_MARGIN * 2),
+    x: Math.floor(rect.left - left),
+    y: Math.floor(rect.top - top),
+    width: Math.ceil(rect.width + left + right),
+    height: Math.ceil(rect.height + top + bottom),
   };
+}
+
+function layerMargins(layer: HTMLElement): readonly number[] | null {
+  try {
+    const margins: unknown = JSON.parse(layer.dataset['layerMargins'] ?? 'null');
+    return Array.isArray(margins) && margins.length === 4 && margins.every((value) => typeof value === 'number')
+      ? (margins as number[])
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Сторінка відео на YouTube (зокрема Shorts, трансляції й вбудований плеєр). */

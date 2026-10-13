@@ -131,6 +131,22 @@ export const commands = {
 	/**  Сайт знову може пропонувати зберегти пароль. */
 	passwordsNeverRemove: (origin: string) => __TAURI_INVOKE<null>("passwords_never_remove", { origin }),
 	passwordsSetSettings: (offer: boolean, autofill: boolean) => __TAURI_INVOKE<null>("passwords_set_settings", { offer, autofill }),
+	addressesState: () => __TAURI_INVOKE<AddressesState>("addresses_state"),
+	/**  Нова адреса (`id` — None) чи нові значення збереженої. */
+	addressSave: (id: string | null, fields: AddressFields) => __TAURI_INVOKE<null>("address_save", { id, fields }),
+	addressRemove: (id: string) => __TAURI_INVOKE<null>("address_remove", { id }),
+	addressesSetSettings: (offer: boolean, autofill: boolean) => __TAURI_INVOKE<null>("addresses_set_settings", { offer, autofill }),
+	/**  Відповідь на «Зберегти адресу?»: `save` — зберегти (чи оновити збережену), інакше — не зараз. */
+	addressPromptAnswer: (id: number, save: boolean) => __TAURI_INVOKE<null>("address_prompt_answer", { id, save }),
+	/**
+	 *  Користувач вибрав адресу `id` у списку над сайтом `label`: сторінка отримує її значення для полів своєї форми
+	 *  й заповнює їх, а фокус повертається в поле.
+	 */
+	addressAutofill: (label: string, id: string) => __TAURI_INVOKE<null>("address_autofill", { label, id }),
+	/**  Усі адреси облікового запису, зашифровані для синхронізації. */
+	addressesSyncItems: () => __TAURI_INVOKE<SyncItems>("addresses_sync_items"),
+	/**  Записи з сервера: нові й змінені адреси — у книгу, видалені — геть. Зашифровані іншим ключем лишаються як є. */
+	addressesSyncApply: (changes: SyncChange[]) => __TAURI_INVOKE<SyncApplied>("addresses_sync_apply", { changes }),
 	windowFillMonitor: () => __TAURI_INVOKE<null>("window_fill_monitor"),
 	windowStartDrag: () => __TAURI_INVOKE<null>("window_start_drag"),
 	/**  Значок сайту з адресою `url` (беремо його головну сторінку); `None` — не знайшли. */
@@ -215,6 +231,48 @@ export const commands = {
 };
 
 /* Types */
+export type Address = {
+	id: string,
+	fields: AddressFields,
+	created: number,
+	updated: number,
+	/**  Коли адресою востаннє заповнили форму. */
+	used: number | null,
+};
+
+/**
+ *  Поля адреси. У формі сайту їм відповідають види полів autofill-page.js; ще два види складаються з кількох полів:
+ *  `name` — ім'я й прізвище разом, `street` — обидва рядки адреси.
+ */
+export type AddressFields = {
+	given: string,
+	family: string,
+	organization: string,
+	/**  Вулиця й будинок. */
+	line1: string,
+	/**  Квартира, офіс, під'їзд. */
+	line2: string,
+	city: string,
+	/**  Область, штат, провінція. */
+	region: string,
+	postal: string,
+	country: string,
+	phone: string,
+	email: string,
+};
+
+/**  Налаштування для інтерфейсу: ті самі, але без serde(default) — у TypeScript поля обов'язкові. */
+export type AddressSettings = {
+	offer: boolean,
+	autofill: boolean,
+};
+
+/**  Усе, що показує сторінка «Адреси»; надсилається й подією addresses://changed. */
+export type AddressesState = {
+	entries: Address[],
+	settings: AddressSettings,
+};
+
 /**  Прямокутник у логічних пікселях від лівого верхнього кута вікна. */
 export type Area = {
 	x: number | null,

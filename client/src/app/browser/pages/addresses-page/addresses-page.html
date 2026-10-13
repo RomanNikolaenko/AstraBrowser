@@ -1,0 +1,119 @@
+<section class="page">
+  <header class="page__header">
+    <h1 class="page__title">{{ 'Адреси' | t }}</h1>
+    @if (addresses.entries().length) {
+      <app-input
+        class="page__search"
+        shape="pill"
+        icon="search"
+        inputId="addresses-search"
+        inputName="addresses-search"
+        [ariaLabel]="'Пошук адрес' | t"
+        [placeholder]="'Пошук адрес' | t"
+        autocomplete="off"
+        [(value)]="query" />
+    }
+    @if (addresses.state() && !guest) {
+      <button class="page__button" type="button" (click)="editor.add()">
+        <app-icon class="addresses__add-icon" icon="plus" />
+        {{ 'Додати' | t }}
+      </button>
+    }
+  </header>
+
+  @if (guest) {
+    <div class="page__empty">
+      <span class="page__empty-icon"><app-icon icon="guest" /></span>
+      <h2 class="page__empty-title">{{ 'Адреси недоступні в гостьовому режимі' | t }}</h2>
+      <p>{{ 'Гість не бачить збережених адрес, а нові адреси в цьому вікні не зберігаються.' | t }}</p>
+    </div>
+  } @else {
+    @if (addresses.settings(); as settings) {
+      <div class="page__list addresses__settings">
+        <div class="addresses__setting">
+          <span class="page__text">
+            <span class="page__name" id="addresses-offer-name">{{ 'Пропонувати зберігати адреси' | t }}</span>
+            <span class="page__meta" id="addresses-offer-hint">{{
+              'Після надсилання форми з адресою браузер запитає, чи зберегти її' | t
+            }}</span>
+          </span>
+          <app-switch
+            inputId="addresses-offer"
+            inputName="addresses-offer"
+            ariaLabelledby="addresses-offer-name"
+            ariaDescribedby="addresses-offer-hint"
+            [checked]="settings.offer"
+            (checkedChange)="setSetting('offer', $event)" />
+        </div>
+        <div class="addresses__setting">
+          <span class="page__text">
+            <span class="page__name" id="addresses-autofill-name">{{ 'Автозаповнення форм' | t }}</span>
+            <span class="page__meta" id="addresses-autofill-hint">
+              {{ 'Показувати збережені адреси в полях форм на сайтах' | t }}
+            </span>
+          </span>
+          <app-switch
+            inputId="addresses-autofill"
+            inputName="addresses-autofill"
+            ariaLabelledby="addresses-autofill-name"
+            ariaDescribedby="addresses-autofill-hint"
+            [checked]="settings.autofill"
+            (checkedChange)="setSetting('autofill', $event)" />
+        </div>
+      </div>
+    }
+
+    @if (!addresses.entries().length) {
+      <div class="page__empty">
+        <span class="page__empty-icon"><app-icon icon="location" /></span>
+        <h2 class="page__empty-title">{{ 'Адрес ще немає' | t }}</h2>
+        <p>
+          {{ 'Коли ви надсилаєте форму з адресою, браузер запропонує зберегти її. Додати адресу можна й вручну.' | t }}
+        </p>
+      </div>
+    } @else if (!filtered().length) {
+      <p class="page__no-results">{{ 'Нічого не знайдено за запитом «{0}».' | t: [query()] }}</p>
+    } @else {
+      <h2 class="page__group">{{ 'Збережені адреси · {0}' | t: [addresses.entries().length] }}</h2>
+      <ul class="page__list">
+        @for (entry of filtered(); track entry.id) {
+          @let name = title(entry);
+          <li class="page__row">
+            <app-icon class="page__favicon" icon="location" />
+            <span class="page__text addresses__entry">
+              <span class="page__name">{{ name }}</span>
+              @if (details(entry); as detail) {
+                <span class="page__meta">{{ detail }}</span>
+              }
+            </span>
+            <button
+              class="page__remove"
+              type="button"
+              [attr.aria-label]="('Змінити адресу ' | t) + name"
+              [title]="'Змінити' | t"
+              (click)="editor.edit(entry)">
+              <app-icon icon="edit" />
+            </button>
+            <button
+              class="page__remove"
+              type="button"
+              [attr.aria-label]="('Видалити адресу ' | t) + name"
+              [title]="'Видалити' | t"
+              (click)="askRemove(entry)">
+              <app-icon icon="trash" />
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  <app-confirm-dialog
+    #confirmRemove
+    [heading]="'Видалити адресу?' | t"
+    [message]="removeMessage()"
+    [confirmLabel]="'Видалити' | t"
+    danger
+    (confirmed)="remove()" />
+  <app-address-editor #editor />
+</section>

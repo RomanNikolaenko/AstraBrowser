@@ -3,7 +3,8 @@
 //! - запити дозволів (камера, мікрофон, геолокація, сповіщення…) — питає інтерфейс, а не стандартний діалог WebView2;
 //! - нові вікна від сайту — новими вкладками; без дії користувача (спливні вікна) інтерфейс їх блокує;
 //! - контекстне меню — з діями браузера: відкрити посилання в новій вкладці, шукати й перекласти виділене тощо;
-//! - сплячі вкладки (WebView2 присипляє приховану сторінку) й SmartScreen (захист від фішингу й шкідливих файлів).
+//! - сплячі вкладки (WebView2 присипляє приховану сторінку) й SmartScreen (захист від фішингу й шкідливих файлів);
+//! - власне автозаповнення WebView2 вимкнено: форми заповнює браузер (addresses.rs).
 
 use std::{
   cell::RefCell,
@@ -71,6 +72,20 @@ pub fn set_smart_screen(webview: &Webview, enabled: bool) -> tauri::Result<()> {
     };
     if let Err(error) = set() {
       log::warn!("page: не вдалося задати SmartScreen: {error}");
+    }
+  })
+}
+
+/// Власне автозаповнення WebView2 (збережені введення й адреси Chromium) — вимкнене: його даних не видно, вони не
+/// синхронізуються, а його підказки лягали б поверх списку адрес браузера (addresses.rs).
+pub fn disable_general_autofill(webview: &Webview) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let set = || -> windows_core::Result<()> {
+      let settings: ICoreWebView2Settings4 = unsafe { core(&platform)?.Settings()?.cast()? };
+      unsafe { settings.SetIsGeneralAutofillEnabled(false) }
+    };
+    if let Err(error) = set() {
+      log::warn!("page: не вдалося вимкнути автозаповнення WebView2: {error}");
     }
   })
 }

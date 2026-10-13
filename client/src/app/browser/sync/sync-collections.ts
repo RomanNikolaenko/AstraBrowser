@@ -1,4 +1,4 @@
-import { Envelope, commands } from '../../bindings';
+import { Envelope, SyncApplied, SyncChange, SyncItems as SealedItems } from '../../bindings';
 import { SettingsStore } from '../../shared/settings/settings';
 import { accountKey, storedSignalFor, writeStored } from '../../shared/storage/stored-signal';
 
@@ -183,45 +183,53 @@ function settingsCollection(settings: SettingsStore): SyncCollection {
   };
 }
 
-/** Зашифрований запис паролів (passwords.rs, Envelope): `h` — відбиток відкритого тексту. */
-interface PasswordEnvelope {
+/** Зашифрований запис (passwords.rs, Envelope): `h` — відбиток відкритого тексту. */
+interface SealedEnvelope {
   readonly h: string;
 }
 
-/** Паролі сайтів з passwords.rs — уже зашифровані ключем облікового запису. */
-export interface PasswordsSnapshot {
+/** Записи зашифрованої колекції з Rust — уже зашифровані ключем облікового запису. */
+export interface SealedSnapshot {
   readonly keyId: string | null;
   /** Коли ключ отримано з пароля облікового запису (секунди Unix). */
   readonly keyTime: number;
-  readonly items: Readonly<Record<string, PasswordEnvelope>>;
+  readonly items: Readonly<Record<string, SealedEnvelope>>;
 }
 
-export class PasswordsCollection implements SyncCollection {
-  readonly name = 'passwords';
-  /** Зміни паролів приходять подією passwords://changed, а не через localStorage. */
+/**
+ * Колекція, яку шифрує Rust ключем із пароля облікового запису: паролі сайтів (passwords.rs) і адреси (addresses.rs).
+ * Сервер бачить лише шифр. Зміни приходять подіями Rust, а не через localStorage.
+ */
+export class SealedCollection implements SyncCollection {
   readonly keys: readonly string[] = [];
   /** Останнє прочитане: ключ і записи. */
-  snapshot: PasswordsSnapshot | null = null;
+  snapshot: SealedSnapshot | null = null;
+
+  constructor(
+    readonly name: string,
+    private readonly items: () => Promise<SealedItems>,
+    private readonly apply: (changes: SyncChange[]) => Promise<SyncApplied>
+  ) {}
 
   async read(): Promise<SyncItems> {
-    this.snapshot = await commands.passwordsSyncItems();
+    this.snapshot = await this.items();
     return new Map(Object.entries(this.snapshot.items));
   }
 
   async write(changes: SyncItems): Promise<readonly string[]> {
-    // Записи колекції паролів — конверти, які зашифрував server/src/passwords.rs.
+    // Записи — конверти, які зашифрував Rust.
     const list = [...changes].map(([id, data]) => ({ id, data: data as Envelope | null }));
-    const result = await commands.passwordsSyncApply(list);
+    const result = await this.apply(list);
     return result.unreadable;
   }
 
   hash(data: unknown): string {
-    return (data as PasswordEnvelope).h;
+    return (data as SealedEnvelope).h;
   }
 }
 
 /** Усе, що синхронізується з обліковим записом. Ключі — того облікового запису, що ввійшов зараз. */
-export function syncCollections(settings: SettingsStore, passwords: PasswordsCollection): SyncCollection[] {
+export function syncCollections(settings: SettingsStore, sealed: readonly SealedCollection[]): SyncCollection[] {
   return [
     bookmarksCollection(accountKey('astra.bookmarks')),
     listCollection('notes', accountKey('astra.notes')),
@@ -239,6 +247,6 @@ export function syncCollections(settings: SettingsStore, passwords: PasswordsCol
       externalApps: accountKey('astra.external.allowed'),
     }),
     settingsCollection(settings),
-    passwords,
+    ...sealed,
   ];
 }

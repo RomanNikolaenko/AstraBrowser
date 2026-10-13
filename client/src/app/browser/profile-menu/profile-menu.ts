@@ -39,6 +39,7 @@ export class ProfileMenu {
   protected readonly items: readonly ProfileItem[] = [
     { label: tr('Керування профілем'), icon: 'user', page: 'profile' },
     { label: tr('Паролі'), icon: 'key', page: 'passwords' },
+    { label: tr('Адреси'), icon: 'location', page: 'addresses' },
     { label: tr('Персоналізація'), icon: 'palette', page: 'personalization' },
     { label: tr('Гостьовий режим'), icon: 'guest', guest: true },
   ];

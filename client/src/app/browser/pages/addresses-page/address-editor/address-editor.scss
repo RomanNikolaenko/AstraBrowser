@@ -1,0 +1,73 @@
+@use '../../../../../assets/styles/mixins' as *;
+@use '../../../browser-ui' as *;
+
+:host {
+  display: contents;
+}
+
+.address-editor {
+  @include modal-dialog(32rem);
+
+  &__panel {
+    @include modal-panel;
+
+    // У низькому вікні поля прокручуються, а не виходять за край.
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--browser-heading);
+  }
+
+  // Ім'я й прізвище, місто й область, індекс і країна, телефон і пошта — попарно; адреса — на всю ширину.
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem 0.75rem;
+  }
+
+  &__item {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+
+    &--wide {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__label {
+    padding-inline: 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--browser-muted);
+  }
+
+  &__field {
+    @include field-colors;
+  }
+
+  &__error {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-error);
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  &__button {
+    @include pill-button(2.5rem);
+
+    &--primary {
+      @include primary-button;
+    }
+  }
+}

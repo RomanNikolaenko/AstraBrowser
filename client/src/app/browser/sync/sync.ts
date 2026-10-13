@@ -5,7 +5,7 @@ import { AuthStore, isAuthError } from '../../shared/auth/auth';
 import { BrowserWindows } from '../../shared/browser-windows/browser-windows';
 import { SettingsStore } from '../../shared/settings/settings';
 import { accountKey, accountSignal, onStoredChange } from '../../shared/storage/stored-signal';
-import { PasswordsCollection, SyncCollection, syncCollections } from './sync-collections';
+import { SealedCollection, SyncCollection, syncCollections } from './sync-collections';
 import { hashOf } from './sync-hash';
 
 /** Рядок таблиці sync_items (supabase/sync.sql). */
@@ -25,8 +25,8 @@ export interface SyncStatus {
   readonly at?: number;
   readonly message?: string;
   /**
-   * Паролі сайтів: ok — синхронізуються; locked — немає ключа (сеанс давніший за синхронізацію); stale — пароль
-   * облікового запису змінили на іншому комп'ютері, а тут ключ ще від старого.
+   * Паролі сайтів і адреси (зашифровані): ok — синхронізуються; locked — немає ключа (сеанс давніший за
+   * синхронізацію); stale — пароль облікового запису змінили на іншому комп'ютері, а тут ключ ще від старого.
    */
   readonly passwords: 'ok' | 'locked' | 'stale';
 }
@@ -38,7 +38,9 @@ interface SyncState {
   base: Record<string, Record<string, [string, number]>>;
   /** Позначка ключа паролів на сервері: id ключа й коли його отримано з пароля (мс). */
   keyMarker?: { readonly id: string; readonly at: number };
-  /** Ключ, яким востаннє синхронізували паролі. */
+  /** Зашифрована колекція → ключ, яким її востаннє синхронізували. */
+  sealedKeys?: Record<string, string>;
+  /** Ключ паролів у версіях до адрес — те саме, що sealedKeys.passwords. */
   passwordsKey?: string;
 }
 
@@ -58,8 +60,8 @@ function emptyState(): SyncState {
 }
 
 /**
- * Синхронізація даних облікового запису: закладки, нотатки, історія, профіль, налаштування й паролі сайтів
- * (зашифровані на комп'ютері ключем із пароля облікового запису) — через таблицю sync_items у Supabase.
+ * Синхронізація даних облікового запису: закладки, нотатки, історія, профіль, налаштування, паролі сайтів і адреси
+ * (останні два зашифровані на комп'ютері ключем із пароля облікового запису) — через таблицю sync_items у Supabase.
  *
  * Кожен запис колекції синхронізується окремо: що змінилося, видно з відбитків записів, які вже на сервері
  * (`base`). З двох змін одного запису перемагає пізніша (сервер приймає лише новішу й повертає відхилені).
@@ -76,8 +78,20 @@ export class SyncService {
   private readonly settings = inject(SettingsStore);
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly passwords = new PasswordsCollection();
-  private readonly collections: readonly SyncCollection[] = syncCollections(this.settings, this.passwords);
+  private readonly passwords = new SealedCollection(
+    'passwords',
+    () => commands.passwordsSyncItems(),
+    (changes) => commands.passwordsSyncApply(changes)
+  );
+  private readonly sealed: readonly SealedCollection[] = [
+    this.passwords,
+    new SealedCollection(
+      'addresses',
+      () => commands.addressesSyncItems(),
+      (changes) => commands.addressesSyncApply(changes)
+    ),
+  ];
+  private readonly collections: readonly SyncCollection[] = syncCollections(this.settings, this.sealed);
   private readonly byName = new Map(this.collections.map((collection) => [collection.name, collection]));
 
   /** Стан синхронізації, спільний для вікон. */
@@ -99,7 +113,7 @@ export class SyncService {
   /**
    * Колекції, змінені тут після того, як їх востаннє надіслали: лише їх читають, порівнюють із сервером і надсилають.
    * Інакше кожен прохід (щохвилини й щоразу, як вікно отримує фокус) перебирав би всю історію й закладки. Спершу —
-   * усі. Паролі — завжди: їх відбитки готові з Rust, а зміни приходять подією.
+   * усі. Паролі й адреси — завжди: їх відбитки готові з Rust, а зміни приходять подіями.
    */
   private readonly changed = new Set(this.collections.map((collection) => collection.name));
 
@@ -151,13 +165,17 @@ export class SyncService {
         this.schedule(CHANGE_DELAY);
       }
     });
-    const passwordsChanged = listen('passwords://changed', () => this.schedule(CHANGE_DELAY));
+    const sealedChanged = ['passwords://changed', 'addresses://changed'].map((event) =>
+      listen(event, () => this.schedule(CHANGE_DELAY))
+    );
     const interval = setInterval(() => this.schedule(0), INTERVAL);
     const onFocus = () => this.schedule(0);
     window.addEventListener('focus', onFocus);
     this.destroyRef.onDestroy(() => {
       unsubscribe();
-      void passwordsChanged.then((unlisten) => unlisten());
+      for (const changed of sealedChanged) {
+        void changed.then((unlisten) => unlisten());
+      }
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     });
@@ -187,7 +205,7 @@ export class SyncService {
     }
   }
 
-  /** Один прохід: (уперше — забрати все), паролі, надіслати змінене, забрати нове. */
+  /** Один прохід: (уперше — забрати все), паролі й адреси, надіслати змінене, забрати нове. */
   async sync(): Promise<void> {
     const state = this.loadState();
     this.setStatus({ state: 'syncing' });
@@ -197,7 +215,7 @@ export class SyncService {
       }
       const passwords = await this.preparePasswords(state);
       for (const collection of this.collections) {
-        const due = collection === this.passwords ? passwords === 'ok' : this.changed.has(collection.name);
+        const due = this.isSealed(collection) ? passwords === 'ok' : this.changed.has(collection.name);
         if (due) {
           // Позначка знімається до читання: зміна посеред надсилання позначить колекцію наново.
           this.changed.delete(collection.name);
@@ -229,12 +247,14 @@ export class SyncService {
   }
 
   /**
-   * Чи можна синхронізувати паролі. Ключ паролів — з пароля облікового запису; на сервері позначка, яким ключем
+   * Чи можна синхронізувати паролі й адреси. Їхній ключ — з пароля облікового запису; на сервері позначка, яким ключем
    * шифрують зараз. Інший ключ, давніший за позначку, — пароль облікового запису змінили деінде (stale); новіший —
-   * змінили тут: позначка оновлюється, а паролі наново забираються й перешифровуються.
+   * змінили тут: позначка оновлюється, а паролі й адреси наново забираються й перешифровуються.
    */
   private async preparePasswords(state: SyncState): Promise<SyncStatus['passwords']> {
-    await this.passwords.read();
+    for (const collection of this.sealed) {
+      await collection.read();
+    }
     const snapshot = this.passwords.snapshot;
     if (!snapshot?.keyId) {
       return 'locked';
@@ -259,18 +279,23 @@ export class SyncService {
         return 'stale';
       }
     }
-    if (state.passwordsKey !== snapshot.keyId) {
-      // Новий ключ: усе з сервера — наново (з ним прочитаються записи інших комп'ютерів), а свої перешифруються.
-      state.base[this.passwords.name] = {};
-      await this.pull(state, { first: true, collection: this.passwords.name, passwords: 'ok' });
-      state.passwordsKey = snapshot.keyId;
+    const keys = (state.sealedKeys ??= state.passwordsKey ? { passwords: state.passwordsKey } : {});
+    for (const collection of this.sealed) {
+      if (keys[collection.name] !== snapshot.keyId) {
+        // Новий ключ (чи колекція, якої тут ще не синхронізували): усе з сервера — наново (з ним прочитаються записи
+        // інших комп'ютерів), а свої перешифруються.
+        state.base[collection.name] = {};
+        await this.pull(state, { first: true, collection: collection.name, passwords: 'ok' });
+        keys[collection.name] = snapshot.keyId;
+      }
     }
+    state.passwordsKey = keys['passwords'];
     return 'ok';
   }
 
   /**
-   * Записи, новіші за останню забрану ревізію (чи всі записи колекції `collection`). Паролі беруться, лише якщо
-   * `passwords` — ok: інакше їх нічим розшифрувати (їх забере повне оновлення паролів, щойно з'явиться ключ).
+   * Записи, новіші за останню забрану ревізію (чи всі записи колекції `collection`). Паролі й адреси беруться, лише
+   * якщо `passwords` — ok: інакше їх нічим розшифрувати (їх забере повне оновлення, щойно з'явиться ключ).
    */
   private async pull(
     state: SyncState,
@@ -318,7 +343,7 @@ export class SyncService {
         continue;
       }
       const collection = this.byName.get(name);
-      if (!collection || (collection === this.passwords && passwords !== 'ok')) {
+      if (!collection || (this.isSealed(collection) && passwords !== 'ok')) {
         continue;
       }
       const base = (state.base[name] ??= {});
@@ -382,6 +407,10 @@ export class SyncService {
       await this.apply(state, rejected, { passwords });
       this.saveState(state);
     }
+  }
+
+  private isSealed(collection: SyncCollection): boolean {
+    return this.sealed.includes(collection as SealedCollection);
   }
 
   private hash(collection: SyncCollection, data: unknown): string {

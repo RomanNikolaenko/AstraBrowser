@@ -1,0 +1,36 @@
+<dialog #dialog class="address-editor" aria-labelledby="address-editor-title" closedby="any">
+  <form class="address-editor__panel" novalidate (submit)="save($event)">
+    <h2 class="address-editor__title" id="address-editor-title">
+      {{ editing() ? ('Змінити адресу' | t) : ('Додати адресу' | t) }}
+    </h2>
+
+    <!-- Підпис над кожним полем: заповнене поле без нього не скаже, що в ньому (індекс, область…). -->
+    <div class="address-editor__grid">
+      @for (field of fields; track field.key) {
+        <div class="address-editor__item" [class.address-editor__item--wide]="field.wide">
+          <label class="address-editor__label" [for]="'address-editor-' + field.key">{{ field.label | t }}</label>
+          <app-input
+            class="address-editor__field"
+            [inputId]="'address-editor-' + field.key"
+            [inputName]="field.key"
+            [type]="field.type"
+            [autocomplete]="field.autocomplete"
+            [spellcheck]="false"
+            [value]="values()[field.key]"
+            (valueChange)="set(field.key, $event)" />
+        </div>
+      }
+    </div>
+
+    @if (error()) {
+      <p class="address-editor__error" role="alert">{{ error() | t }}</p>
+    }
+
+    <div class="address-editor__actions">
+      <button class="address-editor__button" type="button" (click)="close()">{{ 'Скасувати' | t }}</button>
+      <button class="address-editor__button address-editor__button--primary" type="submit" [disabled]="saving()">
+        {{ 'Зберегти' | t }}
+      </button>
+    </div>
+  </form>
+</dialog>

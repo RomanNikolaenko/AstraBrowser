@@ -327,6 +327,7 @@ impl Session {
 fn activate(app: &AppHandle, user: Option<&str>) {
   profiles::set_current(user);
   crate::passwords::switch_account(app, user);
+  crate::addresses::switch_account(app, user);
 }
 
 impl Auth {

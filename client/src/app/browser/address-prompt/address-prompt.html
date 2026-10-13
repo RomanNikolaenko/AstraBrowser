@@ -1,0 +1,30 @@
+<dialog #dialog class="address-prompt" aria-labelledby="address-prompt-title" closedby="any" (close)="onClose()">
+  @if (request(); as request) {
+    <form class="address-prompt__panel" novalidate (submit)="save($event)">
+      <div class="address-prompt__head">
+        <span class="address-prompt__icon"><app-icon icon="location" /></span>
+        <h2 class="address-prompt__title" id="address-prompt-title">
+          {{ request.update ? ('Оновити адресу?' | t) : ('Зберегти адресу?' | t) }}
+        </h2>
+      </div>
+
+      <ul class="address-prompt__lines">
+        @for (line of lines(); track $index) {
+          <li class="address-prompt__line" [class.address-prompt__line--main]="$first">{{ line }}</li>
+        }
+      </ul>
+
+      <p class="address-prompt__note">
+        {{ 'Браузер заповнюватиме нею форми на сайтах. Змінити чи видалити її можна на сторінці «Адреси».' | t }}
+      </p>
+
+      <div class="address-prompt__actions">
+        <button class="address-prompt__button" type="button" (click)="dismiss()">{{ 'Не зараз' | t }}</button>
+        <!-- Фокус одразу на головній дії: Enter зберігає, Esc — «не зараз». -->
+        <button class="address-prompt__button address-prompt__button--primary" type="submit" autofocus>
+          {{ request.update ? ('Оновити' | t) : ('Зберегти' | t) }}
+        </button>
+      </div>
+    </form>
+  }
+</dialog>

@@ -160,7 +160,7 @@ const NEVER_ITEM: &str = "never";
 /// `h` — HMAC відкритого тексту: за ним видно зміни, не розшифровуючи.
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
 pub struct Envelope {
-  k: String,
+  pub(crate) k: String,
   n: String,
   c: String,
   h: String,
@@ -181,24 +181,24 @@ struct SyncedEntry {
 #[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncItems {
-  key_id: Option<String>,
+  pub(crate) key_id: Option<String>,
   /// Коли ключ отримано з пароля облікового запису (секунди Unix): новіший ключ перемагає давніший.
-  key_time: u64,
-  items: BTreeMap<String, Envelope>,
+  pub(crate) key_time: u64,
+  pub(crate) items: BTreeMap<String, Envelope>,
 }
 
 /// Запис із сервера: `data` — None, якщо його видалили.
 #[derive(Deserialize, specta::Type)]
 pub struct SyncChange {
-  id: String,
-  data: Option<Envelope>,
+  pub(crate) id: String,
+  pub(crate) data: Option<Envelope>,
 }
 
 #[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncApplied {
   /// Записи, зашифровані іншим ключем (пароль облікового запису змінили), — їх не прочитати.
-  unreadable: Vec<String>,
+  pub(crate) unreadable: Vec<String>,
 }
 
 static NEXT_PROMPT: AtomicU64 = AtomicU64::new(1);
@@ -457,8 +457,8 @@ fn synced_entry(entry: &Entry) -> Result<Vec<u8>, String> {
   serde_json::to_vec(&synced).map_err(|error| error.to_string())
 }
 
-/// Запис для сервера: той самий відкритий текст — той самий запис, без нового шифрування.
-fn seal_item(key: &secure::SyncKey, key_id: &str, cache: &mut HashMap<String, Envelope>, id: &str, plain: &[u8]) -> Result<Envelope, String> {
+/// Запис для сервера: той самий відкритий текст — той самий запис, без нового шифрування (і для адрес, addresses.rs).
+pub(crate) fn seal_item(key: &secure::SyncKey, key_id: &str, cache: &mut HashMap<String, Envelope>, id: &str, plain: &[u8]) -> Result<Envelope, String> {
   let h = secure::mac(key, plain);
   if let Some(cached) = cache.get(id).filter(|cached| cached.h == h && cached.k == key_id) {
     return Ok(cached.clone());
@@ -469,7 +469,7 @@ fn seal_item(key: &secure::SyncKey, key_id: &str, cache: &mut HashMap<String, En
   Ok(envelope)
 }
 
-fn open_item(key: &secure::SyncKey, envelope: &Envelope) -> Result<Vec<u8>, String> {
+pub(crate) fn open_item(key: &secure::SyncKey, envelope: &Envelope) -> Result<Vec<u8>, String> {
   let nonce = STANDARD.decode(&envelope.n).map_err(|error| error.to_string())?;
   let sealed = STANDARD.decode(&envelope.c).map_err(|error| error.to_string())?;
   secure::open(key, &nonce, &sealed)

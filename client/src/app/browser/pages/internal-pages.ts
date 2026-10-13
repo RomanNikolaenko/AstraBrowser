@@ -4,6 +4,7 @@ export type InternalPage =
   | 'downloads'
   | 'bookmarks'
   | 'passwords'
+  | 'addresses'
   | 'notes'
   | 'profile'
   | 'personalization'
@@ -20,6 +21,7 @@ export const TAB_PAGES: Readonly<Record<TabPage, { readonly title: string; reado
   downloads: { title: tr('Завантаження'), favicon: 'download', url: 'astra://downloads' },
   bookmarks: { title: tr('Закладки'), favicon: 'star', url: 'astra://bookmarks' },
   passwords: { title: tr('Паролі'), favicon: 'key', url: 'astra://passwords' },
+  addresses: { title: tr('Адреси'), favicon: 'location', url: 'astra://addresses' },
   notes: { title: tr('Нотатки'), favicon: 'notes', url: 'astra://notes' },
   profile: { title: tr('Керування профілем'), favicon: 'user', url: 'astra://profile' },
   personalization: { title: tr('Персоналізація'), favicon: 'palette', url: 'astra://personalization' },

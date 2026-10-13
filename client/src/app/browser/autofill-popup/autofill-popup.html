@@ -1,0 +1,38 @@
+<!-- Клік по списку не забирає фокус у документі інтерфейсу: курсор лишається в полі сайту. -->
+<div
+  #panel
+  class="autofill"
+  popover="manual"
+  role="listbox"
+  [attr.aria-label]="'Збережені адреси' | t"
+  (pointerdown)="$event.preventDefault()">
+  @for (item of suggestions(); track item.id; let index = $index) {
+    <button
+      class="autofill__item"
+      type="button"
+      role="option"
+      tabindex="-1"
+      [class.autofill__item--selected]="index === selected()"
+      [attr.aria-selected]="index === selected()"
+      (pointermove)="selected.set(index)"
+      (click)="pick(index)">
+      <app-icon class="autofill__icon" icon="location" />
+      <span class="autofill__text">
+        <span class="autofill__value">{{ item.value }}</span>
+        @if (item.detail) {
+          <span class="autofill__detail">{{ item.detail }}</span>
+        }
+      </span>
+    </button>
+  }
+  <div class="autofill__divider"></div>
+  <button
+    class="autofill__item autofill__manage"
+    type="button"
+    tabindex="-1"
+    [class.autofill__item--selected]="selected() === suggestions().length"
+    (pointermove)="selected.set(suggestions().length)"
+    (click)="openManage()">
+    {{ 'Керувати адресами…' | t }}
+  </button>
+</div>

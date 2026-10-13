@@ -1,0 +1,96 @@
+@use '../../../assets/styles/mixins' as *;
+@use '../browser-ui' as *;
+
+// Сам хост не займає місця: список живе у top layer.
+:host {
+  display: contents;
+}
+
+// Список під полем сайту: місце задає код (left, top), тож без position-area і зсуву під час появи —
+// лише плавна поява. Тінь менша, ніж у меню: регіон інтерфейсу над сайтом тримає лише її (data-layer-margins).
+.autofill {
+  position: fixed;
+  inset: auto;
+  box-sizing: border-box;
+  flex-direction: column;
+  max-width: 26.25rem;
+  max-height: min(22rem, calc(100% - 1rem));
+  padding: 0.375rem;
+  margin: 0;
+  overflow-y: auto;
+  font-family: var(--font-family-base);
+  color: var(--browser-text);
+  background: var(--browser-popover);
+  border: 0.0625rem solid var(--browser-popover-border);
+  border-radius: 0.875rem;
+  box-shadow: 0 0.5rem 1.25rem rgb(0 0 0 / 18%);
+  opacity: 0;
+  transition:
+    opacity $motion,
+    overlay $motion allow-discrete,
+    display $motion allow-discrete;
+
+  &:popover-open {
+    display: flex;
+    opacity: 1;
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+
+  &__item {
+    @include popover-item;
+
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.75rem;
+    cursor: pointer;
+
+    // Вибраний стрілками чи мишею — як під курсором.
+    &--selected {
+      background: var(--browser-hover);
+    }
+  }
+
+  &__icon {
+    flex: 0 0 auto;
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--browser-icon-accent);
+  }
+
+  &__text {
+    display: grid;
+    min-width: 0;
+  }
+
+  &__value,
+  &__detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__value {
+    font-weight: 600;
+  }
+
+  &__detail {
+    font-size: 0.8125rem;
+    color: var(--browser-muted);
+  }
+
+  &__divider {
+    flex: 0 0 auto;
+    height: 0.0625rem;
+    margin: 0.25rem 0.5rem;
+    background: var(--browser-popover-border);
+  }
+
+  &__manage {
+    min-height: 2.25rem;
+    font-size: 0.875rem;
+    color: var(--browser-muted);
+  }
+}

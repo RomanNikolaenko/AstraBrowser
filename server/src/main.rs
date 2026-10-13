@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(windows)]
+mod addresses;
 mod adblock;
 mod audio;
 #[cfg(windows)]
@@ -108,6 +110,7 @@ fn main() {
 				tauri::Manager::manage(app, downloads::Downloads::default());
 				downloads::start(app.handle());
 				tauri::Manager::manage(app, passwords::Passwords::default());
+				tauri::Manager::manage(app, addresses::Addresses::default());
 				tauri::Manager::manage(app, auth::Auth::default());
 				auth::start(app.handle());
 			}
