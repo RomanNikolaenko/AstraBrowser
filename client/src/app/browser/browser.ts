@@ -398,14 +398,12 @@ export class Browser {
     return tab.page === 'web' && !tab.site?.crashed ? this.pageLabel(tab) : null;
   });
 
-  /** Сайт, що показує відео на весь екран: його webview накриває все вікно разом із панелями. */
-  private readonly fullscreenPage = signal<string | null>(null);
-  /** Чи було вікно повноекранним ще до відео — тоді після виходу з відео таким і лишається. */
-  private windowWasFullscreen = false;
   /**
-   * Входи й виходи з повноекранного відео виконуються по черзі: сайт може надіслати «увійшов» і «вийшов»
-   * швидше, ніж вікно встигне змінитися, і переплетені переходи лишили б вікно на весь екран без сторінки.
+   * Сайт, що показує відео на весь екран: його webview накриває все вікно разом із панелями. Вікно й webview для
+   * цього змінює Rust (server/src/fullscreen.rs), а межі сайту тримає, доки відео на весь екран.
    */
+  private readonly fullscreenPage = signal<string | null>(null);
+  /** Входи й виходи з повноекранного відео — по черзі: сайт може надіслати «увійшов» і «вийшов» одне за одним. */
   private fullscreenQueue = Promise.resolve();
 
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
@@ -596,7 +594,8 @@ export class Browser {
       afterNextRender(() => {
         const observer = new ResizeObserver(() => {
           const label = this.visiblePage();
-          if (label) {
+          // Сайт на весь екран тримає Rust; повернувшись, він отримає межі з exitPageFullscreen.
+          if (label && !this.fullscreenPage()) {
             this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
           }
           // Інший розмір — і сайт, і панелі над ним деінде.
@@ -1940,24 +1939,23 @@ export class Browser {
     }
   }
 
-  /** Відео на весь екран: вікно стає повноекранним, а webview сайту накриває його повністю. */
+  /**
+   * Відео на весь екран. Вікно й webview сайту вже змінив Rust — одразу в події сторінки, одним кроком (через
+   * інтерфейс це були б кілька кроків, і відео смикалося б між розмірами). Тут лише пам'ятаємо, хто на весь екран.
+   */
   private async onPageFullscreen({ label, fullscreen }: PageFullscreenEvent): Promise<void> {
     if (!fullscreen) {
       if (label === this.fullscreenPage()) {
-        await this.exitPageFullscreen();
+        await this.exitPageFullscreen(false);
       }
       return;
     }
-    if (label !== this.visiblePage() || label === this.fullscreenPage()) {
+    if (label !== this.visiblePage()) {
+      // Сайт, якого не видно, — назад, як був.
+      this.ignore(this.pageViews.exitFullscreen(label));
       return;
     }
-
-    this.windowWasFullscreen = await this.windows.isFullscreen();
     this.fullscreenPage.set(label);
-    await this.windows.setFullscreen(true);
-    // Якщо вікно вже було на весь екран, розмір не зміниться, тож межі — одразу.
-    this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
-    // Інтерфейс над відео не ловить мишу (і не видно його) — лише панелі, якщо відкриються.
     void this.updateInputRegion();
   }
 
@@ -2002,7 +2000,8 @@ export class Browser {
    */
   private updateInputRegion(): Promise<void> {
     cancelAnimationFrame(this.regionFrame);
-    if (!this.pageViews.available) {
+    // Сайт на весь екран — поверх інтерфейсу (server/src/fullscreen.rs), тож регіон лишається, яким був.
+    if (!this.pageViews.available || this.fullscreenPage()) {
       return Promise.resolve();
     }
     const closing = [...this.closingLayers.values()];
@@ -2045,16 +2044,24 @@ export class Browser {
     this.fullscreenQueue = this.fullscreenQueue.then(change).catch(() => undefined);
   }
 
-  private async exitPageFullscreen(): Promise<void> {
+  /**
+   * Сайт більше не на весь екран: сам вийшов (`fromPage` false — Rust уже все повернув) чи виводимо ми (інша вкладка,
+   * модальне вікно). Регіон надсилаємо наново: Rust, повертаючи сайт, віддав мишу всьому інтерфейсу.
+   */
+  private async exitPageFullscreen(byInterface = true): Promise<void> {
     const label = this.fullscreenPage();
     this.fullscreenPage.set(null);
-    if (!this.windowWasFullscreen) {
-      await this.windows.setFullscreen(false);
+    if (label && byInterface) {
+      await this.pageViews.exitFullscreen(label).catch(() => undefined);
     }
-    if (label) {
-      this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
-    }
-    void this.updateInputRegion();
+    this.sentRegion = '';
+    // Межі — з розкладки вже після того, як вікно повернулося до свого розміру.
+    requestAnimationFrame(() => {
+      if (label && label === this.visiblePage()) {
+        this.ignore(this.pageViews.setBounds(label, this.pageBounds()));
+      }
+      void this.updateInputRegion();
+    });
   }
 
   private onPageFavicon({ label, url, icon }: PageFaviconEvent): void {

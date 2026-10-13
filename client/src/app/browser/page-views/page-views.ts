@@ -260,6 +260,11 @@ export class PageViews {
     await commands.interfaceSetInputRegion(page, [...keep]);
   }
 
+  /** Вивести сайт із повного екрана (server/src/fullscreen.rs): вікно й webview — як були до нього. */
+  async exitFullscreen(label: string): Promise<void> {
+    await commands.pageExitFullscreen(label);
+  }
+
   async setZoom(label: string, scale: number): Promise<void> {
     await commands.pageSetZoom(label, scale);
   }

@@ -151,6 +151,11 @@ export const commands = {
 	width: number | null,
 	height: number | null,
 } | null, keep: Area[]) => __TAURI_INVOKE<null>("interface_set_input_region", { page, keep }),
+	/**
+	 *  Вивести сайт із повного екрана, хоч сторінка його й не покидала (інша вкладка, модальне вікно): вікно й webview —
+	 *  як були до нього.
+	 */
+	pageExitFullscreen: (label: string) => __TAURI_INVOKE<null>("page_exit_fullscreen", { label }),
 	/**  Особливе оновлення з меню кнопки «Оновити»: без кешу, з очищенням даних чи cookies сайту. */
 	pageReloadWith: (label: string, mode: ReloadMode) => __TAURI_INVOKE<null>("page_reload_with", { label, mode }),
 	/**  «Картинка в картинці» для відео на сторінці. */

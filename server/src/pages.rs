@@ -60,6 +60,14 @@ struct FullscreenEvent {
   fullscreen: bool,
 }
 
+/// Інтерфейсові вікна — чи сайт зараз на весь екран (fullscreen.rs): як є, а не що сказала подія сторінки.
+#[cfg(windows)]
+pub(crate) fn notify_fullscreen(page: &Webview) {
+  let label = page.label().to_string();
+  let fullscreen = crate::fullscreen::holds(&label);
+  let _ = page.app_handle().emit_to(page.window().label(), "page://fullscreen", FullscreenEvent { label, fullscreen });
+}
+
 #[cfg(windows)]
 #[derive(Clone, Serialize, specta::Type)]
 struct AudioEvent {
@@ -214,6 +222,12 @@ fn place(webview: &Webview, bounds: &Bounds) -> Result<(), String> {
   webview.set_size(LogicalSize::new(bounds.width, bounds.height)).map_err(|error| error.to_string())
 }
 
+/// Скрипт сторінки, що виводить її з повного екрана після того, як вікно й сайт уже на місці (fullscreen-page.js).
+#[cfg(windows)]
+fn fullscreen_script(token: &str) -> String {
+  format!("({})({});", include_str!("fullscreen-page.js"), serde_json::Value::from(token))
+}
+
 /// Скрипт сторінки для Ctrl + коліщатка (zoom-page.js) з токеном сторінки.
 #[cfg(windows)]
 fn zoom_script(token: &str) -> String {
@@ -242,6 +256,21 @@ fn on_page_message(
       None
     }
     "translate" if message.get("token")?.as_str()? == token => crate::translate::on_page_message(app, label, message),
+    // Сторінка виходить із повного екрана: спершу вікно й сайт на місце, тоді — їй відповідь, що можна.
+    "fullscreen-exit" if message.get("token")?.as_str()? == token => {
+      // Дозвіл прийде, коли під затемненням вікно й сайт уже на місці; не на весь екран — одразу.
+      let later = app.get_webview(label).is_some_and(|page| crate::fullscreen::prepare_exit(&page));
+      (!later).then(|| serde_json::json!({ "astra": "fullscreen-ready" }))
+    }
+    // Сторінка перемалювалась під час переходу: затемнення може сходити.
+    "fullscreen-painted" if message.get("token")?.as_str()? == token => {
+      let size = |key: &str| message.get(key).and_then(serde_json::Value::as_i64).unwrap_or(0) as i32;
+      if let Some(page) = app.get_webview(label) {
+        let fullscreen = message.get("fullscreen").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        crate::fullscreen::painted(&page, fullscreen, size("width"), size("height"));
+      }
+      None
+    }
     _ => crate::passwords::on_page_message(app, ui, label, token, source, message),
   }
 }
@@ -330,6 +359,7 @@ pub async fn page_open(
   let builder = builder
     .initialization_script(crate::passwords::page_script(&page_token))
     .initialization_script(zoom_script(&page_token))
+    .initialization_script(fullscreen_script(&page_token))
     .initialization_script(crate::translate::page_script(&page_token));
 
   // Cookies, входи й сховище сайтів — свої в кожного облікового запису Astra (profiles.rs).
@@ -465,12 +495,15 @@ pub async fn page_open(
   })
   .map_err(|error| error.to_string())?;
 
-  // Відео на весь екран: інтерфейс розтягує webview на все вікно.
+  // Відео на весь екран: вікно й webview змінюються одразу тут (fullscreen.rs), а інтерфейс лише дізнається.
   #[cfg(windows)]
   webview2::watch_fullscreen(&webview, {
-    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-    move |fullscreen| {
-      let _ = app.emit_to(&ui, "page://fullscreen", FullscreenEvent { label: label.clone(), fullscreen });
+    let (app, label) = (app.clone(), label.clone());
+    move |_| {
+      if let Some(page) = app.get_webview(&label) {
+        crate::fullscreen::sync(&page, true);
+        notify_fullscreen(&page);
+      }
     }
   })
   .map_err(|error| error.to_string())?;
@@ -497,6 +530,13 @@ pub async fn page_open(
   webview2::watch_shortcuts(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |shortcut| {
+      // Esc у повному екрані: WebView2 зараз виведе сторінку, а екран темніє ще до того (fullscreen.rs).
+      if shortcut == "escape" {
+        if let Some(page) = app.get_webview(&label) {
+          crate::fullscreen::exit_by_key(&page);
+        }
+        return;
+      }
       let _ = app.emit_to(&ui, "page://shortcut", ShortcutEvent { label: label.clone(), shortcut });
     }
   })
@@ -572,7 +612,23 @@ pub fn page_reload(window: Window, label: String) -> Result<(), String> {
 #[tauri::command]
 #[specta::specta]
 pub fn page_set_bounds(window: Window, label: String, bounds: Bounds) -> Result<(), String> {
-  place(&page(&window, &label)?, &bounds)
+  let webview = page(&window, &label)?;
+  // Сайт на весь екран тримає fullscreen.rs: запізнілі межі з інтерфейсу його не зменшують.
+  #[cfg(windows)]
+  if crate::fullscreen::holds(&label) {
+    return Ok(());
+  }
+  place(&webview, &bounds)
+}
+
+/// Вивести сайт із повного екрана, хоч сторінка його й не покидала (інша вкладка, модальне вікно): вікно й webview —
+/// як були до нього.
+#[cfg(windows)]
+#[tauri::command]
+#[specta::specta]
+pub fn page_exit_fullscreen(window: Window, label: String) -> Result<(), String> {
+  crate::fullscreen::dismiss(&page(&window, &label)?);
+  Ok(())
 }
 
 #[tauri::command]
@@ -625,6 +681,9 @@ pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label
   let Some(webview) = window.get_webview(&label) else {
     return Ok(());
   };
+  // Закривають сайт на весь екран — вікно спершу повертається, яким було.
+  #[cfg(windows)]
+  crate::fullscreen::dismiss(&webview);
   // Сторінку, з якої ще йде завантаження, лише ховаємо до його кінця (webview2::close_page).
   #[cfg(windows)]
   return window

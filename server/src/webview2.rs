@@ -32,7 +32,7 @@ use windows::Win32::{
   Foundation::{E_OUTOFMEMORY, HWND},
   Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_DIFF, RGN_OR},
   UI::{
-    Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT, VK_TAB},
+    Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_ESCAPE, VK_MENU, VK_SHIFT, VK_TAB},
     Shell::SHCreateMemStream,
     WindowsAndMessaging::{SetWindowPos, HWND_BOTTOM, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE},
   },
@@ -215,7 +215,7 @@ pub fn post_page_message(webview: &Webview, message: &serde_json::Value) -> taur
 }
 
 /// Повідомляє `report(fullscreen)`, коли сторінка входить у повноекранний режим (відео тощо) чи виходить з нього.
-/// Сам webview про розміри не дбає: розтягнути його на все вікно — справа інтерфейсу.
+/// Сам webview про розміри не дбає: розтягнути його на все вікно — справа `report` (fullscreen.rs).
 pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let watch = || -> windows_core::Result<()> {
@@ -259,7 +259,8 @@ pub fn disable_devtools(webview: &Webview) -> tauri::Result<()> {
 /// тож вони перехоплюються тут (сайт їх не бачить) і передаються інтерфейсу як `report(shortcut)`.
 /// Це Ctrl+Tab (`next-tab`), Ctrl+Shift+Tab (`previous-tab`), Ctrl+Shift+T (`reopen-tab`), Ctrl+Shift+S (`screenshot`),
 /// Ctrl+U (`view-source`, код сторінки) і масштаб: Ctrl+= чи Ctrl++ (`zoom-in`), Ctrl+− (`zoom-out`), Ctrl+0 (`zoom-reset`).
-/// Інструменти розробника (F12, Ctrl+Shift+I/J/C) відкриває сам WebView2.
+/// Інструменти розробника (F12, Ctrl+Shift+I/J/C) відкриває сам WebView2. Esc теж лишається WebView2 — `escape` лише
+/// попереджає, що сторінка, можливо, зараз вийде з повного екрана (тоді екран темніє, fullscreen.rs).
 pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
@@ -272,6 +273,11 @@ pub fn watch_shortcuts(webview: &Webview, report: impl Fn(&'static str) + Send +
         args.VirtualKey(&mut key)?;
       }
       let held = |key: VIRTUAL_KEY| unsafe { GetKeyState(i32::from(key.0)) } < 0;
+      // Esc лишається WebView2 (виводить сторінку з повного екрана), а `escape` лише попереджає (fullscreen.rs).
+      if kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && key == u32::from(VK_ESCAPE.0) && !held(VK_CONTROL) && !held(VK_MENU) {
+        report("escape");
+        return Ok(());
+      }
       if kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN || !held(VK_CONTROL) || held(VK_MENU) {
         return Ok(());
       }

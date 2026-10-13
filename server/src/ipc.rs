@@ -82,6 +82,7 @@ fn specta() -> tauri_specta::Builder<Wry> {
       browsing_data::browsing_data_sizes,
       browsing_data::browsing_data_clear,
       pages::interface_set_input_region,
+      pages::page_exit_fullscreen,
       pages::page_reload_with,
       pages::page_picture_in_picture,
       pages::page_set_audio_rules,

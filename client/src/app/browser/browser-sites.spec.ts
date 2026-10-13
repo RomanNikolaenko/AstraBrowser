@@ -103,6 +103,9 @@ class FakePageViews {
   setVisible(label: string, visible: boolean) {
     return this.record('visible', label, visible);
   }
+  exitFullscreen(label: string) {
+    return this.record('exit-fullscreen', label);
+  }
   setInputRegion(page: unknown, keep: unknown) {
     return this.record('input-region', page, keep);
   }
@@ -1740,56 +1743,42 @@ describe('Browser with sites', () => {
       await settle();
     };
 
-    it('should stretch the site over the whole window and restore it afterwards', async () => {
-      await typeInOmnibox('youtube.com');
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
+    it('should leave the window and the site to Rust and restore the site bounds afterwards', async () => {
+      await typeInOmnibox('youtube.com');
+      const before = pages.called('bounds').at(-1);
+
+      // Вікно й webview на весь екран ставить Rust (fullscreen.rs) — інтерфейс вікна не чіпає.
       await fullscreen(true);
-      expect(windows.fullscreenCalls).toEqual([true]);
-      expect(pages.called('bounds').at(-1)).toEqual([
-        label(1),
-        { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight },
-      ]);
+      expect(windows.fullscreenCalls).toEqual([]);
+      expect(pages.called('exit-fullscreen')).toEqual([]);
 
       await fullscreen(false);
-      expect(windows.fullscreenCalls).toEqual([true, false]);
-      expect(pages.called('bounds').at(-1)?.[1]).not.toEqual({
-        x: 0,
-        y: 0,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
+      await frame();
+      await settle();
+      expect(windows.fullscreenCalls).toEqual([]);
+      expect(pages.called('exit-fullscreen')).toEqual([]);
+      expect(pages.called('bounds').at(-1)).toEqual(before);
     });
 
-    it('should keep the window fullscreen if it already was', async () => {
-      windows.fullscreen = true;
-      await typeInOmnibox('youtube.com');
-
-      await fullscreen(true);
-      await fullscreen(false);
-
-      expect(windows.fullscreenCalls).toEqual([true]);
-      expect(windows.fullscreen).toBe(true);
-    });
-
-    it('should leave fullscreen when another tab is shown', async () => {
+    it('should bring the site out of fullscreen when another tab is shown', async () => {
       await typeInOmnibox('youtube.com');
       await fullscreen(true);
 
       element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
       await settle();
 
-      expect(windows.fullscreenCalls).toEqual([true, false]);
+      expect(pages.called('exit-fullscreen')).toEqual([[label(1)]]);
     });
 
-    it('should follow the site when it enters and leaves fullscreen at once', async () => {
+    it('should put back a site that went fullscreen while hidden', async () => {
       await typeInOmnibox('youtube.com');
-
-      pages.emit('page://fullscreen', { label: label(1), fullscreen: true });
-      pages.emit('page://fullscreen', { label: label(1), fullscreen: false });
+      element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
       await settle();
 
-      expect(windows.fullscreenCalls).toEqual([true, false]);
-      expect(windows.fullscreen).toBe(false);
+      await fullscreen(true);
+      expect(pages.called('exit-fullscreen')).toEqual([[label(1)]]);
     });
   });
 
