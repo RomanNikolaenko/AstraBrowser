@@ -53,7 +53,7 @@ export const commands = {
 	/**  Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються. */
 	downloadsPickFolder: (current: string | null) => __TAURI_INVOKE<string | null>("downloads_pick_folder", { current }),
 	downloadCancel: (id: number) => __TAURI_INVOKE<null>("download_cancel", { id }),
-	/**  Відкриває файл програмою, що стоїть для нього у Windows (як подвійний клік у Провіднику). */
+	/**  Відкриває файл програмою, що стоїть для нього в системі (як подвійний клік у Провіднику). */
 	downloadOpen: (path: string) => __TAURI_INVOKE<null>("download_open", { path }),
 	/**  Показує файл виділеним у його теці; якщо файла вже немає — просто теку. */
 	downloadShow: (path: string) => __TAURI_INVOKE<null>("download_show", { path }),
@@ -171,7 +171,8 @@ export const commands = {
 	browsingDataSizes: () => __TAURI_INVOKE<BrowsingDataSizes>("browsing_data_sizes"),
 	/**
 	 *  Очищає вибране (`kinds`), змінене від `since` (секунди Unix; 0 — за весь час). `origins` — сайти з історії: у
-	 *  профілі, спільному з інтерфейсом, їхній localStorage чиститься окремо (webview2::clear_browsing_data).
+	 *  профілі, спільному з інтерфейсом, їхній localStorage чиститься окремо (webview2::clear_browsing_data,
+	 *  gtk_page::clear_browsing_data).
 	 */
 	browsingDataClear: (kinds: ClearKinds, since: number | null, origins: string[]) => __TAURI_INVOKE<null>("browsing_data_clear", { kinds, since, origins }),
 	/**
@@ -201,7 +202,7 @@ export const commands = {
 	 */
 	trackingSetRules: (rules: Rules) => __TAURI_INVOKE<null>("tracking_set_rules", { rules }),
 	dnsSettings: () => __TAURI_INVOKE<DnsState>("dns_settings"),
-	/**  Новий вибір — у dns.json; діятиме після перезапуску браузера. */
+	/**  Новий вибір — у dns.json; у Windows діятиме після перезапуску браузера, у Linux — одразу. */
 	dnsSet: (settings: DnsSettings) => __TAURI_INVOKE<DnsState>("dns_set", { settings }),
 	/**
 	 *  Перезапуск браузера — щоб нові налаштування DNS запрацювали: вікна закриваються, браузер WebView2 виходить,
@@ -222,9 +223,12 @@ export const commands = {
 	/**  Показати файл журналу в Провіднику (чи теку, якщо записів ще не було). */
 	appOpenLogs: () => __TAURI_INVOKE<null>("app_open_logs"),
 	defaultBrowserState: () => __TAURI_INVOKE<DefaultBrowserState>("default_browser_state"),
-	/**  «Параметри Windows» → «Програми за замовчуванням» на сторінці Astra: там людина вибирає його для посилань. */
+	/**
+	 *  «Параметри Windows» → «Програми за замовчуванням» на сторінці Astra: там людина вибирає його для посилань. У Linux —
+	 *  одразу вибирає Astra.
+	 */
 	defaultBrowserOpenSettings: () => __TAURI_INVOKE<null>("default_browser_open_settings"),
-	/**  Відкриває посилання програмою, що в Windows для нього вибрана (пошта для mailto: тощо). */
+	/**  Відкриває посилання програмою, що в системі для нього вибрана (пошта для mailto: тощо). */
 	openExternal: (url: string) => __TAURI_INVOKE<null>("open_external", { url }),
 	/**
 	 *  Програма для посилання `url`: її назва, якщо посилання можна відкрити; `None` — нема чим, тож і питати не варто
@@ -235,7 +239,7 @@ export const commands = {
 	/**  Дозвіл сайту на автовідтворення, збережений у профілі WebView2. */
 	pageAutoplay: (label: string) => __TAURI_INVOKE<Autoplay>("page_autoplay", { label }),
 	pageSetAutoplay: (label: string, autoplay: Autoplay) => __TAURI_INVOKE<null>("page_set_autoplay", { label, autoplay }),
-	/**  Присипляє приховану фонову вкладку (page_events.rs); `true` — заснула. */
+	/**  Присипляє приховану фонову вкладку (page_events.rs, gtk_page.rs); `true` — заснула. */
 	pageSuspend: (label: string) => __TAURI_INVOKE<boolean>("page_suspend", { label }),
 	/**  Вкладка пішла у фон (менше пам'яті) чи стала активною. */
 	pageSetBackground: (label: string, background: boolean) => __TAURI_INVOKE<null>("page_set_background", { label, background }),
@@ -391,6 +395,7 @@ export type ClearKinds = {
 	cache: boolean,
 	/**  Власна історія WebView2 (історію й завантаження браузера чистить інтерфейс). */
 	history: boolean,
+	/**  Власне автозаповнення WebView2. */
 	autofill: boolean,
 	/**  Дозволи сайтів. */
 	settings: boolean,
@@ -415,6 +420,11 @@ export type DnsState = {
 	settings: DnsSettings,
 	/**  Збережене ще не діє: потрібен перезапуск браузера. */
 	restartNeeded: boolean,
+	/**
+	 *  DNS через HTTPS є у WebView2 (Windows) і через проксі в Linux (doh_proxy.rs); на macOS сайти відкриваються через
+	 *  DNS системи.
+	 */
+	supported: boolean,
 };
 
 /**  Налаштування завантажень для інтерфейсу; надсилаються й подією downloads://settings. */
@@ -490,7 +500,7 @@ export type PermissionState = "allow" | "deny" |
 /**  Питати щоразу (для панелі дозволів — скинути збережене). */
 "ask";
 
-/**  Що зробила «картинка в картинці». */
+/**  Що зробила «картинка в картинці» (є лише у WebView2). */
 export type PictureInPicture = "opened" | "closed" | 
 /**  На сторінці немає відео. */
 "no-video";

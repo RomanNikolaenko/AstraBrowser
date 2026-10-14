@@ -128,7 +128,6 @@ pub fn guard_script(rules: &AutoplayRules) -> String {
 }
 
 /// Нові правила для документів, що відкриються після цього.
-#[cfg(windows)]
 pub fn rules_script(rules: &AutoplayRules) -> String {
   format!("window[Symbol.for('astra.audio-rules')]?.({}, {});", json(token()), json(rules))
 }

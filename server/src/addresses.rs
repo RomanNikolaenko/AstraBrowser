@@ -715,7 +715,7 @@ pub fn address_autofill(app: AppHandle, window: Window, addresses: State<'_, Add
     let _ = addresses.write(&book);
     values
   };
-  crate::webview2::post_page_message(&page, &json!({ "astra": "autofill", "type": "fill", "values": values }))
+  crate::page_bridge::post(&page, &json!({ "astra": "autofill", "type": "fill", "values": values }))
     .map_err(|error| error.to_string())?;
   let _ = page.set_focus();
   Ok(())

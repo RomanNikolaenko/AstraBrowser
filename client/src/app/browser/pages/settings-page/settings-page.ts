@@ -29,6 +29,7 @@ import {
   translate,
   TranslatePipe,
 } from '../../../shared/i18n/i18n';
+import { IS_LINUX } from '../../../shared/platform/platform';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,6 +46,8 @@ export class SettingsPage {
   protected readonly tracking = inject(TrackingStore);
   protected readonly dns = inject(DnsStore);
   protected readonly defaultBrowser = inject(DefaultBrowserStore);
+  /** У Linux немає того, що дає лише WebView2 (SmartScreen). */
+  protected readonly linux = IS_LINUX;
   /** «Параметри Windows» відкрили — підказуємо, що там натиснути. */
   protected readonly defaultBrowserAsked = signal(false);
   protected readonly defaultBrowserError = signal<string | null>(null);
@@ -78,7 +81,12 @@ export class SettingsPage {
     this.defaultBrowserError.set(null);
     try {
       await this.defaultBrowser.openSettings();
-      this.defaultBrowserAsked.set(true);
+      // У Linux Astra вже вибрано, а у Windows вибирають у «Параметрах», що відкрилися.
+      if (this.linux) {
+        await this.defaultBrowser.refresh();
+      } else {
+        this.defaultBrowserAsked.set(true);
+      }
     } catch (error) {
       this.defaultBrowserError.set(typeof error === 'string' ? error : translate('Не вдалося відкрити «Параметри Windows».'));
     }

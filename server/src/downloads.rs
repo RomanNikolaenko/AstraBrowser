@@ -1,25 +1,33 @@
-//! Завантажені файли: куди їх зберігати (своя тека чи «Завантаження» Windows, питати щоразу чи ні),
-//! скасування, відкриття файла й показ у теці (Провіднику).
-//! Сам перебіг завантажень стежить webview2::watch_downloads, а подія page://download несе його в інтерфейс.
+//! Завантажені файли: куди їх зберігати (своя тека чи «Завантаження» системи, питати щоразу чи ні),
+//! скасування, відкриття файла й показ у теці (Провіднику, Finder чи файловому менеджері).
+//! Сам перебіг завантажень стежить рушій — webview2::watch_downloads у Windows, gtk_downloads.rs у Linux, — а подія
+//! page://download несе його в інтерфейс.
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{
   collections::HashMap,
   fs,
-  os::windows::process::CommandExt,
   path::{Path, PathBuf},
   process::Command,
   sync::{mpsc, Mutex, OnceLock, RwLock},
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State, Url, Window};
+#[cfg(any(windows, target_os = "linux"))]
+use tauri::Url;
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_dialog::DialogExt;
+#[cfg(windows)]
 use windows::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
+#[cfg(windows)]
 use windows_core::{w, HSTRING};
 
+#[cfg(windows)]
 use crate::webview2;
 
 const SETTINGS_FILE: &str = "downloads.json";
+#[cfg(windows)]
 const PAGE_PREFIX: &str = "page-";
 
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
@@ -59,6 +67,29 @@ pub struct DownloadSettings {
   ask: bool,
 }
 
+/// Завантаження, про яке питають, куди зберегти файл: що за файл і куди рушій збирався його покласти.
+#[cfg(any(windows, target_os = "linux"))]
+pub struct DownloadRequest {
+  pub id: u64,
+  pub url: String,
+  pub path: PathBuf,
+  /// 0 — розмір невідомий.
+  pub total: i64,
+}
+
+/// Що інтерфейс знає про завантаження.
+#[cfg(any(windows, target_os = "linux"))]
+pub struct DownloadUpdate {
+  pub id: u64,
+  pub url: String,
+  pub path: String,
+  pub received: i64,
+  /// 0 — розмір невідомий (сервер його не назвав).
+  pub total: i64,
+  /// in-progress, completed, failed чи canceled.
+  pub state: &'static str,
+}
+
 #[derive(Default)]
 pub struct Downloads {
   settings: RwLock<Settings>,
@@ -68,10 +99,13 @@ pub struct Downloads {
 }
 
 impl Downloads {
-  /// Куди зберігаються файли: вибрана тека (якщо вона ще є) чи «Завантаження» Windows.
+  /// Куди зберігаються файли: вибрана тека (якщо вона ще є) чи «Завантаження» системи — а якщо система її не називає
+  /// (Linux без тек XDG), ~/Downloads, як у Chrome.
   pub fn folder(&self, app: &AppHandle) -> Option<PathBuf> {
     let chosen = self.settings.read().ok().and_then(|settings| settings.folder.clone()).filter(|folder| folder.is_dir());
-    chosen.or_else(|| app.path().download_dir().ok())
+    chosen
+      .or_else(|| app.path().download_dir().ok())
+      .or_else(|| app.path().home_dir().ok().map(|home| home.join("Downloads")))
   }
 
   fn ask(&self) -> bool {
@@ -116,6 +150,7 @@ pub fn start(app: &AppHandle) {
 /// Нова тека — усім відкритим сторінкам (у WebView2 її знає профіль) і всім вікнам інтерфейсу.
 fn apply(app: &AppHandle) -> DownloadSettings {
   let downloads = app.state::<Downloads>();
+  #[cfg(windows)]
   if let Some(folder) = downloads.folder(app) {
     for webview in app.webviews().into_values().filter(|webview| webview.label().starts_with(PAGE_PREFIX)) {
       let _ = webview2::set_download_folder(&webview, folder.clone());
@@ -128,7 +163,8 @@ fn apply(app: &AppHandle) -> DownloadSettings {
 
 /// Якщо так налаштовано — просить інтерфейс вікна `ui` показати, куди збережеться файл, і повертає true:
 /// тоді завантаження чекає, поки інтерфейс відповість через download_resolve.
-pub fn ask_where(app: &AppHandle, ui: &str, label: &str, request: webview2::DownloadRequest) -> bool {
+#[cfg(any(windows, target_os = "linux"))]
+pub fn ask_where(app: &AppHandle, ui: &str, label: &str, request: DownloadRequest) -> bool {
   let downloads = app.state::<Downloads>();
   if !downloads.ask() {
     return false;
@@ -193,7 +229,16 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
     }
     _ => None,
   };
-  app.run_on_main_thread(move || webview2::resolve_download(id, path)).map_err(|error| error.to_string())
+  #[cfg(windows)]
+  return app.run_on_main_thread(move || webview2::resolve_download(id, path)).map_err(|error| error.to_string());
+  #[cfg(target_os = "linux")]
+  return app.run_on_main_thread(move || crate::gtk_downloads::resolve_download(id, path)).map_err(|error| error.to_string());
+  // Завантаження, що чекало б відповіді, тут немає: рушій зберігає файл одразу (pages.rs, on_download).
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    let _ = (app, path);
+    Ok(())
+  }
 }
 
 /// Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються.
@@ -262,16 +307,27 @@ pub fn downloads_set_ask(app: AppHandle, downloads: State<'_, Downloads>, ask: b
 #[specta::specta]
 pub fn downloads_open_folder(app: AppHandle, downloads: State<'_, Downloads>) -> Result<(), String> {
   let folder = downloads.folder(&app).ok_or(crate::i18n::text("Немає теки для завантажень", "No downloads folder"))?;
-  Command::new("explorer").arg(folder).spawn().map(|_| ()).map_err(|error| error.to_string())
+  #[cfg(windows)]
+  return Command::new("explorer").arg(folder).spawn().map(|_| ()).map_err(|error| error.to_string());
+  #[cfg(not(windows))]
+  open_with_system(&folder)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn download_cancel(app: AppHandle, id: u64) -> Result<(), String> {
-  app.run_on_main_thread(move || webview2::cancel_download(id)).map_err(|error| error.to_string())
+  #[cfg(windows)]
+  return app.run_on_main_thread(move || webview2::cancel_download(id)).map_err(|error| error.to_string());
+  #[cfg(target_os = "linux")]
+  return app.run_on_main_thread(move || crate::gtk_downloads::cancel_download(id)).map_err(|error| error.to_string());
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    let _ = (app, id);
+    Err(crate::i18n::text("На цій системі цього ще немає", "Not available on this system yet").into())
+  }
 }
 
-/// Відкриває файл програмою, що стоїть для нього у Windows (як подвійний клік у Провіднику).
+/// Відкриває файл програмою, що стоїть для нього в системі (як подвійний клік у Провіднику).
 #[tauri::command]
 #[specta::specta]
 pub fn download_open(path: String) -> Result<(), String> {
@@ -279,13 +335,18 @@ pub fn download_open(path: String) -> Result<(), String> {
   if !path.is_file() {
     return Err(format!("{} {}", crate::i18n::text("Файла вже немає:", "The file no longer exists:"), path.display()));
   }
-  let result = unsafe { ShellExecuteW(None, w!("open"), &HSTRING::from(path.as_os_str()), None, None, SW_SHOWNORMAL) };
-  // Більше за 32 — успіх; менші значення — коди помилок ShellExecute.
-  if result.0 as isize > 32 {
-    Ok(())
-  } else {
-    Err(format!("{} {}", crate::i18n::text("Не вдалося відкрити", "Couldn't open"), path.display()))
+  #[cfg(windows)]
+  {
+    let result = unsafe { ShellExecuteW(None, w!("open"), &HSTRING::from(path.as_os_str()), None, None, SW_SHOWNORMAL) };
+    // Більше за 32 — успіх; менші значення — коди помилок ShellExecute.
+    if result.0 as isize > 32 {
+      Ok(())
+    } else {
+      Err(format!("{} {}", crate::i18n::text("Не вдалося відкрити", "Couldn't open"), path.display()))
+    }
   }
+  #[cfg(not(windows))]
+  open_with_system(path)
 }
 
 /// Показує файл виділеним у його теці; якщо файла вже немає — просто теку.
@@ -293,7 +354,21 @@ pub fn download_open(path: String) -> Result<(), String> {
 #[specta::specta]
 pub fn download_show(path: String) -> Result<(), String> {
   let path = Path::new(&path);
+  // macOS: Finder з виділеним файлом; Linux: тека у файловому менеджері (виділити файл xdg-open не вміє).
+  #[cfg(not(windows))]
+  {
+    #[cfg(target_os = "macos")]
+    if path.is_file() {
+      return Command::new("open").arg("-R").arg(path).spawn().map(drop).map_err(|error| error.to_string());
+    }
+    match path.parent().filter(|folder| folder.is_dir()) {
+      Some(folder) => open_with_system(folder),
+      None => Err(format!("{} {}", crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"), path.display())),
+    }
+  }
+  #[cfg(windows)]
   let mut explorer = Command::new("explorer");
+  #[cfg(windows)]
   if path.is_file() {
     // Провідник розбирає /select, сам, тож шлях у лапках передається як є.
     explorer.raw_arg(format!("/select,\"{}\"", path.display()));
@@ -302,7 +377,18 @@ pub fn download_show(path: String) -> Result<(), String> {
   } else {
     return Err(format!("{} {}", crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"), path.display()));
   }
+  #[cfg(windows)]
   explorer.spawn().map(|_| ()).map_err(|error| error.to_string())
+}
+
+/// Файл чи теку — програмою системи: open на macOS, xdg-open у Linux.
+#[cfg(not(windows))]
+fn open_with_system(path: &Path) -> Result<(), String> {
+  #[cfg(target_os = "macos")]
+  let opener = "open";
+  #[cfg(not(target_os = "macos"))]
+  let opener = "xdg-open";
+  Command::new(opener).arg(path).spawn().map(drop).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

@@ -19,6 +19,15 @@
       <p class="adblock-panel__notice" role="status">
         {{ status.updating ? ('Завантаження списків фільтрів…' | t) : ('Списки фільтрів ще не завантажено' | t) }}
       </p>
+    } @else if (host() && linux) {
+      <!-- Фільтри WebKit (Linux) не кажуть, скільки відсікли. -->
+      <p class="adblock-panel__notice" role="status">
+        @if (active()) {
+          {{ 'Реклама й трекери на цьому сайті блокуються' | t }}
+        } @else {
+          {{ 'Блокувальник на цьому сайті вимкнено' | t }}
+        }
+      </p>
     } @else if (host()) {
       <p class="adblock-panel__count" aria-live="polite">
         <span class="adblock-panel__number">{{ active() ? blocked() : 0 }}</span>

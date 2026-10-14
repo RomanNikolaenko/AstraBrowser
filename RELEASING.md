@@ -36,19 +36,24 @@
    git push origin v0.2.0
    ```
 
-3. GitHub → Actions → **Release**: збирає інсталятор на Windows, підписує й публікує реліз `v0.2.0` з
-   `Astra-Browser_0.2.0_x64-setup.exe` і `latest.json`. Перша збірка — ~20 хв, далі швидше (кеш).
+3. GitHub → Actions → **Release**: збирає інсталятор на Windows і пакети на Linux (Ubuntu 22.04), підписує й
+   публікує реліз `v0.2.0` з `Astra-Browser_0.2.0_x64-setup.exe`, `Astra-Browser_0.2.0_amd64.deb`,
+   `Astra-Browser-0.2.0-1.x86_64.rpm`, `Astra-Browser_0.2.0_amd64.AppImage` і одним `latest.json` на обидві системи.
+   Перша збірка — ~20 хв, далі швидше (кеш).
 
 Тег, що не збігається з версією в `server/tauri.conf.json`, workflow зупиняє з поясненням.
 
 ## Вручну (без Actions)
 
 1. Підняти версію, як вище.
-2. У теці `client`: `npm run release -- "Що нового"` — підписаний інсталятор і `latest.json` у
-   `server/target/release/bundle/release`.
-3. GitHub → Releases → **Draft a new release**: тег `v<версія>`, перетягнути обидва файли, **Publish release**
+2. У теці `client`: `npm run release -- "Що нового"` — підписані пакети системи, на якій запущено (у Windows —
+   інсталятор, у Linux — .deb, .rpm і AppImage), і `latest.json` у `server/target/release/bundle/release`. Щоб
+   оновлювалися обидві системи, зберіть на кожній і складіть latest.json в один:
+   `node scripts/release.mjs --merge <куди> <тека Windows> <тека Linux>`.
+3. GitHub → Releases → **Draft a new release**: тег `v<версія>`, перетягнути всі файли, **Publish release**
    (не Pre-release: такий GitHub не вважає останнім).
 
 ## Хто оновлюється
 
-Лише браузери, встановлені інсталятором з релізу. Запущений `tauri:dev` кнопку показує, але не оновлюється.
+Лише браузери, встановлені інсталятором чи пакетом з релізу. У Linux AppImage оновлюється сам, а .deb і .rpm —
+через `dpkg`/`rpm`, для чого система попросить пароль. Запущений `tauri:dev` кнопку показує, але не оновлюється.

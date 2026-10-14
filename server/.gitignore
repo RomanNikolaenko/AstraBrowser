@@ -1,2 +1,2 @@
 # Rust build output
-/target
+/target*

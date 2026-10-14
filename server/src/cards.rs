@@ -622,7 +622,10 @@ pub async fn card_autofill(app: AppHandle, window: Window, label: String, id: St
     .ok_or(crate::i18n::text("Сторінку вже закрито", "The page is already closed"))?;
   let verify = app.state::<Cards>().vault.lock().map_err(|error| error.to_string())?.settings.verify;
   if verify {
+    #[cfg(windows)]
     let hwnd = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
+    #[cfg(not(windows))]
+    let hwnd = 0;
     let message = crate::i18n::text(
       "Astra Browser хоче заповнити на сайті дані банківської картки",
       "Astra Browser wants to fill in bank card details on a site",
@@ -655,7 +658,7 @@ pub async fn card_autofill(app: AppHandle, window: Window, label: String, id: St
     let _ = cards.write(&vault);
     values
   };
-  crate::webview2::post_page_message(&page, &json!({ "astra": "autofill", "type": "fill", "values": values }))
+  crate::page_bridge::post(&page, &json!({ "astra": "autofill", "type": "fill", "values": values }))
     .map_err(|error| error.to_string())?;
   let _ = page.set_focus();
   Ok(true)

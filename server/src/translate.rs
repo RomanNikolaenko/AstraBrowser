@@ -107,7 +107,7 @@ pub fn on_page_message(app: &AppHandle, label: &str, message: &Value) -> Option<
       Err(error) => json!({ "astra": "translate", "id": id, "error": error, "ui": ui }),
     };
     if let Some(webview) = app.get_webview(&label) {
-      let _ = crate::webview2::post_page_message(&webview, &reply);
+      let _ = crate::page_bridge::post(&webview, &reply);
     }
   });
   None

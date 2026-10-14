@@ -50,14 +50,28 @@
         </div>
         <div class="addresses__setting">
           <span class="page__text">
-            <span class="page__name" id="cards-verify-name">{{ 'Підтверджувати через Windows Hello' | t }}</span>
-            <span class="page__meta" id="cards-verify-hint">
-              @if (cards.hello()) {
-                {{ 'Перш ніж заповнити картку, браузер попросить PIN, відбиток чи обличчя' | t }}
-              } @else {
-                {{ 'Windows Hello не налаштовано на цьому комп’ютері — картки заповнюються без підтвердження' | t }}
-              }
-            </span>
+            @if (linux) {
+              <span class="page__name" id="cards-verify-name">{{ 'Підтверджувати паролем системи' | t }}</span>
+              <span class="page__meta" id="cards-verify-hint">
+                @if (cards.hello()) {
+                  {{ 'Перш ніж заповнити картку, система попросить ваш пароль чи відбиток' | t }}
+                } @else {
+                  {{
+                    'Підтвердження системою є, коли браузер встановлено пакетом (.deb чи .rpm) — поки картки заповнюються без підтвердження'
+                      | t
+                  }}
+                }
+              </span>
+            } @else {
+              <span class="page__name" id="cards-verify-name">{{ 'Підтверджувати через Windows Hello' | t }}</span>
+              <span class="page__meta" id="cards-verify-hint">
+                @if (cards.hello()) {
+                  {{ 'Перш ніж заповнити картку, браузер попросить PIN, відбиток чи обличчя' | t }}
+                } @else {
+                  {{ 'Windows Hello не налаштовано на цьому комп’ютері — картки заповнюються без підтвердження' | t }}
+                }
+              </span>
+            }
           </span>
           <app-switch
             inputId="cards-verify"

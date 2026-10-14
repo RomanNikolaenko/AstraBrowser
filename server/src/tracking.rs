@@ -13,6 +13,8 @@
 //! Ще захист прибирає з адрес мітки, за якими сайти впізнають, звідки ви прийшли (fbclid, gclid…), а сигнал
 //! Global Privacy Control («не продавати й не поширювати мої дані») надсилає заголовком Sec-GPC і показує сайтам
 //! як navigator.globalPrivacyControl.
+//!
+//! У Linux запитів WebKit не показує, тож ті самі списки йдуть у фільтри вмісту WebKit (gtk_tracking.rs).
 
 use std::{
   collections::HashMap,
@@ -49,9 +51,9 @@ pub enum Category {
 }
 
 impl Category {
-  const ALL: [Category; 3] = [Category::Tracking, Category::Social, Category::Cryptomining];
+  pub(crate) const ALL: [Category; 3] = [Category::Tracking, Category::Social, Category::Cryptomining];
 
-  fn id(self) -> &'static str {
+  pub(crate) fn id(self) -> &'static str {
     match self {
       Category::Tracking => "tracking",
       Category::Social => "social",
@@ -123,7 +125,7 @@ impl Rules {
     self.level != Level::Off && !host.is_empty() && !self.exceptions.iter().any(|site| covers(site, host))
   }
 
-  fn blocks(&self, category: Category) -> bool {
+  pub(crate) fn blocks(&self, category: Category) -> bool {
     match self.level {
       Level::Off => false,
       Level::Standard => category != Category::Social,
@@ -142,7 +144,9 @@ pub struct Tracking {
 }
 
 /// id скрипта GPC кожної сторінки (label → id), щоб замінити його, коли зміниться налаштування.
+/// Лише у Windows: у Linux скрипт GPC наступним документам ставить gtk_tracking.rs.
 #[derive(Default)]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub struct PageScripts(pub Mutex<HashMap<String, String>>);
 
 impl Tracking {
@@ -155,7 +159,9 @@ impl Tracking {
     self.rules.write().ok()?.insert(window.to_string(), Arc::new(rules))
   }
 
-  /// Категорія елемента стеження, якщо запит `url` типу `kind` зі сторінки `source` треба заблокувати.
+  /// Категорія елемента стеження, якщо запит `url` типу `kind` зі сторінки `source` треба заблокувати (запити WebView2;
+  /// у Linux блокують фільтри WebKit).
+  #[cfg_attr(not(windows), allow(dead_code))]
   pub fn check(&self, rules: &Rules, url: &str, source: &str, kind: &str, method: &str) -> Option<Category> {
     let engines = self.engines.read().ok()?;
     let request = Request::new(url, source, kind, method).ok()?;
@@ -195,16 +201,42 @@ impl Tracking {
 
   fn is_stale(&self) -> bool {
     let complete = self.engines.read().is_ok_and(|engines| engines.len() == Category::ALL.len());
+    // Без правил для WebKit (уперше після оновлення браузера) фільтрів не буде, хоч рушії й свіжі.
+    #[cfg(not(windows))]
+    let complete = complete
+      && self.dir.get().is_some_and(|dir| Category::ALL.iter().all(|category| Self::content_file(dir, *category).exists()));
     let updated_at = self.updated_at.lock().ok().and_then(|time| *time);
     !complete || updated_at.is_none_or(|time| now_ms().saturating_sub(time) > MAX_AGE.as_millis() as u64)
   }
 
-  /// Завантажує свіжі списки й збирає з них рушії; старі працюють, доки нові не готові.
-  fn refresh(&self) {
+  /// Правила категорії `category` для WebKit (Linux, gtk_tracking.rs).
+  #[cfg(not(windows))]
+  pub(crate) fn content_file(dir: &Path, category: Category) -> PathBuf {
+    dir.join(format!("tracking-content-{}-{CACHE_VERSION}.json", category.id()))
+  }
+
+  /// Завантажує свіжі списки й збирає з них рушії; старі працюють, доки нові не готові. true — оновлено.
+  fn refresh(&self) -> bool {
     if self.updating.swap(true, Ordering::SeqCst) {
-      return;
+      return false;
     }
-    match build() {
+    let texts = download_lists();
+    // WebKit блокує не рушіями, а фільтрами вмісту — правила для них із тих самих списків.
+    #[cfg(not(windows))]
+    if let (Ok(texts), Some(dir)) = (&texts, self.dir.get()) {
+      for (category, lists) in texts {
+        let options = ParseOptions { rule_types: RuleTypes::NetworkOnly, ..ParseOptions::default() };
+        let lists: Vec<_> = lists.iter().map(|text| (text.clone(), options)).collect();
+        match crate::adblock::content_rules(&lists) {
+          Ok(content) => {
+            let _ = fs::create_dir_all(dir).and_then(|()| fs::write(Self::content_file(dir, *category), content));
+          }
+          Err(message) => log::warn!("tracking: правила для WebKit не зібрано: {message}"),
+        }
+      }
+    }
+    let updated = texts.as_ref().is_ok();
+    match texts.map(engines) {
       Ok(built) => {
         for (category, engine) in built {
           if let Some(path) = self.engine_file(category) {
@@ -224,19 +256,34 @@ impl Tracking {
       Err(message) => log::warn!("tracking: не вдалося оновити списки: {message}"),
     }
     self.updating.store(false, Ordering::SeqCst);
+    updated
   }
 }
 
-fn build() -> Result<Vec<(Category, Engine)>, String> {
+/// Тексти списків — за категоріями.
+fn download_lists() -> Result<HashMap<Category, Vec<String>>, String> {
   let urls: Vec<String> = LISTS.iter().map(|list| list.url.to_string()).collect();
-  let mut sets: HashMap<Category, FilterSet> = HashMap::new();
+  let mut texts: HashMap<Category, Vec<String>> = HashMap::new();
   for (list, text) in LISTS.iter().zip(download_all(&urls)) {
     let text = String::from_utf8(text?).map_err(|error| format!("{}: {error}", list.url))?;
-    // Лише мережеві правила: ховати кнопки на сторінці — справа блокувальника реклами.
-    let options = ParseOptions { rule_types: RuleTypes::NetworkOnly, ..ParseOptions::default() };
-    sets.entry(list.category).or_insert_with(|| FilterSet::new(false)).add_filter_list(text, options);
+    texts.entry(list.category).or_default().push(text);
   }
-  Ok(sets.into_iter().map(|(category, filters)| (category, Engine::new_with_filter_set(filters))).collect())
+  Ok(texts)
+}
+
+fn engines(texts: HashMap<Category, Vec<String>>) -> Vec<(Category, Engine)> {
+  // Лише мережеві правила: ховати кнопки на сторінці — справа блокувальника реклами.
+  let options = ParseOptions { rule_types: RuleTypes::NetworkOnly, ..ParseOptions::default() };
+  texts
+    .into_iter()
+    .map(|(category, lists)| {
+      let mut filters = FilterSet::new(false);
+      for text in lists {
+        filters.add_filter_list(text, options);
+      }
+      (category, Engine::new_with_filter_set(filters))
+    })
+    .collect()
 }
 
 /// Адреса без міток стеження; `None`, якщо їх у ній немає.
@@ -281,15 +328,22 @@ pub fn start(app: &AppHandle) {
   let Ok(dir) = app.path().app_data_dir() else {
     return;
   };
-  let _ = app.state::<Tracking>().dir.set(dir);
+  let _ = app.state::<Tracking>().dir.set(dir.clone());
+  // WebKit блокує фільтрами вмісту, скомпільованими раніше (gtk_tracking.rs).
+  #[cfg(target_os = "linux")]
+  crate::gtk_tracking::load(app, dir.clone());
   let app = app.clone();
   thread::spawn(move || {
     let tracking = app.state::<Tracking>();
     tracking.load_cache();
     loop {
-      if tracking.is_stale() {
-        tracking.refresh();
+      let updated = tracking.is_stale() && tracking.refresh();
+      #[cfg(target_os = "linux")]
+      if updated {
+        crate::gtk_tracking::compile(&app, dir.clone());
       }
+      #[cfg(not(target_os = "linux"))]
+      let _ = updated;
       thread::sleep(CHECK_EVERY);
     }
   });
@@ -297,40 +351,58 @@ pub fn start(app: &AppHandle) {
 
 /// Нові правила вікна (рівень, GPC, винятки, SmartScreen): запитам — одразу, вбудованому захисту WebView2, SmartScreen
 /// і скрипту GPC — для всіх сторінок вікна.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub fn tracking_set_rules(window: tauri::Window, rules: Rules) -> Result<(), String> {
-  let tracking = window.state::<Tracking>();
-  let (level, gpc, smart_screen) = (rules.level, rules.gpc, rules.smart_screen);
-  let previous = tracking.set_rules(window.label(), rules);
-  let gpc_changed = previous.as_ref().is_none_or(|previous| previous.gpc != gpc);
-  let level_changed = previous.as_ref().is_none_or(|previous| previous.level != level);
-  let smart_screen_changed = previous.as_ref().is_none_or(|previous| previous.smart_screen != smart_screen);
-  let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(crate::pages::PAGE_PREFIX));
-  for webview in pages {
-    if level_changed {
-      crate::webview2::set_tracking_prevention(&webview, level).map_err(|error| error.to_string())?;
+  #[cfg(windows)]
+  {
+    let tracking = window.state::<Tracking>();
+    let (level, gpc, smart_screen) = (rules.level, rules.gpc, rules.smart_screen);
+    let previous = tracking.set_rules(window.label(), rules);
+    let gpc_changed = previous.as_ref().is_none_or(|previous| previous.gpc != gpc);
+    let level_changed = previous.as_ref().is_none_or(|previous| previous.level != level);
+    let smart_screen_changed = previous.as_ref().is_none_or(|previous| previous.smart_screen != smart_screen);
+    let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(crate::pages::PAGE_PREFIX));
+    for webview in pages {
+      if level_changed {
+        crate::webview2::set_tracking_prevention(&webview, level).map_err(|error| error.to_string())?;
+      }
+      if smart_screen_changed {
+        crate::page_events::set_smart_screen(&webview, smart_screen).map_err(|error| error.to_string())?;
+      }
+      if gpc_changed {
+        let label = webview.label().to_string();
+        let scripts = window.state::<PageScripts>();
+        let previous = scripts.0.lock().map_err(|error| error.to_string())?.get(&label).cloned();
+        let app = window.app_handle().clone();
+        let script = page_script(gpc);
+        crate::webview2::replace_document_script(&webview, previous, script.clone(), move |id| {
+          if let Ok(mut scripts) = app.state::<PageScripts>().0.lock() {
+            scripts.insert(label, id);
+          }
+        })
+        .map_err(|error| error.to_string())?;
+        let _ = webview.eval(script);
+      }
     }
-    if smart_screen_changed {
-      crate::page_events::set_smart_screen(&webview, smart_screen).map_err(|error| error.to_string())?;
-    }
-    if gpc_changed {
-      let label = webview.label().to_string();
-      let scripts = window.state::<PageScripts>();
-      let previous = scripts.0.lock().map_err(|error| error.to_string())?.get(&label).cloned();
-      let app = window.app_handle().clone();
-      let script = page_script(gpc);
-      crate::webview2::replace_document_script(&webview, previous, script.clone(), move |id| {
-        if let Ok(mut scripts) = app.state::<PageScripts>().0.lock() {
-          scripts.insert(label, id);
-        }
-      })
-      .map_err(|error| error.to_string())?;
-      let _ = webview.eval(script);
-    }
+    Ok(())
   }
-  Ok(())
+  #[cfg(not(windows))]
+  {
+    // SmartScreen тут немає. Фільтри, захист WebKit і скрипт GPC наступних документів сторінок — gtk_tracking.rs (Linux),
+    // а скрипт GPC поточних — одразу.
+    let gpc = rules.gpc;
+    let previous = window.state::<Tracking>().set_rules(window.label(), rules);
+    #[cfg(target_os = "linux")]
+    crate::gtk_tracking::apply_window(&window);
+    if previous.as_ref().is_none_or(|previous| previous.gpc != gpc) {
+      let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(crate::pages::PAGE_PREFIX));
+      for webview in pages {
+        let _ = webview.eval(page_script(gpc));
+      }
+    }
+    Ok(())
+  }
 }
 
 #[cfg(test)]

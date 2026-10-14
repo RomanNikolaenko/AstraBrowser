@@ -14,7 +14,9 @@
           } @else {
             <span class="page__name">{{ 'Зробити Astra браузером за замовчуванням' | t }}</span>
             <span class="page__meta">
-              @if (!state.registered) {
+              @if (!state.registered && linux) {
+                {{ 'Доступно в Astra Browser, встановленому пакетом (.deb чи .rpm).' | t }}
+              } @else if (!state.registered) {
                 {{ 'Доступно в Astra Browser, встановленому інсталятором.' | t }}
               } @else if (defaultBrowserAsked()) {
                 {{
@@ -251,24 +253,27 @@
         <button class="page__button" type="button" (click)="tracking.removeException(site)">{{ 'Увімкнути' | t }}</button>
       </div>
     }
-    <div class="settings__row">
-      <span class="settings__text settings__text--wide">
-        <span class="page__name" id="settings-smart-screen-name">{{ 'Захист від небезпечних сайтів і файлів' | t }}</span>
-        <span class="page__meta settings__hint" id="settings-smart-screen-hint">
-          {{
-            'Microsoft Defender SmartScreen попереджає про фішинг і шкідливі завантаження. Для перевірки адреси сайтів надсилаються в Microsoft.'
-              | t
-          }}
+    <!-- SmartScreen є лише у WebView2 (Windows). -->
+    @if (!linux) {
+      <div class="settings__row">
+        <span class="settings__text settings__text--wide">
+          <span class="page__name" id="settings-smart-screen-name">{{ 'Захист від небезпечних сайтів і файлів' | t }}</span>
+          <span class="page__meta settings__hint" id="settings-smart-screen-hint">
+            {{
+              'Microsoft Defender SmartScreen попереджає про фішинг і шкідливі завантаження. Для перевірки адреси сайтів надсилаються в Microsoft.'
+                | t
+            }}
+          </span>
         </span>
-      </span>
-      <app-switch
-        inputId="settings-smart-screen"
-        inputName="smart-screen"
-        ariaLabelledby="settings-smart-screen-name"
-        ariaDescribedby="settings-smart-screen-hint"
-        [checked]="settings.smartScreen()"
-        (checkedChange)="settings.smartScreen.set($event)" />
-    </div>
+        <app-switch
+          inputId="settings-smart-screen"
+          inputName="smart-screen"
+          ariaLabelledby="settings-smart-screen-name"
+          ariaDescribedby="settings-smart-screen-hint"
+          [checked]="settings.smartScreen()"
+          (checkedChange)="settings.smartScreen.set($event)" />
+      </div>
+    }
     <div class="settings__row">
       <span class="settings__text settings__text--wide">
         <span class="page__name" id="settings-gpc-name">{{ 'Просити сайти не продавати й не поширювати мої дані' | t }}</span>

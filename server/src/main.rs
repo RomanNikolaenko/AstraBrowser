@@ -1,51 +1,68 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-#[cfg(windows)]
 mod addresses;
-#[cfg(windows)]
-mod cards;
 mod adblock;
 mod audio;
-#[cfg(windows)]
 mod auth;
-#[cfg(windows)]
 mod browsing_data;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
+mod context_menu;
+// Лише для розробки на macOS і Linux: скрипт із файла — в інтерфейс (debug_eval.rs).
+#[cfg(all(debug_assertions, not(windows)))]
+mod debug_eval;
+mod cards;
 mod default_browser;
-#[cfg(windows)]
 mod dns;
-#[cfg(windows)]
+// Linux: DNS через HTTPS — проксі в самому браузері.
+#[cfg(target_os = "linux")]
+mod doh_proxy;
 mod downloads;
 mod external;
 mod favicons;
-#[cfg(windows)]
+// Linux: сторінки сайтів у WebKitGTK (події, дозволи, завантаження, блокувальник реклами) і сайти під інтерфейсом
+// у вікні GTK.
+#[cfg(target_os = "linux")]
+mod gtk_adblock;
+#[cfg(target_os = "linux")]
+mod gtk_downloads;
+#[cfg(target_os = "linux")]
+mod gtk_fullscreen;
+#[cfg(target_os = "linux")]
+mod gtk_layers;
+#[cfg(target_os = "linux")]
+mod gtk_page;
+#[cfg(target_os = "linux")]
+mod gtk_permissions;
+#[cfg(target_os = "linux")]
+mod gtk_tracking;
+// Повний екран сайту з затемненням, перетягування вікна й Windows Hello — засобами Windows; на macOS і Linux —
+// свої, простіші варіанти (src/other). Підтвердження особи в Linux — через polkit (polkit.rs).
+#[cfg_attr(not(windows), path = "other/fullscreen.rs")]
 mod fullscreen;
-#[cfg(windows)]
+#[cfg_attr(target_os = "linux", path = "polkit.rs")]
+#[cfg_attr(not(any(windows, target_os = "linux")), path = "other/hello.rs")]
 mod hello;
 mod i18n;
 mod ipc;
 mod launch;
 mod logging;
+mod page_bridge;
+mod page_types;
 mod pages;
 #[cfg(windows)]
 mod page_events;
+mod passwords;
+mod profiles;
 mod screenshots;
+mod secure;
 mod suggest;
+mod sync;
 mod tracking;
+mod translate;
 mod updates;
 #[cfg(windows)]
-mod passwords;
-#[cfg(windows)]
-mod profiles;
-#[cfg(windows)]
-mod secure;
-#[cfg(windows)]
-mod sync;
-#[cfg(windows)]
-mod translate;
-#[cfg(windows)]
 mod webview2;
-#[cfg(windows)]
+#[cfg_attr(not(windows), path = "other/window_drag.rs")]
 mod window_drag;
 
 /// Параметри WebView2 для кожного вікна й вебв'ю застосунку. wry за замовчуванням вимикає разом із міні-меню Edge
@@ -58,6 +75,12 @@ mod window_drag;
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI";
 
 fn main() {
+	// Linux: GTK через X11 (у сеансі Wayland — XWayland), якщо людина не вибрала іншого: форма вікон, якою інтерфейс
+	// стоїть над сайтом (gtk_layers.rs), працює лише в X11.
+	#[cfg(target_os = "linux")]
+	if std::env::var_os("GDK_BACKEND").is_none() {
+		std::env::set_var("GDK_BACKEND", "x11");
+	}
 	// Мова повідомлень Rust — як у Windows, доки інтерфейс не скаже свою (i18n.rs).
 	i18n::init();
 	let context = tauri::generate_context!();
@@ -69,7 +92,6 @@ fn main() {
 	let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| launch::second_instance(app, args)));
 	// DNS через HTTPS — у налаштування WebView2 ще до першого вікна: браузер читає їх лише під час запуску (dns.rs).
 	// Плагіном одразу після single-instance: повторний запуск завершується, не чекаючи тут.
-	#[cfg(windows)]
 	let builder = builder.plugin(dns::plugin());
 	// Інструменти розробника (feature devtools) — сайтам; інтерфейс самого браузера в релізі їх не відкриває,
 	// як у Chrome. У `tauri dev` вони лишаються й для інтерфейсу.
@@ -109,17 +131,19 @@ fn main() {
 			log::info!("Astra Browser {} запущено", app.package_info().version);
 			adblock::start(app.handle());
 			tracking::start(app.handle());
-			#[cfg(windows)]
-			{
-				tauri::Manager::manage(app, downloads::Downloads::default());
-				downloads::start(app.handle());
-				tauri::Manager::manage(app, passwords::Passwords::default());
-				tauri::Manager::manage(app, addresses::Addresses::default());
-				tauri::Manager::manage(app, cards::Cards::default());
-				cards::start(app.handle());
-				tauri::Manager::manage(app, auth::Auth::default());
-				auth::start(app.handle());
-			}
+			// Ключ, яким шифруються дані на диску, — у сховищі секретів системи (у Windows — DPAPI, без ключа).
+			#[cfg(not(windows))]
+			secure::init(tauri::Manager::path(app).app_data_dir()?, app.config().identifier.clone());
+			tauri::Manager::manage(app, downloads::Downloads::default());
+			downloads::start(app.handle());
+			tauri::Manager::manage(app, passwords::Passwords::default());
+			tauri::Manager::manage(app, addresses::Addresses::default());
+			tauri::Manager::manage(app, cards::Cards::default());
+			cards::start(app.handle());
+			tauri::Manager::manage(app, auth::Auth::default());
+			auth::start(app.handle());
+			#[cfg(all(debug_assertions, not(windows)))]
+			debug_eval::start(app.handle());
 			Ok(())
 		})
 		.on_page_load(pages::close_orphans)
@@ -133,7 +157,6 @@ fn main() {
 		.expect("error while building Tauri application")
 		.run(|_app, _event| {
 			// Перезапуск браузера для нових налаштувань DNS закриває всі вікна — але не застосунок (dns.rs).
-			#[cfg(windows)]
 			if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &_event {
 				if tauri::Manager::state::<dns::Dns>(_app).is_restarting() {
 					api.prevent_exit();

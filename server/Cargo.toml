@@ -13,7 +13,8 @@ tauri-build = { version = "2.7.1", features = [] }
 tauri = { version = "2.12.1", features = ["unstable", "specta", "devtools"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-adblock = { version = "0.13.3", default-features = false, features = ["css-validation", "embedded-domain-resolver", "full-regex-handling"] }
+# content-blocking — правила у форматі блокувальників Safari для WebKit на macOS і Linux (adblock.rs).
+adblock = { version = "0.13.3", default-features = false, features = ["content-blocking", "css-validation", "embedded-domain-resolver", "full-regex-handling"] }
 ureq = "3"
 base64 = "0.22"
 regex = "1"
@@ -46,6 +47,32 @@ windows = { version = "0.62", features = ["Foundation", "Security_Credentials_UI
 windows-core = "0.62"
 # Дочекатися відповіді Windows Hello (hello.rs) — та сама версія, що й у windows.
 windows-future = "0.3"
+
+# macOS і Linux: PBKDF2 і випадкові числа — без CNG Windows, а ключ, яким шифруються дані на диску, — у сховищі
+# секретів системи (secure.rs).
+[target.'cfg(not(windows))'.dependencies]
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+getrandom = "0.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+# Сайти під інтерфейсом у вікні (gtk_layers.rs) — ті самі версії, що й у Tauri/wry.
+gtk = "0.18"
+# v2_40 — скрипти й повідомлення сторінки в окремому світі (gtk_page.rs); стільки ж вимагає й wry.
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
+javascriptcore-rs = "1.1"
+# Фільтри вмісту WebKit (gtk_adblock.rs): їх обгортка webkit2gtk не описує.
+webkit2gtk-sys = "2.0"
+# Функції WebKit новіші за обгортку — пошуком у вже завантажених бібліотеках (gtk_page::features).
+libc = "0.2"
+# Знімок сторінки (gtk_page::screenshot) — у PNG.
+png = "0.18"
+glib-sys = "0.18"
+gio-sys = "0.18"
+gobject-sys = "0.18"
 
 # Рушій блокувальника реклами розбирає десятки тисяч правил — і в debug-збірці його варто оптимізувати.
 [profile.dev.package.adblock]

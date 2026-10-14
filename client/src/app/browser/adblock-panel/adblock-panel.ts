@@ -5,6 +5,7 @@ import { AdBlockStore } from '../data/adblock';
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
 import { plural, TranslatePipe } from '../../shared/i18n/i18n';
+import { IS_LINUX } from '../../shared/platform/platform';
 
 /**
  * Панель блокувальника реклами — з меню розширень на панелі інструментів (як спливне вікно розширення в Chrome):
@@ -29,6 +30,8 @@ export class AdBlockPanel {
   readonly openSettings = output<void>();
 
   protected readonly adblock = inject(AdBlockStore);
+  /** У Linux блокують фільтри WebKit, а скільки відсікли, вони не кажуть (server/src/gtk_adblock.rs). */
+  protected readonly linux = IS_LINUX;
   private readonly pageViews = inject(PageViews);
   private readonly popover = viewChild.required(Popover);
 

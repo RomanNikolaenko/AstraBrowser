@@ -1,7 +1,8 @@
 # Випуск оновлення: підняти version у server/tauri.conf.json, запушити, потім
 #   git tag -a v0.2.0 -m "Що нового" && git push origin v0.2.0
-# Збирає інсталятор Windows, підписує його ключем оновлень (секрет TAURI_SIGNING_PRIVATE_KEY) і публікує реліз
-# з latest.json — з нього кнопка «Оновити Astra Browser» дізнається про нову версію. Докладно — RELEASING.md.
+# Збирає інсталятор Windows і пакети Linux (.deb, .rpm, AppImage), підписує їх ключем оновлень (секрет
+# TAURI_SIGNING_PRIVATE_KEY) і публікує реліз з latest.json — з нього кнопка «Оновити Astra Browser» дізнається про нову
+# версію. Докладно — RELEASING.md.
 #
 # Лише дії самого GitHub (actions/*): у цієї збірки є доступ до ключа підпису.
 name: Release
@@ -14,8 +15,17 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: windows-latest
+  build:
+    name: Збірка (${{ matrix.system }})
+    strategy:
+      matrix:
+        include:
+          - system: windows
+            os: windows-latest
+          # Найстаріша Ubuntu з WebKitGTK 4.1: пакети з її glibc ставляться й на новіші системи.
+          - system: linux
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
@@ -25,7 +35,6 @@ jobs:
         run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
 
       - name: Тег збігається з версією
-        id: version
         shell: bash
         run: |
           version=$(node -p "require('./server/tauri.conf.json').version")
@@ -33,7 +42,14 @@ jobs:
             echo "::error::Тег $GITHUB_REF_NAME, а в server/tauri.conf.json версія $version. Підніміть version або перейменуйте тег."
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # WebKitGTK, GTK і решта, з чим збирається Linux-версія (як у вимогах Tauri).
+      - name: Бібліотеки Linux
+        if: matrix.system == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev build-essential file patchelf
 
       - uses: actions/setup-node@v7
         with:
@@ -48,8 +64,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             server/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('server/Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          key: cargo-release-${{ runner.os }}-${{ hashFiles('server/Cargo.lock') }}
+          restore-keys: cargo-release-${{ runner.os }}-
 
       - name: Залежності
         working-directory: client
@@ -70,13 +86,40 @@ jobs:
           export RELEASE_NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
           npm run release
 
+      # Пакети й latest.json цієї системи, як їх склав npm run release (client/scripts/release.mjs).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.system }}
+          path: server/target/release/bundle/release/
+          if-no-files-found: error
+
+  publish:
+    name: Реліз
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Повідомлення тегу
+        run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: parts
+
+      # Один latest.json на всі системи — і всі пакети поруч.
+      - name: Файли релізу
+        run: node client/scripts/release.mjs --merge release parts/release-windows parts/release-linux
+
       - name: Реліз
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          version=$(node -p "require('./server/tauri.conf.json').version")
           notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
-          # Інсталятор і latest.json, як їх склав npm run release (client/scripts/release.mjs).
-          gh release create "$GITHUB_REF_NAME" server/target/release/bundle/release/* \
-            --title "Astra Browser $VERSION" --notes "${notes:-Astra Browser $VERSION}"
+          gh release create "$GITHUB_REF_NAME" release/* --title "Astra Browser $version" --notes "${notes:-Astra Browser $version}"

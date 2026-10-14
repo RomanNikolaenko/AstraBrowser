@@ -21,6 +21,7 @@ $caret-min-offset: 1.25rem;
   // Напрям — і в закритому стані: під час анімації закриття display ще flex, і без цього вміст стрибав би.
   flex-direction: column;
   width: var(--popover-width, auto);
+  min-width: var(--popover-min-width, auto);
 
   // Не вище за вікно: довгий вміст прокручується всередині (--popover-display: flex і min-height: 0 у вмісту).
   max-height: calc(100% - 0.625rem);

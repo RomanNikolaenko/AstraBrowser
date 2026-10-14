@@ -10,6 +10,8 @@
 //!
 //! Записувати можна, лише поки браузер у теці не працює: виходячи, він сам переписує «Local State» тим, що прочитав
 //! під час запуску. Тож запис чекає, поки браузер відпустить теку ([`in_use`]).
+//!
+//! У Linux DoH робить проксі в самому браузері (doh_proxy.rs), і новий вибір діє одразу, без перезапуску.
 
 use std::{
   fs,
@@ -18,11 +20,13 @@ use std::{
     atomic::{AtomicBool, Ordering},
     Mutex,
   },
-  thread,
-  time::{Duration, Instant},
+  time::Duration,
 };
+#[cfg(windows)]
+use std::{thread, time::Instant};
 
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State, Url};
 
@@ -81,7 +85,19 @@ impl Settings {
     )
   }
 
+  /// Шаблон DoH для проксі в Linux (doh_proxy.rs) і чи можна, коли постачальник не відповідає, спитати DNS системи;
+  /// `None` — DNS системи.
+  #[cfg(target_os = "linux")]
+  pub(crate) fn doh_template(&self) -> Option<(String, bool)> {
+    match self.mode {
+      Mode::Increased => Some((self.template()?, true)),
+      Mode::Max => Some((self.template()?, false)),
+      Mode::Default | Mode::Off => None,
+    }
+  }
+
   /// Режим і шаблони для Chromium.
+  #[cfg_attr(not(windows), allow(dead_code))]
   fn chromium(&self) -> (&'static str, String) {
     match self.mode {
       Mode::Default => ("automatic", String::new()),
@@ -116,17 +132,21 @@ pub struct DnsState {
   settings: Settings,
   /// Збережене ще не діє: потрібен перезапуск браузера.
   restart_needed: bool,
+  /// DNS через HTTPS є у WebView2 (Windows) і через проксі в Linux (doh_proxy.rs); на macOS сайти відкриваються через
+  /// DNS системи.
+  supported: bool,
 }
 
 impl Dns {
   fn state(&self) -> DnsState {
     let settings = self.saved.lock().map(|saved| saved.clone()).unwrap_or_default();
     let applied = self.applied.lock().map(|applied| applied.clone()).unwrap_or_default();
-    DnsState { restart_needed: settings != applied, settings }
+    DnsState { restart_needed: settings != applied, settings, supported: cfg!(any(windows, target_os = "linux")) }
   }
 
   /// Тека WebView2 (`user_data`), яку створили вже після запуску (обліковий запис, що вперше ввійшов), — з тими
   /// самими налаштуваннями DNS. Якщо браузер у ній уже працює, запис нічого не змінить, і це не шкодить.
+  #[cfg(windows)]
   pub fn apply_to(&self, user_data: &Path) {
     if let Ok(applied) = self.applied.lock() {
       write_local_state(&user_data.join("EBWebView").join("Local State"), &applied);
@@ -140,6 +160,7 @@ impl Dns {
 }
 
 /// Теки WebView2 застосунку: типова (інтерфейс і сайти власника) і власні теки інших облікових записів.
+#[cfg(windows)]
 fn folders(root: &Path) -> Vec<PathBuf> {
   let mut folders = vec![root.to_path_buf()];
   if let Ok(profiles) = fs::read_dir(root.join("profiles")) {
@@ -150,6 +171,7 @@ fn folders(root: &Path) -> Vec<PathBuf> {
 
 /// Чи працює браузер WebView2 у теці: його процес тримає EBWebView/lockfile відкритим, не даючи писати в нього,
 /// і видаляє, коли виходить.
+#[cfg(windows)]
 fn in_use(folder: &Path) -> bool {
   const ERROR_SHARING_VIOLATION: i32 = 32;
   let lockfile = folder.join("EBWebView").join("lockfile");
@@ -160,8 +182,22 @@ fn in_use(folder: &Path) -> bool {
       .is_err_and(|error| error.raw_os_error() == Some(ERROR_SHARING_VIOLATION))
 }
 
-/// Налаштування DNS — у всі теки WebView2, щойно браузер у них вийде (не довше за CLOSE_TIMEOUT).
+/// Налаштування DNS — у всі теки WebView2, щойно браузер у них вийде (не довше за CLOSE_TIMEOUT). На macOS і Linux
+/// записувати нікуди: там рушій бере DNS системи.
 fn apply(root: &Path, settings: &Settings) {
+  #[cfg(not(windows))]
+  let _ = (root, CLOSE_TIMEOUT);
+  #[cfg(windows)]
+  apply_to_folders(root, settings);
+  // Linux: проксі з DoH (сторінкам його ставить pages.rs, а змінений — dns_set).
+  #[cfg(target_os = "linux")]
+  crate::doh_proxy::configure(settings);
+  #[cfg(not(any(windows, target_os = "linux")))]
+  let _ = settings;
+}
+
+#[cfg(windows)]
+fn apply_to_folders(root: &Path, settings: &Settings) {
   let folders = folders(root);
   let deadline = Instant::now() + CLOSE_TIMEOUT;
   while folders.iter().any(|folder| in_use(folder)) && Instant::now() < deadline {
@@ -178,16 +214,20 @@ fn apply(root: &Path, settings: &Settings) {
 pub fn plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
   tauri::plugin::Builder::new("astra-dns")
     .setup(|app, _api| {
-      app.manage(prepare(&app.config().identifier));
+      // Локальна тека даних застосунку — та сама, що в Tauri (у Windows — %LOCALAPPDATA%\<ідентифікатор>).
+      #[cfg(windows)]
+      let root = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default().join(&app.config().identifier);
+      #[cfg(not(windows))]
+      let root = app.path().app_local_data_dir().unwrap_or_default();
+      app.manage(prepare(root));
       Ok(())
     })
     .build()
 }
 
-/// Записує вибране в налаштування всіх тек WebView2 застосунку — до того, як створено перше вікно.
-/// `identifier` — ідентифікатор застосунку (tauri.conf.json): від нього шлях до локальної теки даних.
-fn prepare(identifier: &str) -> Dns {
-  let root = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default().join(identifier);
+/// Записує вибране в налаштування всіх тек WebView2 застосунку — до того, як створено перше вікно. `root` —
+/// локальна тека даних застосунку.
+fn prepare(root: PathBuf) -> Dns {
   let settings: Settings =
     fs::read(root.join(SETTINGS_FILE)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
   apply(&root, &settings);
@@ -195,6 +235,7 @@ fn prepare(identifier: &str) -> Dns {
 }
 
 /// Режим DNS у «Local State» WebView2; решта налаштувань у файлі лишається. Зіпсований файл не чіпаємо.
+#[cfg(windows)]
 fn write_local_state(path: &Path, settings: &Settings) {
   let mut state = match fs::read(path) {
     Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
@@ -228,10 +269,10 @@ pub fn dns_settings(dns: State<'_, Dns>) -> DnsState {
   dns.state()
 }
 
-/// Новий вибір — у dns.json; діятиме після перезапуску браузера.
+/// Новий вибір — у dns.json; у Windows діятиме після перезапуску браузера, у Linux — одразу.
 #[tauri::command]
 #[specta::specta]
-pub fn dns_set(dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, String> {
+pub fn dns_set(app: AppHandle, dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, String> {
   let needs_provider = matches!(settings.mode, Mode::Increased | Mode::Max);
   if needs_provider && settings.template().is_none() {
     return Err(crate::i18n::text("Адреса постачальника має починатися з https://", "The provider address must start with https://").into());
@@ -239,6 +280,16 @@ pub fn dns_set(dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, Stri
   fs::create_dir_all(&dns.root).map_err(|error| error.to_string())?;
   let text = serde_json::to_vec_pretty(&settings).map_err(|error| error.to_string())?;
   fs::write(dns.root.join(SETTINGS_FILE), text).map_err(|error| error.to_string())?;
+  #[cfg(target_os = "linux")]
+  {
+    crate::doh_proxy::configure(&settings);
+    for page in app.webviews().into_values().filter(|webview| webview.label().starts_with(crate::pages::PAGE_PREFIX)) {
+      let _ = crate::doh_proxy::apply(&page);
+    }
+    *dns.applied.lock().map_err(|error| error.to_string())? = settings.clone();
+  }
+  #[cfg(not(target_os = "linux"))]
+  let _ = app;
   *dns.saved.lock().map_err(|error| error.to_string())? = settings;
   Ok(dns.state())
 }
@@ -298,6 +349,7 @@ mod tests {
     assert!(settings(Mode::Max, Provider::Custom, "просто текст").template().is_none());
   }
 
+  #[cfg(windows)]
   #[test]
   fn knows_when_the_browser_still_holds_its_folder() {
     use std::os::windows::fs::OpenOptionsExt;
@@ -315,6 +367,7 @@ mod tests {
     let _ = fs::remove_dir_all(dir);
   }
 
+  #[cfg(windows)]
   #[test]
   fn writes_only_the_dns_settings_into_local_state() {
     let dir = std::env::temp_dir().join(format!("astra-dns-{}", std::process::id()));

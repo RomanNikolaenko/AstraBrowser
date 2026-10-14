@@ -390,6 +390,9 @@ export const EN: Readonly<Record<string, string>> = {
     'Sites and ad networks can track you. You can turn it on in settings.',
   'Захист вимкнено для цього сайту': 'Protection is off for this site',
   'Елементи стеження тут не блокуються.': 'Trackers aren’t blocked here.',
+  'Елементи стеження на цьому сайті блокуються': 'Trackers are blocked on this site',
+  'Реклама й трекери на цьому сайті блокуються': 'Ads and trackers are blocked on this site',
+  'Блокувальник на цьому сайті вимкнено': 'The blocker is off on this site',
   'Astra на сторожі': 'Astra is on guard',
   'Ви захищені. Елементи стеження блокуються, щойно сайт їх завантажує.':
     'You’re protected. Trackers are blocked as soon as the site loads them.',
@@ -724,6 +727,11 @@ export const EN: Readonly<Record<string, string>> = {
     'Before filling in a card, the browser asks for your PIN, fingerprint or face',
   'Windows Hello не налаштовано на цьому комп’ютері — картки заповнюються без підтвердження':
     'Windows Hello isn’t set up on this computer, so cards are filled in without confirmation',
+  'Підтверджувати паролем системи': 'Confirm with your system password',
+  'Перш ніж заповнити картку, система попросить ваш пароль чи відбиток':
+    'Before filling in a card, the system asks for your password or fingerprint',
+  'Підтвердження системою є, коли браузер встановлено пакетом (.deb чи .rpm) — поки картки заповнюються без підтвердження':
+    'System confirmation works when the browser is installed from a package (.deb or .rpm), so for now cards are filled in without confirmation',
   'Карток ще немає': 'No cards yet',
   'Коли ви оплачуєте на сайті новою карткою, браузер запропонує зберегти її. Додати картку можна й вручну.':
     'When you pay on a site with a new card, the browser offers to save it. You can also add one manually.',
@@ -763,6 +771,8 @@ export const EN: Readonly<Record<string, string>> = {
   'Посилання з Telegram, пошти й документів відкриваються тут.': 'Links from Telegram, email and documents open here.',
   'Зробити Astra браузером за замовчуванням': 'Make Astra your default browser',
   'Доступно в Astra Browser, встановленому інсталятором.': 'Available when Astra Browser is installed with the installer.',
+  'Доступно в Astra Browser, встановленому пакетом (.deb чи .rpm).':
+    'Available when Astra Browser is installed from a package (.deb or .rpm).',
   'У «Параметрах Windows», що відкрилися, натисніть «Установити за замовчуванням» угорі сторінки — і посилання з інших програм відкриватимуться тут.':
     'In the Windows Settings that opened, click “Set default” at the top of the page, and links from other apps will open here.',
   'Зараз посилання з Telegram, пошти й документів відкриває інший браузер.':

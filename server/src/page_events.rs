@@ -12,7 +12,6 @@ use std::{
   sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde::{Deserialize, Serialize};
 use tauri::{Url, Webview};
 use webview2_com::{
   take_pwstr, ContextMenuRequestedEventHandler, CustomItemSelectedEventHandler, GetNonDefaultPermissionSettingsCompletedHandler,
@@ -21,19 +20,11 @@ use webview2_com::{
 };
 use windows_core::{Interface, BOOL, HSTRING, PWSTR};
 
-use crate::webview2::{core, profile, Reply};
-
-/// Що сталося з процесом сторінки.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, specta::Type)]
-#[serde(rename_all = "lowercase")]
-pub enum Failure {
-  /// Процес сторінки завершився (аварія, нестача пам'яті, його закрили).
-  Exited,
-  /// Сторінка не відповідає — може ще отямитися.
-  Unresponsive,
-  /// Завершився сам браузер WebView2: webview уже не відновити, лише створити новий.
-  Browser,
-}
+use crate::{
+  context_menu::{custom_items, ContextAction, MenuTarget},
+  page_types::{Failure, PermissionRequest, PermissionState},
+  webview2::{core, profile, Reply},
+};
 
 /// Збій процесу сторінки — `report(Failure)`. Збої процесів iframe не рахуються: сама сторінка працює далі.
 pub fn watch_process_failed(webview: &Webview, report: impl Fn(Failure) + Send + 'static) -> tauri::Result<()> {
@@ -118,27 +109,6 @@ pub fn suspend(webview: &Webview, reply: Reply<bool>) -> tauri::Result<()> {
 }
 
 // --- Дозволи ---
-
-/// Запит дозволу, який чекає відповіді інтерфейсу.
-#[derive(Clone, Serialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionRequest {
-  pub id: u64,
-  pub kind: &'static str,
-  pub origin: String,
-  /// Запит після дії користувача (клік), а не сам собою під час завантаження.
-  pub user_initiated: bool,
-}
-
-/// Відповідь інтерфейсу на запит дозволу.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize, Serialize, specta::Type)]
-#[serde(rename_all = "lowercase")]
-pub enum PermissionState {
-  Allow,
-  Deny,
-  /// Питати щоразу (для панелі дозволів — скинути збережене).
-  Ask,
-}
 
 impl PermissionState {
   fn state(self) -> COREWEBVIEW2_PERMISSION_STATE {
@@ -326,77 +296,9 @@ pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool) + Send
 
 // --- Контекстне меню ---
 
-/// Дія браузера з контекстного меню сайту — для інтерфейсу.
-#[derive(Clone, Serialize, PartialEq, Debug, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct ContextAction {
-  pub action: &'static str,
-  pub url: Option<String>,
-  pub text: Option<String>,
-}
-
 /// Пункти WebView2, яких у браузері не треба: свої «відкрити в новому вікні» (у нас — нові вкладки й вікна),
 /// поділитися, знімок Edge й QR-код Edge, яких тут немає.
 const REMOVED_ITEMS: &[&str] = &["openLinkInNewWindow", "share", "webCapture", "createQrCode", "openImageInNewWindow"];
-
-/// Що є там, де клацнули: посилання, зображення, виділений текст; адреса самої сторінки, якщо це сайт.
-#[derive(Default, Debug, PartialEq)]
-struct MenuTarget {
-  page: Option<String>,
-  link: Option<String>,
-  image: Option<String>,
-  selection: Option<String>,
-  editable: bool,
-}
-
-/// Свої пункти меню: (дія, підпис, адреса чи текст для дії). Порожня дія — роздільник.
-type MenuItems = Vec<(&'static str, String, Option<String>)>;
-
-/// Пункти для `target`: ті, що на початку меню, і ті, що в кінці.
-fn custom_items(target: &MenuTarget) -> (MenuItems, MenuItems) {
-  let mut top = Vec::new();
-  let mut bottom = Vec::new();
-  if let Some(link) = &target.link {
-    top.push(("open-link-tab", crate::i18n::text("Відкрити посилання в новій вкладці", "Open link in new tab").to_string(), Some(link.clone())));
-    top.push(("open-link-window", crate::i18n::text("Відкрити посилання в новому вікні", "Open link in new window").to_string(), Some(link.clone())));
-    top.push(("open-link-private", crate::i18n::text("Відкрити посилання в приватному вікні", "Open link in private window").to_string(), Some(link.clone())));
-    top.push(("", String::new(), None));
-  }
-  if let Some(image) = &target.image {
-    top.push(("open-image-tab", crate::i18n::text("Відкрити зображення в новій вкладці", "Open image in new tab").to_string(), Some(image.clone())));
-    top.push(("", String::new(), None));
-  }
-  if let Some(text) = &target.selection {
-    let short = shorten(text);
-    top.push(("search", crate::i18n::text("Шукати в інтернеті «{0}»", "Search the web for “{0}”").replace("{0}", &short), Some(text.clone())));
-    if !target.editable {
-      top.push(("translate-text", crate::i18n::text("Перекласти «{0}»", "Translate “{0}”").replace("{0}", &short), Some(text.clone())));
-    }
-    top.push(("", String::new(), None));
-  }
-  // Меню самої сторінки — не на посиланні, зображенні, виділенні й не в полі вводу.
-  if target.link.is_none() && target.image.is_none() && target.selection.is_none() && !target.editable {
-    bottom.push(("", String::new(), None));
-    bottom.push(("translate-page", crate::i18n::text("Перекласти сторінку", "Translate page").to_string(), None));
-    bottom.push(("screenshot", crate::i18n::text("Знімок екрана", "Screenshot").to_string(), None));
-    // Для розробки: код сторінки (як Ctrl+U) — перед «Перевірити» самого WebView2.
-    if let Some(page) = &target.page {
-      bottom.push(("", String::new(), None));
-      bottom.push(("view-source", crate::i18n::text("Переглянути джерело сторінки", "View page source").to_string(), Some(page.clone())));
-    }
-  }
-  (top, bottom)
-}
-
-/// Виділене в підписі пункту — коротко, в один рядок.
-fn shorten(text: &str) -> String {
-  let line: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-  if line.chars().count() > 30 {
-    format!("{}…", line.chars().take(29).collect::<String>().trim_end())
-  } else {
-    line
-  }
-}
 
 /// Контекстне меню сайту — стандартне меню WebView2 зі своїми пунктами браузера; вибраний пункт — `report`.
 pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) + Clone + Send + 'static) -> tauri::Result<()> {
@@ -525,47 +427,4 @@ fn menu_item(
   let mut token = 0;
   unsafe { item.add_CustomItemSelected(&handler, &mut token)? };
   Ok(item)
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  fn actions(target: &MenuTarget) -> Vec<&'static str> {
-    let (top, bottom) = custom_items(target);
-    top.into_iter().chain(bottom).map(|(action, _, _)| action).filter(|action| !action.is_empty()).collect()
-  }
-
-  #[test]
-  fn offers_browser_actions_for_what_was_clicked() {
-    let link = MenuTarget { link: Some("https://example.com/".into()), ..MenuTarget::default() };
-    assert_eq!(actions(&link), ["open-link-tab", "open-link-window", "open-link-private"]);
-
-    let image = MenuTarget { image: Some("https://example.com/cat.png".into()), ..MenuTarget::default() };
-    assert_eq!(actions(&image), ["open-image-tab"]);
-
-    let selection = MenuTarget { selection: Some("рецепт борщу".into()), ..MenuTarget::default() };
-    assert_eq!(actions(&selection), ["search", "translate-text"]);
-    let (top, _) = custom_items(&selection);
-    assert_eq!(top[0].1, "Шукати в інтернеті «рецепт борщу»");
-
-    // У полі вводу — без перекладу й без дій сторінки.
-    let field = MenuTarget { selection: Some("текст".into()), editable: true, ..MenuTarget::default() };
-    assert_eq!(actions(&field), ["search"]);
-
-    assert_eq!(actions(&MenuTarget::default()), ["translate-page", "screenshot"]);
-    // На сайті — ще й його код; на посиланні — ні.
-    let page = MenuTarget { page: Some("https://example.com/".into()), ..MenuTarget::default() };
-    assert_eq!(actions(&page), ["translate-page", "screenshot", "view-source"]);
-    let (_, bottom) = custom_items(&page);
-    assert_eq!(bottom.last().and_then(|(_, _, url)| url.as_deref()), Some("https://example.com/"));
-    let link_on_page = MenuTarget { link: Some("https://example.com/a".into()), ..page };
-    assert_eq!(actions(&link_on_page), ["open-link-tab", "open-link-window", "open-link-private"]);
-  }
-
-  #[test]
-  fn shortens_long_selections_to_one_line() {
-    assert_eq!(shorten("  два\n рядки  "), "два рядки");
-    assert_eq!(shorten(&"дуже довгий текст ".repeat(5)), "дуже довгий текст дуже довгий…");
-  }
 }

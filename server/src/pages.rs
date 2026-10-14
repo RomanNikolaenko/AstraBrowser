@@ -4,13 +4,27 @@
 //! й завантаження дізнається з подій `page://…`, які надсилаються лише webview інтерфейсу цього вікна.
 //! Віддалені сторінки не мають доступу до команд: у Tauri 2 IPC для них закритий без явного дозволу.
 
-use std::{path::Path, sync::mpsc, time::Duration};
+#[cfg(any(windows, target_os = "linux"))]
+use std::path::Path;
+use std::{sync::mpsc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use crate::audio;
+use crate::{
+  audio,
+  page_types::{Area, Autoplay, PermissionState, PictureInPicture, ReloadMode},
+};
 #[cfg(windows)]
-use crate::webview2::{self, Autoplay};
+use crate::webview2;
+/// Події й керування сторінкою — засобами рушія системи: WebView2 (Windows) чи WebKitGTK (Linux, gtk_page.rs).
+#[cfg(target_os = "linux")]
+use crate::gtk_page as engine;
+#[cfg(target_os = "linux")]
+use crate::gtk_page as events;
+#[cfg(windows)]
+use crate::page_events as events;
+#[cfg(windows)]
+use crate::webview2 as engine;
 use tauri::{
   webview::{PageLoadEvent, PageLoadPayload},
   AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl, Window,
@@ -43,7 +57,7 @@ struct TitleEvent {
   title: String,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct NavigationEvent {
@@ -53,7 +67,7 @@ struct NavigationEvent {
   can_go_forward: bool,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 struct FullscreenEvent {
   label: String,
@@ -68,7 +82,7 @@ pub(crate) fn notify_fullscreen(page: &Webview) {
   let _ = page.app_handle().emit_to(page.window().label(), "page://fullscreen", FullscreenEvent { label, fullscreen });
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 struct AudioEvent {
   label: String,
@@ -76,7 +90,7 @@ struct AudioEvent {
   muted: bool,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 struct FaviconEvent {
   label: String,
@@ -84,8 +98,9 @@ struct FaviconEvent {
   icon: String,
 }
 
-/// Гаряча клавіша браузера, натиснута, поки фокус у сайті (webview2::watch_shortcuts).
-#[cfg(windows)]
+/// Гаряча клавіша браузера, натиснута, поки фокус у сайті (webview2::watch_shortcuts), чи Ctrl + коліщатко
+/// (zoom-page.js).
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 struct ShortcutEvent {
   label: String,
@@ -116,31 +131,31 @@ struct TrackersEvent {
   trackers: Vec<BlockedTracker>,
 }
 
-/// Процес сторінки впав чи не відповідає (page_events.rs).
-#[cfg(windows)]
+/// Процес сторінки впав чи не відповідає (page_events.rs, gtk_page.rs).
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 struct CrashedEvent {
   label: String,
-  failure: crate::page_events::Failure,
+  failure: crate::page_types::Failure,
 }
 
 /// Сайт просить дозвіл (камера, мікрофон…): інтерфейс питає й відповідає page_permission_answer.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PermissionEvent {
   label: String,
   #[serde(flatten)]
-  request: crate::page_events::PermissionRequest,
+  request: crate::page_types::PermissionRequest,
 }
 
 /// Дія браузера з контекстного меню сайту.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 struct ContextEvent {
   label: String,
   #[serde(flatten)]
-  action: crate::page_events::ContextAction,
+  action: crate::context_menu::ContextAction,
 }
 
 /// Сайт хоче відкрити посилання програмою (mailto:, tel:…): інтерфейс спершу спитає користувача (external.rs).
@@ -159,8 +174,8 @@ struct NewTabEvent {
   user_initiated: bool,
 }
 
-/// Завантаження почалося, іде чи скінчилося (webview2::watch_downloads).
-#[cfg(windows)]
+/// Завантаження почалося, іде чи скінчилося (webview2::watch_downloads, gtk_downloads.rs).
+#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct DownloadEvent {
@@ -184,7 +199,7 @@ fn is_page_url(url: &Url) -> bool {
 }
 
 /// Іконка з вебу або невелика вбудована картинка (data:image/…), щоб не роздувати сховище інтерфейсу.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn is_icon_url(icon: &str) -> bool {
   Url::parse(icon).is_ok_and(|url| is_web(&url)) || (icon.starts_with("data:image/") && icon.len() <= 16 * 1024)
 }
@@ -217,9 +232,22 @@ pub fn close_orphans(webview: &Webview, payload: &PageLoadPayload<'_>) {
   });
 }
 
+#[cfg(target_os = "linux")]
+impl Bounds {
+  fn area(&self) -> Area {
+    Area { x: self.x, y: self.y, width: self.width, height: self.height }
+  }
+}
+
 fn place(webview: &Webview, bounds: &Bounds) -> Result<(), String> {
-  webview.set_position(LogicalPosition::new(bounds.x, bounds.y)).map_err(|error| error.to_string())?;
-  webview.set_size(LogicalSize::new(bounds.width, bounds.height)).map_err(|error| error.to_string())
+  // Linux: Tauri кладе webview стовпчиком у вікно, а не на місце, — сайт ставить gtk_layers.rs.
+  #[cfg(target_os = "linux")]
+  return crate::gtk_layers::place(webview, bounds.area()).map_err(|error| error.to_string());
+  #[cfg(not(target_os = "linux"))]
+  {
+    webview.set_position(LogicalPosition::new(bounds.x, bounds.y)).map_err(|error| error.to_string())?;
+    webview.set_size(LogicalSize::new(bounds.width, bounds.height)).map_err(|error| error.to_string())
+  }
 }
 
 /// Скрипт сторінки, що виводить її з повного екрана після того, як вікно й сайт уже на місці (fullscreen-page.js).
@@ -229,14 +257,14 @@ fn fullscreen_script(token: &str) -> String {
 }
 
 /// Скрипт сторінки для Ctrl + коліщатка (zoom-page.js) з токеном сторінки.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn zoom_script(token: &str) -> String {
   format!("({})({});", include_str!("zoom-page.js"), serde_json::Value::from(token))
 }
 
 /// Повідомлення скриптів сторінки: паролі — до passwords.rs, адреси — до addresses.rs, банківські картки — до
 /// cards.rs, переклад виділеного — до translate.rs, крок масштабу — інтерфейсу вікна як гаряча клавіша.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn on_page_message(
   app: &AppHandle,
   ui: &str,
@@ -262,12 +290,14 @@ fn on_page_message(
     }
     "autofill" => crate::addresses::on_page_message(app, ui, label, token, source, message),
     // Сторінка виходить із повного екрана: спершу вікно й сайт на місце, тоді — їй відповідь, що можна.
+    #[cfg(windows)]
     "fullscreen-exit" if message.get("token")?.as_str()? == token => {
       // Дозвіл прийде, коли під затемненням вікно й сайт уже на місці; не на весь екран — одразу.
       let later = app.get_webview(label).is_some_and(|page| crate::fullscreen::prepare_exit(&page));
       (!later).then(|| serde_json::json!({ "astra": "fullscreen-ready" }))
     }
     // Сторінка перемалювалась під час переходу: затемнення може сходити.
+    #[cfg(windows)]
     "fullscreen-painted" if message.get("token")?.as_str()? == token => {
       let size = |key: &str| message.get(key).and_then(serde_json::Value::as_i64).unwrap_or(0) as i32;
       if let Some(page) = app.get_webview(label) {
@@ -300,9 +330,9 @@ pub async fn page_open(
   let ui = window.label().to_string();
   let app = window.app_handle().clone();
   // Захист від стеження вікна: мітки стеження (fbclid, gclid…) прибираються з адреси ще до відкриття.
-  #[cfg(windows)]
+  #[cfg(any(windows, target_os = "linux"))]
   let privacy = app.state::<crate::tracking::Tracking>().rules(&ui);
-  #[cfg(windows)]
+  #[cfg(any(windows, target_os = "linux"))]
   let url = match url.host_str() {
     Some(host) if privacy.protects(host) => crate::tracking::without_tracking_params(&url).unwrap_or(url),
     _ => url,
@@ -311,7 +341,7 @@ pub async fn page_open(
   let address = url.to_string();
   // Токен скриптів цієї сторінки (паролі, адреси, масштаб коліщатком, переклад виділеного): повідомлення без нього
   // не приймаються, тож скрипти самого сайту не можуть ні просити паролів, ні крутити масштаб, ні перекладати.
-  #[cfg(windows)]
+  #[cfg(any(windows, target_os = "linux"))]
   let page_token = crate::passwords::new_token();
 
   let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
@@ -354,7 +384,7 @@ pub async fn page_open(
       }
     })
     // Файл зберігається в «Завантаження» Windows, а власне вікно завантажень WebView2 сховане:
-    // перебіг показує інтерфейс (webview2::watch_downloads).
+    // перебіг показує інтерфейс (webview2::watch_downloads). У Linux завантаження веде gtk_downloads.rs.
     .on_download(|_, _| true);
   // Паролі: запропонувати зберегти після входу, підставити збережений у полі входу. Адреси й картки — так само у
   // формах (один скрипт, autofill-page.js).
@@ -370,27 +400,54 @@ pub async fn page_open(
     .initialization_script(crate::translate::page_script(&page_token));
 
   // Cookies, входи й сховище сайтів — свої в кожного облікового запису Astra (profiles.rs).
-  #[cfg(windows)]
   let builder = match crate::profiles::site_data_dir(&app) {
     Some(dir) if !ui.starts_with("private-") && !ui.starts_with(GUEST_PREFIX) => {
-      // Тека облікового запису, що вперше ввійшов, — з тими самими налаштуваннями DNS, що й решта (dns.rs).
+      // Тека облікового запису, що вперше ввійшов, — з тими самими налаштуваннями DNS, що й решта (dns.rs; DNS через
+      // HTTPS є лише у WebView2).
+      #[cfg(windows)]
       app.state::<crate::dns::Dns>().apply_to(&dir);
       builder.data_directory(dir)
     }
     _ => builder,
   };
 
+  // Linux: DNS через HTTPS — проксі профілю даних WebKit (doh_proxy.rs). Сторінка починає вантажитися, щойно створена,
+  // тож проксі ставиться заздалегідь — профілю інтерфейсу вікна, спільному із сайтами власника.
+  #[cfg(target_os = "linux")]
+  if let Some(interface) = window.get_webview(&ui) {
+    let _ = crate::doh_proxy::apply(&interface);
+  }
   let webview = window
     .add_child(builder, LogicalPosition::new(bounds.x, bounds.y), LogicalSize::new(bounds.width, bounds.height))
     .map_err(|error| error.to_string())?;
   // Сайт — під інтерфейсом, а інтерфейс над ним прозорий: меню й вікна малюються просто над сторінкою
   // (webview2::send_to_back, interface_set_input_region).
   #[cfg(windows)]
+  let _ = webview2::send_to_back(&webview);
+  #[cfg(target_os = "linux")]
   {
-    let _ = webview2::send_to_back(&webview);
-    if let Some(interface) = window.get_webview(&ui) {
-      let _ = interface.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-    }
+    // Найпершим: без апаратного прискорення переходи View Transitions валять увесь браузер (gtk_page.rs).
+    let _ = crate::gtk_page::avoid_view_transitions_crash(&webview);
+    // Проксі DoH і профілю самої сторінки (в іншого облікового запису й у приватному вікні — свій).
+    let _ = crate::doh_proxy::apply(&webview);
+    let _ = crate::gtk_layers::adopt(&webview, bounds.area());
+    // Блокувальник реклами й захист від стеження: фільтри вмісту WebKit і скрипти сторінки на кожному переході
+    // (gtk_adblock.rs, gtk_tracking.rs).
+    let _ = crate::gtk_adblock::attach(&webview);
+    let _ = crate::gtk_tracking::attach(&webview);
+    // Паролі, адреси й картки, масштаб коліщатком і переклад виділеного — ті самі скрипти, що й у Windows, але в
+    // окремому світі WebKit (gtk_page.rs).
+    let scripts = vec![
+      crate::passwords::page_script(&page_token),
+      crate::addresses::page_script(&page_token),
+      zoom_script(&page_token),
+      crate::translate::page_script(&page_token),
+    ];
+    crate::gtk_page::add_page_scripts(&webview, scripts).map_err(|error| error.to_string())?;
+  }
+  #[cfg(windows)]
+  if let Some(interface) = window.get_webview(&ui) {
+    let _ = interface.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
   }
 
   // Найпершим — блокувальник реклами й захист від стеження: перший перехід Tauri вже почав, і фільтр має стати
@@ -419,8 +476,8 @@ pub async fn page_open(
 
   // Посилання з target="_blank" і window.open — новою вкладкою, а не окремим вікном; спливні вікна без дії
   // користувача інтерфейс може заблокувати. Посилання на програми (mailto:…) — після запитання.
-  #[cfg(windows)]
-  crate::page_events::watch_new_windows(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  events::watch_new_windows(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |url, user_initiated| {
       let Ok(parsed) = Url::parse(&url) else {
@@ -435,9 +492,9 @@ pub async fn page_open(
   })
   .map_err(|error| error.to_string())?;
 
-  // Збій сторінки, запити дозволів і контекстне меню — через інтерфейс (page_events.rs).
-  #[cfg(windows)]
-  crate::page_events::watch_process_failed(&webview, {
+  // Збій сторінки, запити дозволів і контекстне меню — через інтерфейс (page_events.rs, gtk_page.rs).
+  #[cfg(any(windows, target_os = "linux"))]
+  events::watch_process_failed(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |failure| {
       // Без адреси сторінки: журнал не має знати, що відкривали.
@@ -446,16 +503,16 @@ pub async fn page_open(
     }
   })
   .map_err(|error| error.to_string())?;
-  #[cfg(windows)]
-  crate::page_events::watch_permissions(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  events::watch_permissions(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |request| {
       let _ = app.emit_to(&ui, "page://permission", PermissionEvent { label: label.clone(), request });
     }
   })
   .map_err(|error| error.to_string())?;
-  #[cfg(windows)]
-  crate::page_events::customize_context_menu(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  events::customize_context_menu(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |action| {
       let _ = app.emit_to(&ui, "page://context", ContextEvent { label: label.clone(), action });
@@ -481,9 +538,9 @@ pub async fn page_open(
     receive(hidden).await??;
   }
 
-  // Іконка сторінки — та, яку обрав сам WebView2 (без скриптів на сторінці).
-  #[cfg(windows)]
-  webview2::watch_favicon(&webview, {
+  // Іконка сторінки — та, яку обрав сам рушій (без скриптів на сторінці).
+  #[cfg(any(windows, target_os = "linux"))]
+  engine::watch_favicon(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |url, icon| {
       if is_icon_url(&icon) {
@@ -494,8 +551,8 @@ pub async fn page_open(
   .map_err(|error| error.to_string())?;
 
   // Адреса й історія вкладки — від самого WebView2, разом зі змінами адреси без перезавантаження.
-  #[cfg(windows)]
-  webview2::watch_navigation(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  engine::watch_navigation(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |url, can_go_back, can_go_forward| {
       let event = NavigationEvent { label: label.clone(), url, can_go_back, can_go_forward };
@@ -516,10 +573,19 @@ pub async fn page_open(
     }
   })
   .map_err(|error| error.to_string())?;
+  // Linux: вікно на весь екран розгортає WebKit, а сайт на все вікно ставить gtk_fullscreen.rs.
+  #[cfg(target_os = "linux")]
+  crate::gtk_fullscreen::watch(&webview, {
+    let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
+    move |fullscreen| {
+      let _ = app.emit_to(&ui, "page://fullscreen", FullscreenEvent { label: label.clone(), fullscreen });
+    }
+  })
+  .map_err(|error| error.to_string())?;
 
   // Звук сторінки: значок у вкладці й кнопка, що його вимикає.
-  #[cfg(windows)]
-  webview2::watch_audio(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  engine::watch_audio(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |playing, muted| {
       let _ = app.emit_to(&ui, "page://audio", AudioEvent { label: label.clone(), playing, muted });
@@ -527,19 +593,20 @@ pub async fn page_open(
   })
   .map_err(|error| error.to_string())?;
 
-  #[cfg(windows)]
-  webview2::watch_page_messages(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  engine::watch_page_messages(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |source, message| on_page_message(&app, &ui, &label, &page_token, source, message)
   })
   .map_err(|error| error.to_string())?;
 
   // Ctrl+Tab і Ctrl+Shift+Tab перемикають вкладки й тоді, коли фокус у сайті.
-  #[cfg(windows)]
-  webview2::watch_shortcuts(&webview, {
+  #[cfg(any(windows, target_os = "linux"))]
+  engine::watch_shortcuts(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
     move |shortcut| {
       // Esc у повному екрані: WebView2 зараз виведе сторінку, а екран темніє ще до того (fullscreen.rs).
+      #[cfg(windows)]
       if shortcut == "escape" {
         if let Some(page) = app.get_webview(&label) {
           crate::fullscreen::exit_by_key(&page);
@@ -557,8 +624,8 @@ pub async fn page_open(
   if let Some(folder) = app.state::<crate::downloads::Downloads>().folder(&app) {
     webview2::set_download_folder(&webview, folder).map_err(|error| error.to_string())?;
   }
-  #[cfg(windows)]
-  webview2::watch_downloads(
+  #[cfg(any(windows, target_os = "linux"))]
+  engine::watch_downloads(
     &webview,
     {
       let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
@@ -589,7 +656,7 @@ pub async fn page_open(
   )
   .map_err(|error| error.to_string())?;
 
-  #[cfg(not(windows))]
+  #[cfg(not(any(windows, target_os = "linux")))]
   let _ = (webview, app);
   Ok(())
 }
@@ -627,17 +694,29 @@ pub fn page_set_bounds(window: Window, label: String, bounds: Bounds) -> Result<
   if crate::fullscreen::holds(&label) {
     return Ok(());
   }
+  #[cfg(target_os = "linux")]
+  if crate::gtk_fullscreen::holds(&label) {
+    return Ok(());
+  }
   place(&webview, &bounds)
 }
 
 /// Вивести сайт із повного екрана, хоч сторінка його й не покидала (інша вкладка, модальне вікно): вікно й webview —
 /// як були до нього.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub fn page_exit_fullscreen(window: Window, label: String) -> Result<(), String> {
-  crate::fullscreen::dismiss(&page(&window, &label)?);
-  Ok(())
+  #[cfg(windows)]
+  {
+    crate::fullscreen::dismiss(&page(&window, &label)?);
+    Ok(())
+  }
+  #[cfg(not(windows))]
+  {
+    page(&window, &label)?
+    .eval("document.fullscreenElement && document.exitFullscreen()")
+    .map_err(|error| error.to_string())
+  }
 }
 
 #[tauri::command]
@@ -649,12 +728,23 @@ pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<
 
 /// Де інтерфейс вікна ловить мишу (webview2::set_input_region): поза сторінкою, а над нею — лише відкриті панелі й
 /// вікна. `page: None` — увесь інтерфейс.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
-pub fn interface_set_input_region(webview: Webview, page: Option<webview2::Area>, keep: Vec<webview2::Area>) -> Result<(), String> {
-  let scale = webview.window().scale_factor().map_err(|error| error.to_string())?;
-  webview2::set_input_region(&webview, page, keep, scale).map_err(|error| error.to_string())
+pub fn interface_set_input_region(webview: Webview, page: Option<Area>, keep: Vec<Area>) -> Result<(), String> {
+  #[cfg(windows)]
+  {
+    let scale = webview.window().scale_factor().map_err(|error| error.to_string())?;
+    webview2::set_input_region(&webview, page, keep, scale).map_err(|error| error.to_string())
+  }
+  #[cfg(target_os = "linux")]
+  {
+    crate::gtk_layers::set_input_region(&webview, page, keep).map_err(|error| error.to_string())
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    let _ = (webview, page, keep);
+    Ok(())
+  }
 }
 
 #[tauri::command]
@@ -700,6 +790,8 @@ pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label
       let _ = webview2::close_page(webview);
     })
     .map_err(|error| error.to_string());
+  #[cfg(target_os = "linux")]
+  crate::gtk_fullscreen::dismiss(&webview);
   #[cfg(not(windows))]
   webview.close().map_err(|error| error.to_string())
 }
@@ -730,7 +822,7 @@ async fn receive<T: Send + 'static>(receiver: mpsc::Receiver<T>) -> Result<T, St
 }
 
 /// Origin сторінки (https://www.example.com), для якого зберігаються дозволи.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn page_origin(webview: &Webview) -> Result<String, String> {
   let url = webview.url().map_err(|error| error.to_string())?;
   if is_web(&url) {
@@ -741,158 +833,253 @@ fn page_origin(webview: &Webview) -> Result<String, String> {
 }
 
 /// Нові правила автовідтворення (audio.rs) для всіх сайтів вікна: відкритим сторінкам — одразу, новим — зі скриптом.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub fn page_set_audio_rules(window: Window, rules: audio::AutoplayRules) -> Result<(), String> {
-  let script = audio::rules_script(&rules);
-  let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(PAGE_PREFIX));
-  for webview in pages {
-    let label = webview.label().to_string();
-    let scripts = window.state::<audio::RulesScripts>();
-    let previous = scripts.0.lock().map_err(|error| error.to_string())?.get(&label).cloned();
-    let app = window.app_handle().clone();
-    webview2::replace_document_script(&webview, previous, script.clone(), move |id| {
-      if let Ok(mut scripts) = app.state::<audio::RulesScripts>().0.lock() {
-        scripts.insert(label, id);
-      }
-    })
-    .map_err(|error| error.to_string())?;
-    // І вже відкритим сторінкам — одразу: дозволили YouTube й перейшли на інше відео без перезавантаження сторінки —
-    // нове правило вже діє.
-    let _ = webview.eval(script.clone());
+  #[cfg(windows)]
+  {
+    let script = audio::rules_script(&rules);
+    let pages = window.webviews().into_iter().filter(|webview| webview.label().starts_with(PAGE_PREFIX));
+    for webview in pages {
+      let label = webview.label().to_string();
+      let scripts = window.state::<audio::RulesScripts>();
+      let previous = scripts.0.lock().map_err(|error| error.to_string())?.get(&label).cloned();
+      let app = window.app_handle().clone();
+      webview2::replace_document_script(&webview, previous, script.clone(), move |id| {
+        if let Ok(mut scripts) = app.state::<audio::RulesScripts>().0.lock() {
+          scripts.insert(label, id);
+        }
+      })
+      .map_err(|error| error.to_string())?;
+      // І вже відкритим сторінкам — одразу: дозволили YouTube й перейшли на інше відео без перезавантаження сторінки —
+      // нове правило вже діє.
+      let _ = webview.eval(script.clone());
+    }
+    Ok(())
   }
-  Ok(())
+  #[cfg(not(windows))]
+  {
+    // Новим сторінкам правила дає скрипт із page_open, відкритим — одразу.
+    let script = audio::rules_script(&rules);
+    for webview in window.webviews().into_iter().filter(|webview| webview.label().starts_with(PAGE_PREFIX)) {
+      let _ = webview.eval(script.clone());
+    }
+    Ok(())
+  }
 }
 
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub async fn page_set_muted(window: Window, label: String, muted: bool) -> Result<(), String> {
-  let (reply, receiver) = mpsc::channel();
-  webview2::set_muted(&page(&window, &label)?, muted, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    let (reply, receiver) = mpsc::channel();
+    engine::set_muted(&page(&window, &label)?, muted, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    // Без вимикача звуку сторінки в рушії — звук її відео й аудіо.
+    page(&window, &label)?
+      .eval(format!("document.querySelectorAll('audio, video').forEach((media) => {{ media.muted = {muted}; }})"))
+      .map_err(|error| error.to_string())
+  }
 }
 
 /// Скріншот сторінки PNG: видима частина чи вся сторінка з прокруткою (`full`). Уся сторінка знімається довше,
 /// тож і чекаємо довше, ніж на звичайні відповіді WebView2.
-#[cfg(windows)]
 #[tauri::command]
 pub async fn page_screenshot(window: Window, label: String, full: bool) -> Result<tauri::ipc::Response, String> {
-  let (reply, receiver) = mpsc::channel();
-  webview2::screenshot(&page(&window, &label)?, full, reply).map_err(|error| error.to_string())?;
-  let image = tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(20)))
-    .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())??;
-  Ok(tauri::ipc::Response::new(image))
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    let (reply, receiver) = mpsc::channel();
+    engine::screenshot(&page(&window, &label)?, full, reply).map_err(|error| error.to_string())?;
+    let image = tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(20)))
+      .await
+      .map_err(|error| error.to_string())?
+      .map_err(|error| error.to_string())??;
+    Ok(tauri::ipc::Response::new(image))
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    let _ = (window, label, full);
+    Err(unsupported())
+  }
 }
 
 /// «Картинка в картинці» для відео на сторінці.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
-pub async fn page_picture_in_picture(window: Window, label: String) -> Result<webview2::PictureInPicture, String> {
-  let (reply, receiver) = mpsc::channel();
-  webview2::picture_in_picture(&page(&window, &label)?, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+pub async fn page_picture_in_picture(window: Window, label: String) -> Result<PictureInPicture, String> {
+  #[cfg(windows)]
+  {
+    let (reply, receiver) = mpsc::channel();
+    webview2::picture_in_picture(&page(&window, &label)?, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(windows))]
+  {
+    let _ = (window, label);
+    Err(unsupported())
+  }
 }
 
 /// Особливе оновлення з меню кнопки «Оновити»: без кешу, з очищенням даних чи cookies сайту.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
-pub async fn page_reload_with(window: Window, label: String, mode: webview2::ReloadMode) -> Result<(), String> {
-  let webview = page(&window, &label)?;
-  let url = webview.url().map_err(|error| error.to_string())?.to_string();
-  let (reply, receiver) = mpsc::channel();
-  webview2::reload_with(&webview, mode, url, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+pub async fn page_reload_with(window: Window, label: String, mode: ReloadMode) -> Result<(), String> {
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    let webview = page(&window, &label)?;
+    let url = webview.url().map_err(|error| error.to_string())?.to_string();
+    let (reply, receiver) = mpsc::channel();
+    engine::reload_with(&webview, mode, url, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    // Окремо стерти дані одного сайту рушій не дає — лише оновити сторінку.
+    let _ = mode;
+    page(&window, &label)?.reload().map_err(|error| error.to_string())
+  }
 }
 
 /// Дозвіл сайту на автовідтворення, збережений у профілі WebView2.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub async fn page_autoplay(window: Window, label: String) -> Result<Autoplay, String> {
-  let webview = page(&window, &label)?;
-  let (reply, receiver) = mpsc::channel();
-  webview2::autoplay(&webview, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+  #[cfg(windows)]
+  {
+    let webview = page(&window, &label)?;
+    let (reply, receiver) = mpsc::channel();
+    webview2::autoplay(&webview, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(windows))]
+  {
+    page(&window, &label)?;
+    Ok(Autoplay::Default)
+  }
 }
 
-/// Присипляє приховану фонову вкладку (page_events.rs); `true` — заснула.
-#[cfg(windows)]
+/// Присипляє приховану фонову вкладку (page_events.rs, gtk_page.rs); `true` — заснула.
 #[tauri::command]
 #[specta::specta]
 pub async fn page_suspend(window: Window, label: String) -> Result<bool, String> {
-  let webview = page(&window, &label)?;
-  let (reply, receiver) = mpsc::channel();
-  crate::page_events::suspend(&webview, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    let webview = page(&window, &label)?;
+    let (reply, receiver) = mpsc::channel();
+    events::suspend(&webview, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    page(&window, &label)?;
+    Ok(false)
+  }
 }
 
 /// Вкладка пішла у фон (менше пам'яті) чи стала активною.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub fn page_set_background(window: Window, label: String, background: bool) -> Result<(), String> {
-  crate::page_events::set_background(&page(&window, &label)?, background).map_err(|error| error.to_string())
+  #[cfg(windows)]
+  {
+    crate::page_events::set_background(&page(&window, &label)?, background).map_err(|error| error.to_string())
+  }
+  #[cfg(not(windows))]
+  {
+    let _ = (window, label, background);
+    Ok(())
+  }
 }
 
 /// Відповідь користувача на запит дозволу сайту.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub fn page_permission_answer(
   app: AppHandle,
   id: u64,
-  state: crate::page_events::PermissionState,
+  state: PermissionState,
   remember: bool,
 ) -> Result<(), String> {
-  app
-    .run_on_main_thread(move || crate::page_events::answer_permission(id, state, remember))
-    .map_err(|error| error.to_string())
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    app.run_on_main_thread(move || events::answer_permission(id, state, remember)).map_err(|error| error.to_string())
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    let _ = (app, id, state, remember);
+    Ok(())
+  }
 }
 
 /// Збережені дозволи сайту вкладки — для панелі дозволів.
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub async fn page_permissions(
   window: Window,
   label: String,
-) -> Result<std::collections::HashMap<String, crate::page_events::PermissionState>, String> {
-  let webview = page(&window, &label)?;
-  let (reply, receiver) = mpsc::channel();
-  crate::page_events::site_permissions(&webview, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+) -> Result<std::collections::HashMap<String, PermissionState>, String> {
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    let webview = page(&window, &label)?;
+    let (reply, receiver) = mpsc::channel();
+    events::site_permissions(&webview, page_origin(&webview)?, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    page(&window, &label)?;
+    Ok(std::collections::HashMap::new())
+  }
 }
 
 /// Зберігає дозвіл сайту вкладки (з панелі дозволів).
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub async fn page_set_permission(
   window: Window,
   label: String,
   kind: String,
-  state: crate::page_events::PermissionState,
+  state: PermissionState,
 ) -> Result<(), String> {
-  let webview = page(&window, &label)?;
-  let (reply, receiver) = mpsc::channel();
-  crate::page_events::set_site_permission(&webview, page_origin(&webview)?, kind, state, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+  #[cfg(any(windows, target_os = "linux"))]
+  {
+    let webview = page(&window, &label)?;
+    let (reply, receiver) = mpsc::channel();
+    events::set_site_permission(&webview, page_origin(&webview)?, kind, state, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(any(windows, target_os = "linux")))]
+  {
+    let _ = (window, label, kind, state);
+    Err(unsupported())
+  }
 }
 
-#[cfg(windows)]
 #[tauri::command]
 #[specta::specta]
 pub async fn page_set_autoplay(window: Window, label: String, autoplay: Autoplay) -> Result<(), String> {
-  let webview = page(&window, &label)?;
-  let (reply, receiver) = mpsc::channel();
-  webview2::set_autoplay(&webview, page_origin(&webview)?, autoplay, reply).map_err(|error| error.to_string())?;
-  receive(receiver).await?
+  #[cfg(windows)]
+  {
+    let webview = page(&window, &label)?;
+    let (reply, receiver) = mpsc::channel();
+    webview2::set_autoplay(&webview, page_origin(&webview)?, autoplay, reply).map_err(|error| error.to_string())?;
+    receive(receiver).await?
+  }
+  #[cfg(not(windows))]
+  {
+    let _ = (window, label, autoplay);
+    Ok(())
+  }
+}
+
+/// Що є лише в WebView2 (Windows) і чого на цій системі ще немає.
+#[cfg(not(windows))]
+fn unsupported() -> String {
+  crate::i18n::text("На цій системі цього ще немає", "Not available on this system yet").into()
 }
 
 #[cfg(test)]

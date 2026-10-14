@@ -18,6 +18,7 @@ import { BlockedTracker, TRACKER_CATEGORIES, TrackingStore } from '../data/track
 import { PageViews } from '../page-views/page-views';
 import { Popover } from '../popover/popover';
 import { plural, translate, TranslatePipe } from '../../shared/i18n/i18n';
+import { IS_LINUX } from '../../shared/platform/platform';
 
 /**
  * Панель «Захист від стеження» з кнопки-щита на початку адресного рядка, як у Firefox: чи захищене з'єднання,
@@ -65,6 +66,10 @@ export class TrackingPanel {
     })).filter((group) => group.hosts.length)
   );
   protected readonly count = computed(() => {
+    // У Linux блокують фільтри WebKit, а що саме відсікли, вони не кажуть (server/src/gtk_tracking.rs).
+    if (IS_LINUX) {
+      return translate('Елементи стеження на цьому сайті блокуються');
+    }
     const count = this.trackers().length;
     return count
       ? plural(

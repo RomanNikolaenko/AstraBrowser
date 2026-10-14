@@ -6,12 +6,18 @@
 }
 
 .site-permissions {
-  --popover-width: 26rem;
+  // Не вужче за 26rem, а ширше — якщо рядки не влазять: шрифт без Segoe UI (Linux) ширший, і «Блокувати аудіо та
+  // відео» вилазило б за панель (над сайтом у Linux його просто не видно).
+  --popover-width: fit-content;
+  --popover-min-width: 26rem;
   --popover-padding: 0.75rem 1rem 1rem;
 
   &__title {
     padding-bottom: 0.875rem;
     margin: 0.25rem 0 0.875rem;
+
+    // Ширину панелі задають рядки, а не довга адреса чи підказка — ті переносяться.
+    contain: inline-size;
     font-size: 1rem;
     font-weight: 700;
     color: var(--browser-heading);
@@ -45,7 +51,8 @@
   &__select {
     @include select-colors;
 
-    flex: 0 0 auto;
+    // Вікно надто вузьке й для ширшої панелі — значення скорочується трикрапкою, а не вилазить за неї.
+    flex: 0 1 auto;
     min-width: 11rem;
   }
 
@@ -55,6 +62,7 @@
     align-items: center;
     padding: 0.625rem 0.625rem 0.625rem 0.875rem;
     margin-top: 0.875rem;
+    contain: inline-size;
     font-size: 0.8125rem;
     color: var(--browser-muted);
     background: var(--browser-field);

@@ -1,8 +1,9 @@
 //! Блокувальник реклами й трекерів, як AdGuard чи uBlock Origin: правила зі списків EasyList, EasyPrivacy,
 //! uBlock і AdGuard перевіряє рушій adblock-rust від Brave.
 //!
-//! Мережеві правила відсікають запити сторінки (webview2::block_ads), а косметичні — ховають рекламні блоки
-//! й запускають скриптлети uBlock Origin (як проти реклами на YouTube) скриптом на початку документа
+//! Мережеві правила відсікають запити сторінки (у Windows — webview2::block_ads; на macOS і Linux — сам WebKit за
+//! тими самими правилами, перекладеними у формат блокувальників Safari, gtk_adblock.rs), а косметичні — ховають
+//! рекламні блоки й запускають скриптлети uBlock Origin (як проти реклами на YouTube) скриптом на початку документа
 //! (adblock-page.js). Скриптлети й підмінні ресурси (порожній скрипт, прозора картинка тощо) беруться з
 //! вихідного коду uBlock Origin. Списки оновлюються у фоні раз на 4 дні, а зібраний рушій кешується
 //! в теці даних застосунку, щоб запуск не розбирав десятки тисяч правил заново.
@@ -63,6 +64,9 @@ const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 const ENGINE_FILE: &str = "adblock-engine-v2.dat";
 const RESOURCES_FILE: &str = "adblock-resources-v2.json";
 const SETTINGS_FILE: &str = "adblock.json";
+/// Мережеві правила у форматі блокувальників Safari — для WebKit (macOS, Linux).
+#[cfg(not(windows))]
+pub(crate) const CONTENT_FILE: &str = "adblock-content-v1.json";
 
 /// Реліз uBlock Origin зі скриптлетами, якщо GitHub не скаже про новіший.
 const UBO_RELEASE: &str = "1.75.0";
@@ -101,6 +105,8 @@ pub struct Status {
 }
 
 /// Що робити із запитом сторінки.
+// Перевіряє запити WebView2 (Windows); у Linux блокують фільтри WebKit, а це — для тестів.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub enum Verdict {
   Allow,
   Block,
@@ -151,6 +157,7 @@ impl AdBlock {
   }
 
   /// Запит `url` типу `kind` (script, image, xmlhttprequest, sub_frame…) зі сторінки `source`.
+  #[cfg_attr(not(windows), allow(dead_code))]
   pub fn check(&self, url: &str, source: &str, kind: &str, method: &str) -> Verdict {
     let Some(engine) = self.engine() else {
       return Verdict::Allow;
@@ -244,6 +251,7 @@ fn normalize_site(site: &str) -> Option<String> {
   Some(host.strip_prefix("www.").unwrap_or(host).to_string())
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn decode_data_url(url: &str) -> Option<(String, Vec<u8>)> {
   let (mime, data) = url.strip_prefix("data:")?.split_once(";base64,")?;
   Some((mime.to_string(), BASE64.decode(data).ok()?))
@@ -297,11 +305,21 @@ pub fn start(app: &AppHandle) {
     }
   }
   remove_old_caches(&dir);
-  let _ = adblock.dir.set(dir);
+  let _ = adblock.dir.set(dir.clone());
 
   let app = app.clone();
   thread::spawn(move || {
-    app.state::<AdBlock>().load_cache();
+    let adblock = app.state::<AdBlock>();
+    adblock.load_cache();
+    // Правил для WebKit ще немає (рушій з версії без них) — списки оновлюються одразу.
+    #[cfg(not(windows))]
+    if !dir.join(CONTENT_FILE).exists() {
+      if let Ok(mut updated_at) = adblock.updated_at.lock() {
+        *updated_at = None;
+      }
+    }
+    #[cfg(target_os = "linux")]
+    crate::gtk_adblock::load(&app, dir.clone());
     broadcast(&app);
     loop {
       if app.state::<AdBlock>().is_stale() {
@@ -324,15 +342,21 @@ fn refresh(app: &AppHandle) {
     adblock.updating.store(false, Ordering::SeqCst);
     return;
   };
-  let result = build(&dir).and_then(|(engine, resources)| {
+  let result = build(&dir).and_then(|(engine, resources, content)| {
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     fs::write(dir.join(ENGINE_FILE), engine.serialize()).map_err(|error| error.to_string())?;
     fs::write(dir.join(RESOURCES_FILE), json(&resources)).map_err(|error| error.to_string())?;
+    #[cfg(not(windows))]
+    fs::write(dir.join(CONTENT_FILE), content).map_err(|error| error.to_string())?;
+    #[cfg(windows)]
+    let _ = content;
     Ok(engine)
   });
   match result {
     Ok(engine) => {
       adblock.set_engine(engine);
+      #[cfg(target_os = "linux")]
+      crate::gtk_adblock::compile(app, dir.clone());
       if let Ok(mut updated_at) = adblock.updated_at.lock() {
         *updated_at = Some(now_ms());
       }
@@ -351,13 +375,23 @@ fn refresh(app: &AppHandle) {
   broadcast(app);
 }
 
-fn build(dir: &Path) -> Result<(Engine, Vec<Resource>), String> {
+/// Свіжі списки: рушій, ресурси (скриптлети, підмінні файли) і, для WebKit (macOS, Linux), мережеві правила у
+/// форматі блокувальників Safari (JSON; у Windows — порожньо).
+fn build(dir: &Path) -> Result<(Engine, Vec<Resource>, Vec<u8>), String> {
   let urls: Vec<String> = LISTS.iter().map(|list| list.url.to_string()).collect();
-  let mut filters = FilterSet::new(false);
+  let mut lists = Vec::new();
   for (list, text) in LISTS.iter().zip(download_all(&urls)) {
     let text = String::from_utf8(text?).map_err(|error| format!("{}: {error}", list.url))?;
     let permissions = if list.trusted { TRUSTED } else { PermissionMask::default() };
-    filters.add_filter_list(text, ParseOptions { permissions, ..ParseOptions::default() });
+    lists.push((text, ParseOptions { permissions, ..ParseOptions::default() }));
+  }
+  #[cfg(not(windows))]
+  let content = content_rules(&lists)?;
+  #[cfg(windows)]
+  let content = Vec::new();
+  let mut filters = FilterSet::new(false);
+  for (text, options) in lists {
+    filters.add_filter_list(text, options);
   }
   let mut engine = Engine::new_with_filter_set(filters);
 
@@ -367,7 +401,23 @@ fn build(dir: &Path) -> Result<(Engine, Vec<Resource>), String> {
     cached_resources(dir)
   });
   engine.use_resources(resources.clone());
-  Ok((engine, resources))
+  Ok((engine, resources, content))
+}
+
+/// Мережеві правила списків — у форматі блокувальників Safari (JSON) для WebKit (і захисту від стеження, tracking.rs).
+/// Косметичних серед них немає: рекламні блоки й так ховає скрипт сторінки (adblock-page.js), тут вони лише подвоїли б
+/// і без того великий список.
+#[cfg(not(windows))]
+pub(crate) fn content_rules(lists: &[(String, ParseOptions)]) -> Result<Vec<u8>, String> {
+  use adblock::content_blocking::CbType;
+  let mut filters = FilterSet::new(true);
+  for (text, options) in lists {
+    filters.add_filter_list(text.clone(), *options);
+  }
+  let (rules, _) = filters.into_content_blocking().map_err(|()| "content blocking: no debug filter set".to_string())?;
+  let rules: Vec<_> = rules.into_iter().filter(|rule| rule.action.typ != CbType::CssDisplayNone).collect();
+  log::info!("adblock: правил для WebKit — {}", rules.len());
+  serde_json::to_vec(&rules).map_err(|error| error.to_string())
 }
 
 fn agent() -> &'static ureq::Agent {
@@ -782,7 +832,7 @@ async function trustedSetCookie(name = '') {
   #[ignore]
   fn real_lists() {
     let started = std::time::Instant::now();
-    let (engine, resources) = build(&std::env::temp_dir()).expect("lists");
+    let (engine, resources, _) = build(&std::env::temp_dir()).expect("lists");
     let scriptlets = resources.iter().filter(|resource| resource.name.ends_with(".js") || resource.name.ends_with(".fn")).count();
     eprintln!("built in {:?}: {} resources, {scriptlets} of them scripts", started.elapsed(), resources.len());
 

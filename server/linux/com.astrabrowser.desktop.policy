@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Підтвердження особи перед заповненням банківської картки (server/src/polkit.rs): пароль користувача щоразу. -->
+<policyconfig>
+  <vendor>Astra Browser</vendor>
+  <action id="com.astrabrowser.desktop.verify-identity">
+    <description>Confirm your identity before filling in a bank card</description>
+    <description xml:lang="uk">Підтвердити особу перед заповненням банківської картки</description>
+    <message>Astra Browser wants to fill in bank card details on a site</message>
+    <message xml:lang="uk">Astra Browser хоче заповнити на сайті дані банківської картки</message>
+    <icon_name>astra-browser</icon_name>
+    <defaults>
+      <allow_any>auth_self</allow_any>
+      <allow_inactive>auth_self</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { BrowserWindows } from '../../../shared/browser-windows/browser-windows';
 import { translate, TranslatePipe } from '../../../shared/i18n/i18n';
+import { IS_LINUX } from '../../../shared/platform/platform';
 import { UiIcon } from '../../../shared/ui-icon/ui-icon';
 import { UiSwitch } from '../../../shared/ui-switch/ui-switch';
 import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
@@ -23,6 +24,8 @@ export class CardsPage {
   protected readonly cards = inject(CardsStore);
   /** У гостьовому вікні карток власника не видно, а нові не зберігаються (server/src/cards.rs). */
   protected readonly guest = inject(BrowserWindows).isGuest;
+  /** У Linux особу підтверджує polkit (паролем системи), а не Windows Hello (server/src/polkit.rs). */
+  protected readonly linux = IS_LINUX;
 
   /** Картка, про видалення якої питають. */
   protected readonly removing = signal<CardInfo | null>(null);

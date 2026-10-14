@@ -39,22 +39,15 @@ use windows::Win32::{
 };
 use windows_core::{w, IUnknown, Interface, BOOL, HSTRING, PWSTR};
 
+pub use crate::page_types::{Area, Autoplay, ClearKinds, PictureInPicture, ReloadMode};
 use crate::{
   adblock::{AdBlock, Verdict},
+  downloads::{DownloadRequest, DownloadUpdate},
   tracking::{self, Category, Tracking},
 };
 
 /// Відповідь, яку команда чекає з головного потоку.
 pub type Reply<T> = Sender<Result<T, String>>;
-
-/// Дозвіл на автовідтворення: явно дозволено, заборонено чи як за замовчуванням.
-#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
-#[serde(rename_all = "lowercase")]
-pub enum Autoplay {
-  Allow,
-  Block,
-  Default,
-}
 
 impl Autoplay {
   fn state(self) -> COREWEBVIEW2_PERMISSION_STATE {
@@ -81,15 +74,6 @@ pub(crate) fn core(platform: &PlatformWebview) -> windows_core::Result<ICoreWebV
 /// Профіль webview: у приватному вікні — окремий InPrivate, тож і дозволи там не зберігаються.
 pub(crate) fn profile(platform: &PlatformWebview) -> windows_core::Result<ICoreWebView2Profile4> {
   unsafe { core(platform)?.cast::<ICoreWebView2_13>()?.Profile()?.cast() }
-}
-
-/// Прямокутник у логічних пікселях від лівого верхнього кута вікна.
-#[derive(serde::Deserialize, specta::Type)]
-pub struct Area {
-  x: f64,
-  y: f64,
-  width: f64,
-  height: f64,
 }
 
 /// Сайт — під інтерфейсом. Там, де сторінка, інтерфейс прозорий (pages.rs), тож меню, вікна й тіні малюються просто
@@ -383,22 +367,6 @@ fn report_navigation(sender: Option<ICoreWebView2>, report: &impl Fn(String, boo
   Ok(())
 }
 
-/// Особливі оновлення з меню кнопки «Оновити».
-#[derive(Clone, Copy, serde::Deserialize, specta::Type)]
-#[serde(rename_all = "kebab-case")]
-pub enum ReloadMode {
-  /// Повторно завантажити все, минаючи кеш.
-  Hard,
-  /// Сховища кешу сайту (Cache Storage) — і жорстке оновлення.
-  Cache,
-  /// Кеш, localStorage, sessionStorage, IndexedDB тощо — без cookies.
-  SiteData,
-  /// Cookies сайту (вийде з облікового запису) — і звичайне оновлення.
-  Cookies,
-  /// Усе разом: сховища сайту й cookies («Стерти файли cookie та дані сайту» в захисті від стеження).
-  All,
-}
-
 /// Виконує `mode` для поточного сайту вкладки (`url`, `origin`) і перезавантажує сторінку.
 /// Усе — через сам WebView2 і протокол DevTools, без скриптів, які бачила б сторінка.
 pub fn reload_with(webview: &Webview, mode: ReloadMode, url: String, origin: String, reply: Reply<()>) -> tauri::Result<()> {
@@ -444,20 +412,6 @@ pub fn reload_with(webview: &Webview, mode: ReloadMode, url: String, origin: Str
 
 fn finish(reply: &Reply<()>, result: windows_core::Result<()>) {
   let _ = reply.send(result.map_err(|error| error.to_string()));
-}
-
-/// Що очистити в діалозі «Очистити дані перегляду».
-#[derive(Clone, Copy, serde::Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct ClearKinds {
-  /// Cookies і сховища сайтів.
-  pub site_data: bool,
-  pub cache: bool,
-  /// Власна історія WebView2 (історію й завантаження браузера чистить інтерфейс).
-  pub history: bool,
-  pub autofill: bool,
-  /// Дозволи сайтів.
-  pub settings: bool,
 }
 
 /// Очищає дані профілю сайтів `webview`, змінені від `since` (секунди Unix; 0 — за весь час).
@@ -680,16 +634,6 @@ const PICTURE_IN_PICTURE_SCRIPT: &str = r#"(async () => {
   await video.requestPictureInPicture();
   return 'opened';
 })()"#;
-
-/// Що зробила «картинка в картинці».
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, specta::Type)]
-#[serde(rename_all = "kebab-case")]
-pub enum PictureInPicture {
-  Opened,
-  Closed,
-  /// На сторінці немає відео.
-  NoVideo,
-}
 
 /// Перемикає «картинку в картинці». Без жесту користувача браузер її не дозволить, тож скрипт
 /// виконується з жестом — це чесно, бо запускає його сам користувач (кнопка чи Ctrl+Shift+]).
@@ -1197,18 +1141,6 @@ fn replace_page_script(core: &ICoreWebView2, page: &Rc<RefCell<AdPage>>, script:
   unsafe { core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler) }
 }
 
-/// Що інтерфейс знає про завантаження.
-pub struct DownloadUpdate {
-  pub id: u64,
-  pub url: String,
-  pub path: String,
-  pub received: i64,
-  /// 0 — розмір невідомий (сервер його не назвав).
-  pub total: i64,
-  /// in-progress, completed, failed чи canceled.
-  pub state: &'static str,
-}
-
 /// Завантаження, що триває: його COM-об'єкт, кому про нього повідомляти й з якої сторінки воно.
 struct RunningDownload {
   operation: ICoreWebView2DownloadOperation,
@@ -1245,15 +1177,6 @@ const DOWNLOAD_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 const DOWNLOAD_SILENT_CHECKS: u32 = 2;
 /// Скільки чекати, поки WebView2 видалить файл під першим ім'ям, перш ніж повернути файлу назву (restore_kept).
 const KEEP_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Завантаження, про яке питають, куди зберегти файл: що за файл і куди WebView2 збирався його покласти.
-pub struct DownloadRequest {
-  pub id: u64,
-  pub url: String,
-  pub path: PathBuf,
-  /// 0 — розмір невідомий.
-  pub total: i64,
-}
 
 /// Завантаження, що чекає, поки користувач вибере, куди зберегти файл («Питати, куди зберегти»).
 struct PendingDownload {

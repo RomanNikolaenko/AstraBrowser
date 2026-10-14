@@ -1,27 +1,30 @@
 //! «Очистити дані перегляду і файли cookie»: скільки займають дані сайтів і кеш і саме очищення за вибраний час.
 //!
-//! Очищає WebView2 профіль сайтів облікового запису, що ввійшов (profiles.rs): для цього створюється прихований
-//! webview у тому самому профілі. Історію й список завантажень браузера чистить інтерфейс — вони його власні.
+//! Очищає профіль сайтів облікового запису, що ввійшов (profiles.rs), рушій — WebView2 у Windows, WebKitGTK у Linux
+//! (gtk_page::clear_browsing_data): для цього створюється прихований webview у тому самому профілі. Історію й список
+//! завантажень браузера чистить інтерфейс — вони його власні. На macOS рушій чистить профіль лише цілком, тож там
+//! очищення — усього окремого профілю сайтів.
 
+#[cfg(any(windows, target_os = "linux"))]
+use std::{sync::mpsc, time::Duration};
 use std::{
   fs,
   path::{Path, PathBuf},
-  sync::{
-    atomic::{AtomicU64, Ordering},
-    mpsc,
-  },
-  time::Duration,
+  sync::atomic::{AtomicU64, Ordering},
 };
 
 use serde::Serialize;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Url, WebviewBuilder, WebviewUrl, Window};
 
-use crate::{
-  profiles,
-  webview2::{self, ClearKinds},
-};
+use crate::{page_types::ClearKinds, profiles};
+/// Очищення — засобами рушія системи.
+#[cfg(target_os = "linux")]
+use crate::gtk_page as engine;
+#[cfg(windows)]
+use crate::webview2 as engine;
 
 /// Що в профілі WebView2 — дані сайтів, а що — кеш (шляхи всередині теки профілю).
+#[cfg(windows)]
 const SITE_DATA: [&str; 9] = [
   "Network/Cookies",
   "Network/Cookies-journal",
@@ -33,8 +36,16 @@ const SITE_DATA: [&str; 9] = [
   "databases",
   "WebStorage",
 ];
+#[cfg(windows)]
 const CACHE: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"];
-/// Скільки чекати, поки WebView2 очистить дані (великий кеш — це не миттєво).
+/// Те саме в теці даних WebKitGTK (Linux).
+#[cfg(target_os = "linux")]
+const SITE_DATA: [&str; 9] =
+  ["cookies", "localstorage", "databases", "storage", "serviceworkers", "CacheStorage", "mediakeys", "deviceidhashsalts", "hsts-storage.sqlite"];
+#[cfg(target_os = "linux")]
+const CACHE: [&str; 1] = ["WebKitCache"];
+/// Скільки чекати, поки рушій очистить дані (великий кеш — це не миттєво).
+#[cfg(any(windows, target_os = "linux"))]
 const CLEAR_TIMEOUT: Duration = Duration::from_secs(120);
 
 static NEXT_CLEANER: AtomicU64 = AtomicU64::new(1);
@@ -57,9 +68,22 @@ fn size_of(path: &Path) -> u64 {
 }
 
 /// Тека профілю WebView2 з даними сайтів облікового запису, що ввійшов.
+#[cfg(windows)]
 fn profile_dir(app: &AppHandle) -> Option<PathBuf> {
   let data = profiles::site_data_dir(app).or_else(|| app.path().app_local_data_dir().ok())?;
   Some(data.join("EBWebView").join("Default"))
+}
+
+/// Тека даних WebKitGTK з даними сайтів облікового запису, що ввійшов (у власника — типова, спільна з інтерфейсом).
+#[cfg(target_os = "linux")]
+fn profile_dir(app: &AppHandle) -> Option<PathBuf> {
+  profiles::site_data_dir(app).or_else(|| app.path().app_local_data_dir().ok())
+}
+
+/// Окремий профіль сайтів облікового запису; спільний з інтерфейсом не рахуємо — у ньому дані самого браузера.
+#[cfg(not(any(windows, target_os = "linux")))]
+fn profile_dir(app: &AppHandle) -> Option<PathBuf> {
+  profiles::site_data_dir(app)
 }
 
 #[tauri::command]
@@ -69,14 +93,21 @@ pub async fn browsing_data_sizes(app: AppHandle) -> BrowsingDataSizes {
     let Some(dir) = profile_dir(&app) else {
       return BrowsingDataSizes { site_data: 0, cache: 0 };
     };
-    let sum = |parts: &[&str]| parts.iter().map(|part| size_of(&dir.join(part))).sum();
-    BrowsingDataSizes { site_data: sum(&SITE_DATA), cache: sum(&CACHE) }
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+      let sum = |parts: &[&str]| parts.iter().map(|part| size_of(&dir.join(part))).sum();
+      BrowsingDataSizes { site_data: sum(&SITE_DATA), cache: sum(&CACHE) }
+    }
+    // Кеш рушій тримає окремо від профілю — тут лише дані сайтів.
+    #[cfg(not(any(windows, target_os = "linux")))]
+    BrowsingDataSizes { site_data: size_of(&dir), cache: 0 }
   };
   tauri::async_runtime::spawn_blocking(measure).await.unwrap_or(BrowsingDataSizes { site_data: 0, cache: 0 })
 }
 
 /// Очищає вибране (`kinds`), змінене від `since` (секунди Unix; 0 — за весь час). `origins` — сайти з історії: у
-/// профілі, спільному з інтерфейсом, їхній localStorage чиститься окремо (webview2::clear_browsing_data).
+/// профілі, спільному з інтерфейсом, їхній localStorage чиститься окремо (webview2::clear_browsing_data,
+/// gtk_page::clear_browsing_data).
 #[tauri::command]
 #[specta::specta]
 pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, origins: Vec<String>) -> Result<(), String> {
@@ -104,14 +135,35 @@ pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, 
     .add_child(builder, LogicalPosition::new(0.0, 0.0), LogicalSize::new(0.0, 0.0))
     .map_err(|error| error.to_string())?;
 
-  let (reply, receiver) = mpsc::channel();
-  let result = match webview2::clear_browsing_data(&webview, kinds, separate.is_none(), since.max(0.0), origins, reply) {
-    Ok(()) => tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(CLEAR_TIMEOUT))
-      .await
-      .map_err(|error| error.to_string())
-      .and_then(|received| received.map_err(|_| crate::i18n::text("Очищення триває задовго", "Clearing is taking too long").to_string()))
-      .and_then(|cleared| cleared),
-    Err(error) => Err(error.to_string()),
+  #[cfg(any(windows, target_os = "linux"))]
+  let result = {
+    let (reply, receiver) = mpsc::channel();
+    match engine::clear_browsing_data(&webview, kinds, separate.is_none(), since.max(0.0), origins, reply) {
+      Ok(()) => tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(CLEAR_TIMEOUT))
+        .await
+        .map_err(|error| error.to_string())
+        .and_then(|received| received.map_err(|_| crate::i18n::text("Очищення триває задовго", "Clearing is taking too long").to_string()))
+        .and_then(|cleared| cleared),
+      Err(error) => Err(error.to_string()),
+    }
+  };
+  // Дозволи сайтів у Linux зберігає сам браузер (gtk_permissions.rs), а не рушій.
+  #[cfg(target_os = "linux")]
+  if kinds.settings {
+    crate::gtk_permissions::forget_all(&app, window.label());
+  }
+  // Рушій macOS чистить профіль лише цілком, без вибору часу й видів, — і лише окремий профіль сайтів: у спільному з
+  // інтерфейсом лежать дані самого браузера (закладки, історія).
+  #[cfg(not(any(windows, target_os = "linux")))]
+  let result = {
+    let _ = (since, origins);
+    if !(kinds.site_data || kinds.cache) {
+      Ok(())
+    } else if separate.is_some() {
+      webview.clear_all_browsing_data().map_err(|error| error.to_string())
+    } else {
+      Err(crate::i18n::text("На цій системі цього ще немає", "Not available on this system yet").to_string())
+    }
   };
   let _ = webview.close();
   result

@@ -108,6 +108,7 @@ import { SitePermissions } from './site-permissions/site-permissions';
 import { TrackingPanel } from './tracking-panel/tracking-panel';
 import { ToolAction, ToolsMenu } from './tools-menu/tools-menu';
 import { translate, TranslatePipe } from '../shared/i18n/i18n';
+import { IS_LINUX } from '../shared/platform/platform';
 
 /** Стан вкладки із сайтом. */
 interface Site {
@@ -332,10 +333,10 @@ export class Browser {
     active: this.selectedSuggestion() >= 0 ? suggestionId(this.selectedSuggestion()) : null,
   }));
 
-  /** На сторінці відео YouTube — кнопка «Картинка в картинці» в адресному рядку. */
+  /** На сторінці відео YouTube — кнопка «Картинка в картинці» в адресному рядку (WebKitGTK у Linux її не вміє). */
   protected readonly canPictureInPicture = computed(() => {
     const site = this.activeTab().site;
-    return !!site && isYouTubeVideo(site.url);
+    return !IS_LINUX && !!site && isYouTubeVideo(site.url);
   });
 
   /** Закладка поточної сторінки — тоді зірочка в адресному рядку зафарбована. */
@@ -553,6 +554,18 @@ export class Browser {
       // Одразу, а не наступним кадром: що раніше панель потрапить у регіон, то раніше її видно над сайтом.
       void this.updateInputRegion();
     };
+    // Панель з'являється, трохи зменшена й вище за своє місце (transform), тож одразу після відкриття її виміряно меншою.
+    // Розміру вона потім не змінює, і ResizeObserver мовчить — тож ще раз, коли з'явилася: у Linux поза регіоном
+    // інтерфейс не малюється (server/src/gtk_layers.rs), і низ панелі лишався б обрізаним.
+    const onSettled = (event: TransitionEvent) => {
+      if (
+        event.propertyName === 'transform' &&
+        event.target instanceof Element &&
+        event.target.matches(':popover-open, dialog[open]')
+      ) {
+        this.scheduleInputRegion();
+      }
+    };
     // Клік по сайту — фокус іде в його webview, і HTML інтерфейсу кліку не бачить. Тоді відкриті меню закриваються
     // самі, як і від кліку повз них в інтерфейсі.
     const onBlur = () => {
@@ -566,10 +579,12 @@ export class Browser {
     };
     document.addEventListener('beforetoggle', onBeforeToggle, true);
     document.addEventListener('toggle', onToggle, true);
+    document.addEventListener('transitionend', onSettled, true);
     window.addEventListener('blur', onBlur);
     destroyRef.onDestroy(() => {
       document.removeEventListener('beforetoggle', onBeforeToggle, true);
       document.removeEventListener('toggle', onToggle, true);
+      document.removeEventListener('transitionend', onSettled, true);
       window.removeEventListener('blur', onBlur);
       this.layerObserver?.disconnect();
       cancelAnimationFrame(this.regionFrame);
@@ -2009,7 +2024,7 @@ export class Browser {
       );
     }
     this.siteUnder = shown ? label : null;
-    document.documentElement.classList.toggle('site-visible', shown);
+    document.documentElement.classList.toggle('site-visible', shown && !SHAPED_LAYERS);
     await this.updateInputRegion();
     if (previous && previous !== label) {
       await this.pageViews.setVisible(previous, false).catch(() => undefined);
@@ -2242,6 +2257,11 @@ const POPOVER_MOTION_MS = 180;
 const LAYER_FADE_SLACK_MS = 40;
 /** Запас довкола панелі в регіоні інтерфейсу, px: її тінь (--browser-popover-shadow) і зсув під час появи. */
 const LAYER_MARGIN = 56;
+/**
+ * Linux (WebKitGTK): GTK3 не змішує вікна, тож інтерфейс над сайтом не прозорий, а обрізаний формою
+ * (server/src/gtk_layers.rs) — і панель над сайтом лише сама, без тіні навколо: там видно сайт.
+ */
+const SHAPED_LAYERS = IS_LINUX;
 
 /**
  * Місце панелі чи вікна в регіоні інтерфейсу — разом із тінню. Панель може задати свої відступи (data-layer-margins:
@@ -2249,7 +2269,7 @@ const LAYER_MARGIN = 56;
  */
 function layerArea(layer: Element): PageBounds {
   const rect = layer.getBoundingClientRect();
-  const margins = layer instanceof HTMLElement ? layerMargins(layer) : null;
+  const margins = SHAPED_LAYERS ? [0, 0, 0, 0] : layer instanceof HTMLElement ? layerMargins(layer) : null;
   const [top, right, bottom, left] = margins ?? [LAYER_MARGIN, LAYER_MARGIN, LAYER_MARGIN, LAYER_MARGIN];
   return {
     x: Math.floor(rect.left - left),
