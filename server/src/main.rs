@@ -147,10 +147,10 @@ fn main() {
 			Ok(())
 		})
 		.on_page_load(pages::close_orphans)
-		.on_window_event(|window, event| {
-			if let tauri::WindowEvent::Focused(true) = event {
-				launch::focused(window);
-			}
+		.on_window_event(|window, event| match event {
+			tauri::WindowEvent::Focused(true) => launch::focused(window),
+			tauri::WindowEvent::Destroyed => pages::forget_window(window),
+			_ => {}
 		})
 		.invoke_handler(ipc::handler())
 		.build(context)

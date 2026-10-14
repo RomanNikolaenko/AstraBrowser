@@ -4,7 +4,8 @@
 -- Кожен рядок — один запис користувача: закладки, нотатки, історія, налаштування, паролі сайтів (вони приходять уже
 -- зашифрованими на комп'ютері ключем із пароля облікового запису — сервер їх прочитати не може).
 -- Видалені записи лишаються з deleted = true (без даних — лише id і час), щоб видалення дійшло до інших комп'ютерів,
--- а через 30 днів сервер прибирає їх сам (sync_push): за цей час видалення встигає дійти до всіх.
+-- а через 30 днів сервер прибирає їх сам — щодня за розкладом (pg_cron, у кінці файла) і під час синхронізації
+-- (sync_push): за цей час видалення встигає дійти до всіх.
 
 create sequence if not exists public.sync_revision;
 
@@ -95,3 +96,19 @@ $$;
 
 revoke execute on function public.sync_push(jsonb) from public, anon;
 grant execute on function public.sync_push(jsonb) to authenticated;
+
+-- Прибирання за розкладом: позначки «видалено», старші за 30 днів, — щодня в усіх користувачів, і в тих, хто більше не
+-- запускає браузер (sync_push прибирає лише свої й лише під час синхронізації). Розклад — розширення pg_cron (у Supabase
+-- його можна ввімкнути й у Integrations → Cron). Задача з тією самою назвою замінюється, тож повторний запуск файла її
+-- не дублює. Час — UTC.
+create extension if not exists pg_cron with schema pg_catalog;
+
+select cron.schedule(
+  'sync-items-tombstones',
+  '17 3 * * *',
+  $$
+    delete from public.sync_items
+    where deleted
+      and updated_at < (extract(epoch from now()) * 1000)::bigint - 30::bigint * 24 * 60 * 60 * 1000
+  $$
+);

@@ -4,7 +4,8 @@
 //! Мережеві правила відсікають запити сторінки (у Windows — webview2::block_ads; на macOS і Linux — сам WebKit за
 //! тими самими правилами, перекладеними у формат блокувальників Safari, gtk_adblock.rs), а косметичні — ховають
 //! рекламні блоки й запускають скриптлети uBlock Origin (як проти реклами на YouTube) скриптом на початку документа
-//! (adblock-page.js). Скриптлети й підмінні ресурси (порожній скрипт, прозора картинка тощо) беруться з
+//! (adblock-page.js). На macOS і Linux рушієві мережеві правила не потрібні (їх виконує WebKit), тож він там лише
+//! косметичний і в кілька разів менший. Скриптлети й підмінні ресурси (порожній скрипт, прозора картинка тощо) беруться з
 //! вихідного коду uBlock Origin. Списки оновлюються у фоні раз на 4 дні, а зібраний рушій кешується
 //! в теці даних застосунку, щоб запуск не розбирав десятки тисяч правил заново.
 //!
@@ -61,7 +62,11 @@ const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
 /// Кеш рушія й ресурсів. Номер у назві змінюється разом зі списками чи способом збирання рушія —
 /// тоді кеш попередньої версії не підходить і прибирається.
+#[cfg(windows)]
 const ENGINE_FILE: &str = "adblock-engine-v2.dat";
+/// На macOS і Linux рушій лише косметичний (cosmetic_rules) — і кеш свій.
+#[cfg(not(windows))]
+const ENGINE_FILE: &str = "adblock-engine-cosmetic-v1.dat";
 const RESOURCES_FILE: &str = "adblock-resources-v2.json";
 const SETTINGS_FILE: &str = "adblock.json";
 /// Мережеві правила у форматі блокувальників Safari — для WebKit (macOS, Linux).
@@ -311,6 +316,7 @@ pub fn start(app: &AppHandle) {
   thread::spawn(move || {
     let adblock = app.state::<AdBlock>();
     adblock.load_cache();
+    release_memory();
     // Правил для WebKit ще немає (рушій з версії без них) — списки оновлюються одразу.
     #[cfg(not(windows))]
     if !dir.join(CONTENT_FILE).exists() {
@@ -373,6 +379,17 @@ fn refresh(app: &AppHandle) {
   }
   adblock.updating.store(false, Ordering::SeqCst);
   broadcast(app);
+  // Списки, правила й попередній рушій — десятки мегабайтів, і вже не потрібні.
+  release_memory();
+}
+
+/// Звільнене після великої роботи — системі. glibc (Linux) інакше тримає звільнену пам'ять за процесом, і браузер після
+/// оновлення списків займав би на десятки мегабайтів більше.
+pub(crate) fn release_memory() {
+  #[cfg(all(target_os = "linux", target_env = "gnu"))]
+  unsafe {
+    libc::malloc_trim(0);
+  }
 }
 
 /// Свіжі списки: рушій, ресурси (скриптлети, підмінні файли) і, для WebKit (macOS, Linux), мережеві правила у
@@ -385,14 +402,22 @@ fn build(dir: &Path) -> Result<(Engine, Vec<Resource>, Vec<u8>), String> {
     let permissions = if list.trusted { TRUSTED } else { PermissionMask::default() };
     lists.push((text, ParseOptions { permissions, ..ParseOptions::default() }));
   }
-  #[cfg(not(windows))]
-  let content = content_rules(&lists)?;
-  #[cfg(windows)]
-  let content = Vec::new();
   let mut filters = FilterSet::new(false);
-  for (text, options) in lists {
-    filters.add_filter_list(text, options);
-  }
+  #[cfg(windows)]
+  let content = {
+    for (text, options) in lists {
+      filters.add_filter_list(text, options);
+    }
+    Vec::new()
+  };
+  // Рушієві — лише косметика, а мережеві правила виконає WebKit.
+  #[cfg(not(windows))]
+  let content = {
+    for (text, options) in &lists {
+      filters.add_filter_list(cosmetic_rules(text), *options);
+    }
+    content_rules(lists)?
+  };
   let mut engine = Engine::new_with_filter_set(filters);
 
   // Без свіжих скриптлетів рушій усе одно корисний — тоді беремо їх з попереднього оновлення.
@@ -408,16 +433,26 @@ fn build(dir: &Path) -> Result<(Engine, Vec<Resource>, Vec<u8>), String> {
 /// Косметичних серед них немає: рекламні блоки й так ховає скрипт сторінки (adblock-page.js), тут вони лише подвоїли б
 /// і без того великий список.
 #[cfg(not(windows))]
-pub(crate) fn content_rules(lists: &[(String, ParseOptions)]) -> Result<Vec<u8>, String> {
+pub(crate) fn content_rules(lists: impl IntoIterator<Item = (String, ParseOptions)>) -> Result<Vec<u8>, String> {
   use adblock::content_blocking::CbType;
   let mut filters = FilterSet::new(true);
   for (text, options) in lists {
-    filters.add_filter_list(text.clone(), *options);
+    filters.add_filter_list(text, options);
   }
   let (rules, _) = filters.into_content_blocking().map_err(|()| "content blocking: no debug filter set".to_string())?;
   let rules: Vec<_> = rules.into_iter().filter(|rule| rule.action.typ != CbType::CssDisplayNone).collect();
   log::info!("adblock: правил для WebKit — {}", rules.len());
   serde_json::to_vec(&rules).map_err(|error| error.to_string())
+}
+
+/// Рядки списку, потрібні рушієві там, де запити блокує сам WebKit (macOS, Linux): косметичні правила й скриптлети (усі
+/// з `#`, як і директиви `!#if`) і мережеві винятки, що вимикають косметику на сайті ($generichide, $elemhide…), — без
+/// них рушій ховав би блоки й там, де списки цього не дозволяють.
+#[cfg(not(windows))]
+fn cosmetic_rules(list: &str) -> String {
+  const HIDING: [&str; 6] = ["generichide", "ghide", "elemhide", "ehide", "specifichide", "shide"];
+  let lines: Vec<&str> = list.lines().filter(|line| line.contains('#') || HIDING.iter().any(|option| line.contains(option))).collect();
+  lines.join("\n")
 }
 
 fn agent() -> &'static ureq::Agent {
@@ -838,15 +873,99 @@ async function trustedSetCookie(name = '') {
 
     let adblock = AdBlock::default();
     adblock.set_engine(engine);
-    let ads = adblock.check("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "https://example.com/", "script", "GET");
-    assert!(matches!(ads, Verdict::Block | Verdict::Replace { .. }));
-    assert!(matches!(adblock.check("https://www.google-analytics.com/analytics.js", "https://example.com/", "script", "GET"), Verdict::Block | Verdict::Replace { .. }));
-    assert!(matches!(adblock.check("https://example.com/app.js", "https://example.com/", "script", "GET"), Verdict::Allow));
+    // Запити перевіряє лише рушій Windows: на macOS і Linux він косметичний.
+    #[cfg(windows)]
+    {
+      let ads = adblock.check("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "https://example.com/", "script", "GET");
+      assert!(matches!(ads, Verdict::Block | Verdict::Replace { .. }));
+      assert!(matches!(adblock.check("https://www.google-analytics.com/analytics.js", "https://example.com/", "script", "GET"), Verdict::Block | Verdict::Replace { .. }));
+      assert!(matches!(adblock.check("https://example.com/app.js", "https://example.com/", "script", "GET"), Verdict::Allow));
+    }
 
     let script = adblock.page_script("https://www.youtube.com/watch?v=dQw4w9WgXcQ").expect("youtube script");
     eprintln!("youtube script: {} bytes", script.len());
     assert!(script.contains("function jsonPrune"));
     let _ = fs::write(std::env::temp_dir().join("astra-youtube-script.js"), &script);
+  }
+
+  /// Що рушій ховає й запускає на сторінці `url` (множини — без порядку).
+  #[cfg(not(windows))]
+  fn cosmetics(engine: &Engine, url: &str) -> (HashSet<String>, HashSet<String>, HashSet<String>, String, bool) {
+    let found = engine.url_cosmetic_resources(url);
+    (found.hide_selectors, found.procedural_actions, found.exceptions, found.injected_script, found.generichide)
+  }
+
+  /// Косметичний рушій (macOS, Linux) ховає й запускає на сторінках те саме, що й повний, — разом із винятками
+  /// $generichide і $elemhide.
+  #[cfg(not(windows))]
+  #[test]
+  fn cosmetic_engine_hides_the_same() {
+    let list = [
+      "||ads.example^",
+      "||cdn.example/tracker.js$script,redirect=noop.js",
+      "##.ad-banner",
+      "example.org##.sponsored",
+      "example.org#@#.ad-banner",
+      "example.org##div:has-text(Sponsored):remove()",
+      "@@||quiet.example^$generichide",
+      "@@||plain.example^$elemhide",
+      "news.example##+js(set-constant, ads, false)",
+      "!#if false",
+      "hidden.example##.never",
+      "!#endif",
+    ]
+    .join("\n");
+    let engine = |text: String| {
+      let mut filters = FilterSet::new(false);
+      filters.add_filter_list(text, ParseOptions { permissions: TRUSTED, ..ParseOptions::default() });
+      let mut engine = Engine::new_with_filter_set(filters);
+      engine.use_resources(scriptlets(&[SOURCES.to_string(), JSONPATH.to_string()]));
+      engine
+    };
+    let cosmetic_list = cosmetic_rules(&list);
+    assert!(!cosmetic_list.contains("||ads.example^") && cosmetic_list.contains("$generichide"));
+    let (full, cosmetic) = (engine(list), engine(cosmetic_list));
+    for url in ["https://example.org/", "https://quiet.example/", "https://plain.example/", "https://news.example/", "https://hidden.example/"] {
+      assert_eq!(cosmetics(&full, url), cosmetics(&cosmetic, url), "{url}");
+    }
+  }
+
+  /// Те саме на справжніх списках, і наскільки менший косметичний рушій:
+  /// `cargo test cosmetic_engine_on_real_lists -- --ignored --nocapture`.
+  #[cfg(not(windows))]
+  #[test]
+  #[ignore]
+  fn cosmetic_engine_on_real_lists() {
+    let urls: Vec<String> = LISTS.iter().map(|list| list.url.to_string()).collect();
+    let texts: Vec<(String, ParseOptions)> = LISTS
+      .iter()
+      .zip(download_all(&urls))
+      .map(|(list, text)| {
+        let permissions = if list.trusted { TRUSTED } else { PermissionMask::default() };
+        (String::from_utf8(text.expect("list")).expect("utf-8"), ParseOptions { permissions, ..ParseOptions::default() })
+      })
+      .collect();
+    let engine = |only_cosmetic: bool| {
+      let mut filters = FilterSet::new(false);
+      for (text, options) in &texts {
+        filters.add_filter_list(if only_cosmetic { cosmetic_rules(text) } else { text.clone() }, *options);
+      }
+      Engine::new_with_filter_set(filters)
+    };
+    let (full, cosmetic) = (engine(false), engine(true));
+    eprintln!("рушій: повний {} байтів, косметичний {} байтів", full.serialize().len(), cosmetic.serialize().len());
+    for url in [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://www.google.com/search?q=astra",
+      "https://www.pravda.com.ua/",
+      "https://rozetka.com.ua/",
+      "https://www.facebook.com/",
+      "https://edition.cnn.com/",
+      "https://github.com/",
+      "https://example.com/",
+    ] {
+      assert!(cosmetics(&full, url) == cosmetics(&cosmetic, url), "{url}");
+    }
   }
 
   #[test]

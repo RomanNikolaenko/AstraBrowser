@@ -42,14 +42,20 @@
     return;
   }
 
-  // Аргумент — текст або /регулярний вираз/прапорці.
+  // Аргумент — текст або /регулярний вираз/прапорці. Правила застосовуються знову й знову, тож перевірка для кожного
+  // аргументу будується раз (їх стільки, скільки правил).
+  const matchers = new Map();
   const matcher = (arg, partial) => {
-    const regex = /^\/(.+)\/([dgimsuy]*)$/.exec(arg);
-    if (regex) {
-      const pattern = new RegExp(regex[1], regex[2]);
-      return (text) => pattern.test(text);
+    const id = `${partial ? '~' : '='}${arg}`;
+    let test = matchers.get(id);
+    if (!test) {
+      const regex = /^\/(.+)\/([dgimsuy]*)$/.exec(arg);
+      // Без g і y: з ними test() пам'ятав би, де зупинився, а вираз тепер спільний для всіх перевірок.
+      const pattern = regex && new RegExp(regex[1], regex[2].replace(/[gy]/g, ''));
+      test = pattern ? (text) => pattern.test(text) : partial ? (text) => text.includes(arg) : (text) => text === arg;
+      matchers.set(id, test);
     }
-    return partial ? (text) => text.includes(arg) : (text) => text === arg;
+    return test;
   };
   const root = (nodes) => nodes ?? [document.documentElement];
   const css =

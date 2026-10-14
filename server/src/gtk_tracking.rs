@@ -22,8 +22,8 @@ use webkit2gtk::{
 };
 use webkit2gtk_sys::{
   webkit_user_content_filter_store_load, webkit_user_content_filter_store_load_finish, webkit_user_content_filter_store_save,
-  webkit_user_content_filter_store_save_finish, webkit_user_content_manager_add_filter, webkit_user_content_manager_remove_filter,
-  webkit_user_content_manager_remove_script, WebKitUserContentFilter, WebKitUserContentManager,
+  webkit_user_content_filter_store_save_finish, webkit_user_content_filter_unref, webkit_user_content_manager_add_filter,
+  webkit_user_content_manager_remove_filter, webkit_user_content_manager_remove_script, WebKitUserContentFilter, WebKitUserContentManager,
 };
 
 use crate::tracking::{page_script, Category, Level, Tracking};
@@ -49,12 +49,12 @@ fn identifier(category: Category) -> CString {
 }
 
 /// Фільтр категорії готовий: замість попереднього — на всі сторінки, де він стоїть. Попередній кожна сторінка
-/// відпускає сама, а наше посилання на нього лишається (раз на кілька днів, коли оновлюються списки).
+/// відпускає сама, а наше посилання на нього — слідом за ними (раз на кілька днів, коли оновлюються списки).
 fn ready(category: Category, filter: *mut WebKitUserContentFilter) {
   if filter.is_null() {
     return;
   }
-  FILTERS.with(|filters| filters.borrow_mut().insert(category, filter));
+  let previous = FILTERS.with(|filters| filters.borrow_mut().insert(category, filter)).map_or(0, |previous| previous as usize);
   let Some(app) = APP.with(|app| app.borrow().clone()) else {
     return;
   };
@@ -62,6 +62,10 @@ fn ready(category: Category, filter: *mut WebKitUserContentFilter) {
     let ui = webview.window().label().to_string();
     let label = webview.label().to_string();
     let _ = webview.with_webview(move |platform| update(&platform.inner(), &label, &ui));
+  }
+  // Виклики головного потоку йдуть по черзі — цей уже після сторінок.
+  if previous != 0 {
+    let _ = app.run_on_main_thread(move || unsafe { webkit_user_content_filter_unref(previous as *mut WebKitUserContentFilter) });
   }
 }
 

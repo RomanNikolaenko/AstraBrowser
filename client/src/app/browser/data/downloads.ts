@@ -1,5 +1,12 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
+import { SettingsStore } from '../../shared/settings/settings';
 import { accountSignal } from '../../shared/storage/stored-signal';
+
+/**
+ * Найбільше записів у списку завантажень — навіть коли строк «Завжди» (самі файли лишаються на диску). Список лежить у
+ * localStorage одним записом: без межі він ріс би з кожним завантаженням, а кожне нове перезаписувало б його весь.
+ */
+export const DOWNLOADS_LIMIT = 1000;
 
 /** Чим скінчилося завантаження. */
 export type DownloadStatus = 'completed' | 'failed' | 'canceled';
@@ -53,6 +60,7 @@ export interface ActiveDownload {
 @Injectable({ providedIn: 'root' })
 export class DownloadsStore {
   private readonly items = accountSignal<readonly DownloadEntry[]>('astra.downloads', []);
+  private readonly settings = inject(SettingsStore);
   private readonly running = signal<readonly ActiveDownload[]>([]);
   private readonly asking = signal<readonly DownloadPromptRequest[]>([]);
   /** Завантаження цього запуску, що вже скінчилися: запізнілі звістки про них нічого не змінюють. */
@@ -71,6 +79,14 @@ export class DownloadsStore {
   readonly started = this.startedCount.asReadonly();
   /** Завантаження, що чекають на відповідь «куди зберегти», — по черзі. */
   readonly prompts = this.asking.asReadonly();
+
+  constructor() {
+    // Давніші за вибраний у налаштуваннях строк записи прибираються — при запуску й щойно строк змінили.
+    effect(() => {
+      const days = this.settings.downloadsDays();
+      untracked(() => this.trim(days));
+    });
+  }
 
   ask(request: DownloadPromptRequest): void {
     this.asking.update((prompts) => [...prompts.filter((prompt) => prompt.id !== request.id), request]);
@@ -109,6 +125,7 @@ export class DownloadsStore {
 
   add(download: Omit<DownloadEntry, 'id'>): void {
     this.items.update((items) => [...items, { ...download, id: crypto.randomUUID() }]);
+    this.trim(this.settings.downloadsDays());
   }
 
   remove(id: string): void {
@@ -117,6 +134,19 @@ export class DownloadsStore {
 
   clear(): void {
     this.items.set([]);
+  }
+
+  /** Прибирає записи, старші за `days` днів (0 — без строку), і найдавніші понад DOWNLOADS_LIMIT. */
+  private trim(days: number, now = Date.now()): void {
+    const items = this.items();
+    const oldest = days > 0 ? now - days * 86_400_000 : -Infinity;
+    let kept = items.some((item) => item.finishedAt < oldest) ? items.filter((item) => item.finishedAt >= oldest) : items;
+    if (kept.length > DOWNLOADS_LIMIT) {
+      kept = kept.slice(-DOWNLOADS_LIMIT);
+    }
+    if (kept !== items) {
+      this.items.set(kept);
+    }
   }
 
   /** Записи завантажень, що закінчилися від `since` (мс); самі файли лишаються на диску. */

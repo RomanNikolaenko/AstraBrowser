@@ -554,10 +554,15 @@ fn restore_page(core: &ICoreWebView2, (x, y): (f64, f64)) {
 }
 
 fn decode_screenshot(result: windows_core::Result<String>) -> Result<Vec<u8>, String> {
+  /// Відповідь Page.captureScreenshot — лише картинка (base64), без дерева JSON: знімок буває на десятки мегабайтів.
+  #[derive(serde::Deserialize)]
+  struct Shot<'a> {
+    #[serde(borrow)]
+    data: std::borrow::Cow<'a, str>,
+  }
   let json = result.map_err(|error| error.to_string())?;
-  let response = serde_json::from_str::<serde_json::Value>(&json).map_err(|error| error.to_string())?;
-  let data = response.get("data").and_then(serde_json::Value::as_str).ok_or(crate::i18n::text("Порожній знімок", "Empty screenshot"))?;
-  base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data).map_err(|error| error.to_string())
+  let shot: Shot = serde_json::from_str(&json).map_err(|_| crate::i18n::text("Порожній знімок", "Empty screenshot").to_string())?;
+  base64::Engine::decode(&base64::engine::general_purpose::STANDARD, shot.data.as_bytes()).map_err(|error| error.to_string())
 }
 
 fn devtools(core: &ICoreWebView2, method: &str, params: &str, then: impl FnOnce(windows_core::Result<String>) + 'static) -> windows_core::Result<()> {

@@ -40,6 +40,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Скільки тримати адреси в кеші — у межах того, що каже постачальник.
 const MIN_TTL: Duration = Duration::from_secs(30);
 const MAX_TTL: Duration = Duration::from_secs(5 * 60);
+/// Від скількох записів кеш позбувається прострочених: інакше він ріс би з кожним новим сайтом.
+const CACHE_PRUNE_AT: usize = 512;
 
 static RESOLVER: RwLock<Option<Resolver>> = RwLock::new(None);
 static PROXY: OnceLock<Option<Proxy>> = OnceLock::new();
@@ -202,6 +204,10 @@ fn resolve(host: &str) -> io::Result<Vec<IpAddr>> {
         return Err(io::Error::new(io::ErrorKind::NotFound, "no such host"));
       }
       if let Ok(mut cache) = CACHE.lock() {
+        if cache.len() >= CACHE_PRUNE_AT {
+          let now = Instant::now();
+          cache.retain(|_, (_, until)| *until > now);
+        }
         cache.insert(host, (addresses.clone(), Instant::now() + ttl.clamp(MIN_TTL, MAX_TTL)));
       }
       Ok(addresses)

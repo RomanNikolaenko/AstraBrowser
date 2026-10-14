@@ -14,7 +14,8 @@
 //! Global Privacy Control («не продавати й не поширювати мої дані») надсилає заголовком Sec-GPC і показує сайтам
 //! як navigator.globalPrivacyControl.
 //!
-//! У Linux запитів WebKit не показує, тож ті самі списки йдуть у фільтри вмісту WebKit (gtk_tracking.rs).
+//! У Linux запитів WebKit не показує, тож ті самі списки йдуть у фільтри вмісту WebKit (gtk_tracking.rs), а рушіїв там
+//! немає зовсім: вони лише займали б пам'ять.
 
 use std::{
   collections::HashMap,
@@ -28,8 +29,10 @@ use std::{
   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(any(windows, test))]
+use adblock::lists::FilterSet;
 use adblock::{
-  lists::{FilterSet, ParseOptions, RuleTypes},
+  lists::{ParseOptions, RuleTypes},
   request::Request,
   Engine,
 };
@@ -144,9 +147,8 @@ pub struct Tracking {
 }
 
 /// id скрипта GPC кожної сторінки (label → id), щоб замінити його, коли зміниться налаштування.
-/// Лише у Windows: у Linux скрипт GPC наступним документам ставить gtk_tracking.rs.
+/// Заповнюється лише у Windows: у Linux скрипт GPC наступним документам ставить gtk_tracking.rs.
 #[derive(Default)]
-#[cfg_attr(not(windows), allow(dead_code))]
 pub struct PageScripts(pub Mutex<HashMap<String, String>>);
 
 impl Tracking {
@@ -157,6 +159,13 @@ impl Tracking {
 
   fn set_rules(&self, window: &str, rules: Rules) -> Option<Arc<Rules>> {
     self.rules.write().ok()?.insert(window.to_string(), Arc::new(rules))
+  }
+
+  /// Вікно `window` закрили — його правил більше не треба.
+  pub fn forget(&self, window: &str) {
+    if let Ok(mut rules) = self.rules.write() {
+      rules.remove(window);
+    }
   }
 
   /// Категорія елемента стеження, якщо запит `url` типу `kind` зі сторінки `source` треба заблокувати (запити WebView2;
@@ -170,28 +179,39 @@ impl Tracking {
     })
   }
 
-  fn engine_file(&self, category: Category) -> Option<PathBuf> {
-    Some(self.dir.get()?.join(format!("tracking-{}-{CACHE_VERSION}.dat", category.id())))
+  fn engine_file(dir: &Path, category: Category) -> PathBuf {
+    dir.join(format!("tracking-{}-{CACHE_VERSION}.dat", category.id()))
   }
 
-  /// Рушії з кешу попереднього запуску.
+  /// Рушії з кешу попереднього запуску. У Linux — лише коли востаннє оновлено (за файлами правил для WebKit), а рушії
+  /// попередніх версій прибираються з диска.
   fn load_cache(&self) {
+    let Some(dir) = self.dir.get() else {
+      return;
+    };
     let mut oldest: Option<u64> = None;
     for category in Category::ALL {
-      let Some(path) = self.engine_file(category) else {
-        return;
-      };
-      let Ok(bytes) = fs::read(&path) else {
-        continue;
-      };
-      let mut engine = Engine::default();
-      if engine.deserialize(&bytes).is_ok() {
-        if let Some(time) = modified_ms(&path) {
-          oldest = Some(oldest.map_or(time, |oldest| oldest.min(time)));
+      #[cfg(windows)]
+      let (path, loaded) = {
+        let path = Self::engine_file(dir, category);
+        let mut engine = Engine::default();
+        let loaded = fs::read(&path).is_ok_and(|bytes| engine.deserialize(&bytes).is_ok());
+        if loaded {
+          if let Ok(mut engines) = self.engines.write() {
+            engines.insert(category, Arc::new(engine));
+          }
         }
-        if let Ok(mut engines) = self.engines.write() {
-          engines.insert(category, Arc::new(engine));
-        }
+        (path, loaded)
+      };
+      #[cfg(not(windows))]
+      let (path, loaded) = {
+        let _ = fs::remove_file(Self::engine_file(dir, category));
+        let path = Self::content_file(dir, category);
+        let loaded = path.exists();
+        (path, loaded)
+      };
+      if let Some(time) = modified_ms(&path).filter(|_| loaded) {
+        oldest = Some(oldest.map_or(time, |oldest| oldest.min(time)));
       }
     }
     if let Ok(mut updated_at) = self.updated_at.lock() {
@@ -200,11 +220,11 @@ impl Tracking {
   }
 
   fn is_stale(&self) -> bool {
+    #[cfg(windows)]
     let complete = self.engines.read().is_ok_and(|engines| engines.len() == Category::ALL.len());
-    // Без правил для WebKit (уперше після оновлення браузера) фільтрів не буде, хоч рушії й свіжі.
+    // Без правил для WebKit фільтрів не буде.
     #[cfg(not(windows))]
-    let complete = complete
-      && self.dir.get().is_some_and(|dir| Category::ALL.iter().all(|category| Self::content_file(dir, *category).exists()));
+    let complete = self.dir.get().is_some_and(|dir| Category::ALL.iter().all(|category| Self::content_file(dir, *category).exists()));
     let updated_at = self.updated_at.lock().ok().and_then(|time| *time);
     !complete || updated_at.is_none_or(|time| now_ms().saturating_sub(time) > MAX_AGE.as_millis() as u64)
   }
@@ -215,48 +235,56 @@ impl Tracking {
     dir.join(format!("tracking-content-{}-{CACHE_VERSION}.json", category.id()))
   }
 
-  /// Завантажує свіжі списки й збирає з них рушії; старі працюють, доки нові не готові. true — оновлено.
+  /// Завантажує свіжі списки й збирає з них рушії (у Linux — правила для фільтрів WebKit); старі працюють, доки нові не
+  /// готові. true — оновлено.
   fn refresh(&self) -> bool {
     if self.updating.swap(true, Ordering::SeqCst) {
       return false;
     }
-    let texts = download_lists();
-    // WebKit блокує не рушіями, а фільтрами вмісту — правила для них із тих самих списків.
-    #[cfg(not(windows))]
-    if let (Ok(texts), Some(dir)) = (&texts, self.dir.get()) {
-      for (category, lists) in texts {
-        let options = ParseOptions { rule_types: RuleTypes::NetworkOnly, ..ParseOptions::default() };
-        let lists: Vec<_> = lists.iter().map(|text| (text.clone(), options)).collect();
-        match crate::adblock::content_rules(&lists) {
-          Ok(content) => {
-            let _ = fs::create_dir_all(dir).and_then(|()| fs::write(Self::content_file(dir, *category), content));
-          }
-          Err(message) => log::warn!("tracking: правила для WebKit не зібрано: {message}"),
-        }
-      }
-    }
-    let updated = texts.as_ref().is_ok();
-    match texts.map(engines) {
-      Ok(built) => {
-        for (category, engine) in built {
-          if let Some(path) = self.engine_file(category) {
-            if let Some(dir) = path.parent() {
-              let _ = fs::create_dir_all(dir);
-            }
-            let _ = fs::write(&path, engine.serialize());
-          }
-          if let Ok(mut engines) = self.engines.write() {
-            engines.insert(category, Arc::new(engine));
-          }
-        }
+    let updated = match (download_lists(), self.dir.get()) {
+      (Ok(texts), Some(dir)) => {
+        self.build(dir, texts);
         if let Ok(mut updated_at) = self.updated_at.lock() {
           *updated_at = Some(now_ms());
         }
+        true
       }
-      Err(message) => log::warn!("tracking: не вдалося оновити списки: {message}"),
-    }
+      (Ok(_), None) => false,
+      (Err(message), _) => {
+        log::warn!("tracking: не вдалося оновити списки: {message}");
+        false
+      }
+    };
     self.updating.store(false, Ordering::SeqCst);
     updated
+  }
+
+  /// Рушії категорій — у кеш і на заміну попереднім.
+  #[cfg(windows)]
+  fn build(&self, dir: &Path, texts: HashMap<Category, Vec<String>>) {
+    let _ = fs::create_dir_all(dir);
+    for (category, engine) in engines(texts) {
+      let _ = fs::write(Self::engine_file(dir, category), engine.serialize());
+      if let Ok(mut engines) = self.engines.write() {
+        engines.insert(category, Arc::new(engine));
+      }
+    }
+  }
+
+  /// WebKit блокує не рушіями, а фільтрами вмісту — правила для них із тих самих списків (gtk_tracking.rs).
+  #[cfg(not(windows))]
+  fn build(&self, dir: &Path, texts: HashMap<Category, Vec<String>>) {
+    let options = ParseOptions { rule_types: RuleTypes::NetworkOnly, ..ParseOptions::default() };
+    for (category, lists) in texts {
+      match crate::adblock::content_rules(lists.into_iter().map(|text| (text, options))) {
+        Ok(content) => {
+          let _ = fs::create_dir_all(dir).and_then(|()| fs::write(Self::content_file(dir, category), content));
+        }
+        Err(message) => log::warn!("tracking: правила для WebKit не зібрано: {message}"),
+      }
+    }
+    // Списки й правила — десятки мегабайтів, і вже не потрібні.
+    crate::adblock::release_memory();
   }
 }
 
@@ -271,6 +299,7 @@ fn download_lists() -> Result<HashMap<Category, Vec<String>>, String> {
   Ok(texts)
 }
 
+#[cfg(windows)]
 fn engines(texts: HashMap<Category, Vec<String>>) -> Vec<(Category, Engine)> {
   // Лише мережеві правила: ховати кнопки на сторінці — справа блокувальника реклами.
   let options = ParseOptions { rule_types: RuleTypes::NetworkOnly, ..ParseOptions::default() };

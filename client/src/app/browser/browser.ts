@@ -960,6 +960,8 @@ export class Browser {
       this.closedTabs.update((list) => [...list, { page: closed.page, url: site?.url, index }].slice(-CLOSED_TABS_LIMIT));
     }
 
+    // id вкладок не повторюються — лічильник її міток більше не знадобиться.
+    this.pagesCreated.delete(id);
     const remaining = tabs.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
       const tab = this.createNewTab();

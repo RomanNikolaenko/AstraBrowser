@@ -57,10 +57,11 @@ export function removeAccountData(id: string): void {
 /** Сигнали цього вікна за ключами — щоб синхронізація оновлювала їх, а не лише localStorage. */
 const signals = new Map<string, WritableSignal<unknown>>();
 /**
- * Що лежить у localStorage під ключем, наскільки відомо цьому вікну (востаннє прочитане чи записане). Із ним і
- * порівнюється нове значення — а не з перечитаним зі сховища: історія чи нотатки можуть важити мегабайти.
+ * Значення, що лежить у localStorage під ключем, наскільки відомо цьому вікну (востаннє прочитане чи записане): його
+ * вдруге не записуємо. Порівнюється сам об'єкт — той, що й так у сигналі, — а не рядок JSON: історія чи нотатки можуть
+ * важити мегабайти, і ні перечитувати їх зі сховища, ні тримати ще й копію рядком кожне вікно не мусить.
  */
-const savedValues = new Map<string, string | null>();
+const savedValues = new Map<string, unknown>();
 /** Хто стежить за змінами збережених значень (своїми й з інших вікон). */
 const listeners = new Set<(key: string) => void>();
 
@@ -74,10 +75,9 @@ export function storedSignalFor<T>(key: string): WritableSignal<T> | undefined {
  * сповіщення слухачів: так пише синхронізація, якій не треба бачити свої ж записи як зміни.
  */
 export function writeStored(key: string, value: unknown): void {
-  const raw = JSON.stringify(value);
   try {
-    localStorage.setItem(key, raw);
-    savedValues.set(key, raw);
+    localStorage.setItem(key, JSON.stringify(value));
+    savedValues.set(key, value);
   } catch {
     // Сховище переповнене — лишається в пам'яті цього вікна.
   }
@@ -96,11 +96,17 @@ export function onStoredChange(listener: (key: string) => void): () => void {
  * Приватне вікно (InPrivate) має власне localStorage, яке зникає разом із вікном.
  */
 export function storedSignal<T>(key: string, fallback: T): WritableSignal<T> {
+  // Нічого не збережено чи збережене не прочитати — у сховище піде `fallback`.
   const read = (): T => {
+    savedValues.delete(key);
     try {
       const raw = localStorage.getItem(key);
-      savedValues.set(key, raw);
-      return raw === null ? fallback : (JSON.parse(raw) as T);
+      if (raw === null) {
+        return fallback;
+      }
+      const value = JSON.parse(raw) as T;
+      savedValues.set(key, value);
+      return value;
     } catch {
       return fallback;
     }
@@ -110,12 +116,12 @@ export function storedSignal<T>(key: string, fallback: T): WritableSignal<T> {
   signals.set(key, state as WritableSignal<unknown>);
 
   effect(() => {
-    const value = JSON.stringify(state());
-    if (savedValues.get(key) === value) {
+    const value = state();
+    if (savedValues.has(key) && savedValues.get(key) === value) {
       return;
     }
     try {
-      localStorage.setItem(key, value);
+      localStorage.setItem(key, JSON.stringify(value));
       savedValues.set(key, value);
     } catch {
       // Сховище недоступне чи переповнене: дані лишаються лише в пам'яті цього вікна.
@@ -140,6 +146,7 @@ export function storedSignal<T>(key: string, fallback: T): WritableSignal<T> {
     window.removeEventListener('storage', onStorage);
     if (signals.get(key) === state) {
       signals.delete(key);
+      savedValues.delete(key);
     }
   });
 

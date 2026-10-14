@@ -195,6 +195,24 @@
           [checked]="downloads.ask"
           (checkedChange)="setAsk($event)" />
       </div>
+      <div class="settings__row">
+        <span class="settings__text">
+          <span class="page__name" id="settings-downloads-days-label">{{ 'Зберігати список завантажень' | t }}</span>
+          <span class="page__meta" id="settings-downloads-days-hint">{{
+            'Давніші записи прибираються зі списку самі, а файли лишаються на диску. Щонайбільше — {0} останніх записів'
+              | t: [downloadsLimit()]
+          }}</span>
+        </span>
+        <app-select
+          class="settings__select"
+          selectId="settings-downloads-days"
+          ariaLabelledby="settings-downloads-days-label"
+          ariaDescribedby="settings-downloads-days-hint"
+          selectName="downloads-days"
+          [options]="retention"
+          [value]="'' + settings.downloadsDays()"
+          (valueChange)="setDownloadsDays($event)" />
+      </div>
     </div>
   }
 

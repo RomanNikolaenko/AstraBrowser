@@ -17,6 +17,7 @@ import { ClearDataDialog } from '../../clear-data/clear-data-dialog';
 import { DefaultBrowserStore } from '../../data/default-browser';
 import { DNS_MODES, DNS_PROVIDERS, DnsMode, DnsProvider, DnsSettings, DnsStore } from '../../data/dns';
 import { DownloadSettingsStore } from '../../data/download-settings';
+import { DOWNLOADS_LIMIT } from '../../data/downloads';
 import { HISTORY_LIMIT, HistoryStore } from '../../data/history';
 import { TrackingStore } from '../../data/tracking';
 import {
@@ -141,6 +142,15 @@ export class SettingsPage {
     const days = Number(value);
     if (value !== undefined && Number.isFinite(days)) {
       this.settings.historyDays.set(days);
+    }
+  }
+
+  protected readonly downloadsLimit = () => formatNumber(DOWNLOADS_LIMIT);
+
+  protected setDownloadsDays(value: string | undefined): void {
+    const days = Number(value);
+    if (value !== undefined && Number.isFinite(days)) {
+      this.settings.downloadsDays.set(days);
     }
   }
 

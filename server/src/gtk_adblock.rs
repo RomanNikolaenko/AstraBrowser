@@ -19,8 +19,8 @@ use webkit2gtk::{LoadEvent, UserContentInjectedFrames, UserContentManagerExt, Us
 use webkit2gtk_sys::{
   webkit_user_content_filter_store_load, webkit_user_content_filter_store_load_finish, webkit_user_content_filter_store_new,
   webkit_user_content_filter_store_save, webkit_user_content_filter_store_save_finish,
-  webkit_user_content_manager_add_filter, webkit_user_content_manager_remove_filter, webkit_user_content_manager_remove_script,
-  WebKitUserContentFilter, WebKitUserContentFilterStore,
+  webkit_user_content_filter_unref, webkit_user_content_manager_add_filter, webkit_user_content_manager_remove_filter,
+  webkit_user_content_manager_remove_script, WebKitUserContentFilter, WebKitUserContentFilterStore,
 };
 
 use crate::adblock::{AdBlock, CONTENT_FILE};
@@ -53,9 +53,9 @@ pub(crate) fn store(dir: &std::path::Path) -> *mut WebKitUserContentFilterStore 
   })
 }
 
-/// Фільтр готовий: замість попереднього — в усі сторінки, де блокувальник діє. Попередній фільтр сторінки
-/// відпускають самі (раз на кілька днів, коли оновлюються списки), а наше посилання на нього тут лишається: сторінки
-/// оновлюються вже після цього, у своїх викликах головного потоку.
+/// Фільтр готовий: замість попереднього — в усі сторінки, де блокувальник діє. Попередній фільтр сторінки відпускають
+/// самі, а наше посилання на нього — слідом за ними (раз на кілька днів, коли оновлюються списки): скомпільований фільтр
+/// важить мегабайти.
 fn ready(filter: *mut WebKitUserContentFilter) {
   if filter.is_null() {
     return;
@@ -79,6 +79,10 @@ fn ready(filter: *mut WebKitUserContentFilter) {
       });
       update(&view, &label);
     });
+  }
+  // Виклики головного потоку йдуть по черзі — цей уже після сторінок.
+  if previous != 0 {
+    let _ = app.run_on_main_thread(move || unsafe { webkit_user_content_filter_unref(previous as *mut WebKitUserContentFilter) });
   }
   log::info!("adblock: фільтр WebKit готовий");
 }
@@ -195,6 +199,14 @@ pub fn attach(page: &Webview) -> tauri::Result<()> {
   page.with_webview(move |platform| {
     let view: webkit2gtk::WebView = platform.inner();
     update(&view, &label);
+    // Сторінку закрили — її скрипт блокувальника (буває й на сотні кілобайтів) і позначка фільтра тут більше не потрібні.
+    gtk::prelude::WidgetExt::connect_destroy(&view, {
+      let label = label.clone();
+      move |_| {
+        FILTERED.with(|filtered| filtered.borrow_mut().remove(&label));
+        SCRIPTS.with(|scripts| scripts.borrow_mut().remove(&label));
+      }
+    });
     view.connect_load_changed(move |view, event| {
       if matches!(event, LoadEvent::Started | LoadEvent::Redirected) {
         update(view, &label);

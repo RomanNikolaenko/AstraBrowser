@@ -232,6 +232,20 @@ pub fn close_orphans(webview: &Webview, payload: &PageLoadPayload<'_>) {
   });
 }
 
+/// Вікно закрили: правила захисту від стеження його інтерфейсу й записи про скрипти сторінок, яких уже немає (закритих
+/// разом із ним), більше не потрібні.
+pub fn forget_window(window: &Window) {
+  let app = window.app_handle();
+  let open = |label: &String| app.get_webview(label).is_some();
+  if let Ok(mut scripts) = app.state::<audio::RulesScripts>().0.lock() {
+    scripts.retain(|label, _| open(label));
+  }
+  if let Ok(mut scripts) = app.state::<crate::tracking::PageScripts>().0.lock() {
+    scripts.retain(|label, _| open(label));
+  }
+  app.state::<crate::tracking::Tracking>().forget(window.label());
+}
+
 #[cfg(target_os = "linux")]
 impl Bounds {
   fn area(&self) -> Area {
@@ -777,6 +791,7 @@ pub fn page_open_devtools(window: Window, label: String) -> Result<(), String> {
 #[specta::specta]
 pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label: String) -> Result<(), String> {
   scripts.0.lock().map_err(|error| error.to_string())?.remove(&label);
+  window.state::<crate::tracking::PageScripts>().0.lock().map_err(|error| error.to_string())?.remove(&label);
   let Some(webview) = window.get_webview(&label) else {
     return Ok(());
   };

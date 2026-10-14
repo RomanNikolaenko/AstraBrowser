@@ -821,6 +821,9 @@ export const EN: Readonly<Record<string, string>> = {
     'History ({0}), cookies, cache, form data and site settings',
   'Очистити…': 'Clear…',
   'Зберігати історію': 'Keep history',
+  'Зберігати список завантажень': 'Keep the download list',
+  'Давніші записи прибираються зі списку самі, а файли лишаються на диску. Щонайбільше — {0} останніх записів':
+    'Older entries are removed from the list automatically; the files stay on disk. At most the latest {0} entries are kept',
   'Давніші записи прибираються самі — і на цьому комп’ютері, і в синхронізації. Щонайбільше — {0} останніх записів':
     'Older entries are removed automatically, both on this computer and in sync. At most the latest {0} entries are kept',
   'Не вдалося відкрити «Параметри Windows».': 'Couldn’t open Windows Settings.',

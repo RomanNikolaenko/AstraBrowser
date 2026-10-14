@@ -23,7 +23,7 @@ export const ACCENT_COLORS: readonly { readonly value: AccentColor; readonly lab
 export type NewTabBackground = 'bubbles' | 'aurora' | 'sunset' | 'ocean' | 'none' | 'custom';
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing';
 
-/** Скільки днів зберігати історію переглядів; 0 — завжди. Як у Chrome, стандартно — 90. */
+/** Скільки днів зберігати історію переглядів і список завантажень; 0 — завжди. Як у Chrome, стандартно — 90. */
 export const HISTORY_RETENTION: readonly { readonly days: number; readonly label: string }[] = [
   { days: 7, label: tr('7 днів') },
   { days: 30, label: tr('30 днів') },
@@ -92,6 +92,8 @@ export class SettingsStore {
   readonly newTabImage = storedSignal('astra.settings.new-tab-image', '');
   /** Скільки днів зберігати історію (HISTORY_RETENTION); давніші записи прибираються самі. */
   readonly historyDays = storedSignal('astra.settings.history-days', 90);
+  /** Скільки днів зберігати список завантажень (HISTORY_RETENTION); давніші записи прибираються самі, файли лишаються. */
+  readonly downloadsDays = storedSignal('astra.settings.downloads-days', 90);
   /** Підказки пошукової системи в адресному рядку: введене надсилається їй, щоб показати можливі запити. */
   readonly searchSuggestions = storedSignal('astra.settings.search-suggestions', true);
   /** Microsoft Defender SmartScreen: попередження про фішинг і шкідливі завантаження. */
@@ -114,6 +116,7 @@ export class SettingsStore {
     newTabBackground: this.newTabBackground as WritableSignal<unknown>,
     newTabImage: this.newTabImage as WritableSignal<unknown>,
     historyDays: this.historyDays as WritableSignal<unknown>,
+    downloadsDays: this.downloadsDays as WritableSignal<unknown>,
     startup: this.startup as WritableSignal<unknown>,
     smartScreen: this.smartScreen as WritableSignal<unknown>,
     sleepTabsAfter: this.sleepTabsAfter as WritableSignal<unknown>,
@@ -130,6 +133,7 @@ export class SettingsStore {
     'astra.settings.new-tab-background',
     'astra.settings.new-tab-image',
     'astra.settings.history-days',
+    'astra.settings.downloads-days',
     'astra.settings.startup',
     'astra.settings.smart-screen',
     'astra.settings.sleep-tabs',

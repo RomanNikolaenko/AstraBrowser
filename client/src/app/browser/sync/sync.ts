@@ -338,7 +338,12 @@ export class SyncService {
   ): Promise<void> {
     const groups = new Map<string, SyncRow[]>();
     for (const row of rows) {
-      groups.set(row.collection, [...(groups.get(row.collection) ?? []), row]);
+      const group = groups.get(row.collection);
+      if (group) {
+        group.push(row);
+      } else {
+        groups.set(row.collection, [row]);
+      }
     }
     for (const [name, group] of groups) {
       if (name === KEYS_COLLECTION) {

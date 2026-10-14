@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { SettingsStore } from '../../shared/settings/settings';
 import { BookmarkItem, BookmarksStore } from './bookmarks';
-import { DownloadsStore } from './downloads';
+import { DOWNLOADS_LIMIT, DownloadsStore } from './downloads';
 import { FaviconStore } from './favicons';
 import { HISTORY_LIMIT, HistoryStore } from './history';
 
@@ -42,10 +42,15 @@ describe('browser data stores', () => {
 
   it('should keep only the latest entries of a history kept forever', () => {
     TestBed.inject(SettingsStore).historyDays.set(0);
+    // Повна історія — одразу в сховище: десять тисяч відвідувань по одному — секунди, і під навантаженням тест не встигав.
+    const saved = Array.from({ length: HISTORY_LIMIT }, (_, index) => ({
+      id: `${index}`,
+      url: `https://site${index}.example`,
+      title: `${index}`,
+      visitedAt: 1000 + index,
+    }));
+    localStorage.setItem('astra.history', JSON.stringify(saved));
     const history = TestBed.inject(HistoryStore);
-    for (let index = 0; index < HISTORY_LIMIT; index++) {
-      history.record(`https://site${index}.example`, `${index}`, 1000 + index);
-    }
     expect(history.entries()).toHaveLength(HISTORY_LIMIT);
 
     history.record('https://newest.example', 'Найновіший', 1000 + HISTORY_LIMIT);
@@ -89,11 +94,42 @@ describe('browser data stores', () => {
   });
 
   it('should keep downloads newest first', () => {
+    // Записи з 1970 року: щоб їх не прибрало як давні, список — «Завжди».
+    TestBed.inject(SettingsStore).downloadsDays.set(0);
     const downloads = TestBed.inject(DownloadsStore);
     downloads.add({ fileName: 'old.zip', url: 'https://a.example/old.zip', size: 10, status: 'completed', finishedAt: 1 });
     downloads.add({ fileName: 'new.zip', url: 'https://a.example/new.zip', size: 10, status: 'failed', finishedAt: 2 });
 
     expect(downloads.entries().map((entry) => entry.fileName)).toEqual(['new.zip', 'old.zip']);
+  });
+
+  it('should keep only the latest downloads', () => {
+    TestBed.inject(SettingsStore).downloadsDays.set(0);
+    const downloads = TestBed.inject(DownloadsStore);
+    for (let index = 0; index <= DOWNLOADS_LIMIT; index++) {
+      downloads.add({ fileName: `${index}.zip`, url: 'https://a.example/', size: 1, status: 'completed', finishedAt: index });
+    }
+
+    expect(downloads.entries()).toHaveLength(DOWNLOADS_LIMIT);
+    expect(downloads.entries()[0].fileName).toBe(`${DOWNLOADS_LIMIT}.zip`);
+    expect(downloads.entries().at(-1)?.fileName).toBe('1.zip');
+  });
+
+  it('should drop downloads older than the chosen number of days, but not the files', () => {
+    const day = 86_400_000;
+    const downloads = TestBed.inject(DownloadsStore);
+    const add = (fileName: string, finishedAt: number) =>
+      downloads.add({ fileName, url: 'https://a.example/', size: 1, status: 'completed', finishedAt });
+    add('old.zip', Date.now() - 100 * day);
+    add('month.zip', Date.now() - 40 * day);
+    add('today.zip', Date.now());
+
+    // Стандартно — 90 днів, як історія.
+    expect(downloads.entries().map((entry) => entry.fileName)).toEqual(['today.zip', 'month.zip']);
+
+    TestBed.inject(SettingsStore).downloadsDays.set(30);
+    TestBed.tick();
+    expect(downloads.entries().map((entry) => entry.fileName)).toEqual(['today.zip']);
   });
 
   it('should start empty and drop the demo bookmarks saved by older versions', () => {

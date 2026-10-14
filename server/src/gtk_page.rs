@@ -175,26 +175,40 @@ pub fn screenshot(webview: &Webview, full: bool, reply: Reply<Vec<u8>>) -> tauri
   })
 }
 
-/// Знімок cairo (ARGB32 із домноженою прозорістю, байти BGRA) — у PNG (RGBA).
+/// Найбільша висота знімка, px — як у Windows (webview2.rs): довші сторінки обрізаються.
+const SCREENSHOT_MAX_HEIGHT: usize = 16384;
+
+/// Знімок cairo (ARGB32 із домноженою прозорістю, байти BGRA) — у PNG (RGBA). Рядок за рядком: другої копії всієї
+/// картинки немає, а знімок довгої сторінки — сотні мегабайтів.
 fn to_png(surface: &gtk::cairo::Surface) -> Result<Vec<u8>, String> {
   let image = gtk::cairo::ImageSurface::try_from(surface.clone()).map_err(|_| "Not an image surface".to_string())?;
-  let (width, height, stride) = (image.width() as usize, image.height() as usize, image.stride() as usize);
-  let mut rgba = Vec::with_capacity(width * height * 4);
-  image
-    .with_data(|data| {
-      for row in data.chunks(stride).take(height) {
-        for &[blue, green, red, alpha] in row[..width * 4].as_chunks::<4>().0 {
-          let straight = |value: u8| if alpha == 0 { 0 } else { (u16::from(value) * 255 / u16::from(alpha)) as u8 };
-          rgba.extend_from_slice(&[straight(red), straight(green), straight(blue), alpha]);
-        }
-      }
-    })
-    .map_err(|error| error.to_string())?;
+  let (width, stride) = (image.width() as usize, image.stride() as usize);
+  let height = (image.height() as usize).min(SCREENSHOT_MAX_HEIGHT);
   let mut png = Vec::new();
   let mut encoder = png::Encoder::new(&mut png, width as u32, height as u32);
   encoder.set_color(png::ColorType::Rgba);
   encoder.set_depth(png::BitDepth::Eight);
-  encoder.write_header().and_then(|mut writer| writer.write_image_data(&rgba)).map_err(|error| error.to_string())?;
+  let mut writer = encoder.write_header().map_err(|error| error.to_string())?;
+  let mut stream = writer.stream_writer().map_err(|error| error.to_string())?;
+  let mut rgba = vec![[0u8; 4]; width];
+  let mut written = Ok(());
+  image
+    .with_data(|data| {
+      for row in data.chunks(stride).take(height) {
+        for (pixel, &[blue, green, red, alpha]) in rgba.iter_mut().zip(row[..width * 4].as_chunks::<4>().0) {
+          let straight = |value: u8| if alpha == 0 { 0 } else { (u16::from(value) * 255 / u16::from(alpha)) as u8 };
+          *pixel = [straight(red), straight(green), straight(blue), alpha];
+        }
+        written = std::io::Write::write_all(&mut stream, rgba.as_flattened());
+        if written.is_err() {
+          break;
+        }
+      }
+    })
+    .map_err(|error| error.to_string())?;
+  written.map_err(|error| error.to_string())?;
+  stream.finish().map_err(|error| error.to_string())?;
+  writer.finish().map_err(|error| error.to_string())?;
   Ok(png)
 }
 

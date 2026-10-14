@@ -56,6 +56,21 @@ describe('storedSignal', () => {
     stop();
   });
 
+  it('should not write back what it has just read or been given', () => {
+    localStorage.setItem('test.items', JSON.stringify(['saved']));
+    const state = create('test.items', ['fallback']);
+    const write = vi.spyOn(Storage.prototype, 'setItem');
+
+    TestBed.tick();
+    writeStored('test.items', ['synced']);
+    TestBed.tick();
+
+    expect(state()).toEqual(['synced']);
+    // Лише сам writeStored.
+    expect(write).toHaveBeenCalledTimes(1);
+    write.mockRestore();
+  });
+
   it('should restore the saved value', () => {
     localStorage.setItem('test.items', JSON.stringify(['saved']));
 
