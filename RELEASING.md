@@ -2,7 +2,7 @@
 
 Кнопка «Оновити Astra Browser» у меню ☰ читає `latest.json` з останнього релізу цього репозиторію:
 `https://github.com/RomanNikolaenko/AstraBrowser/releases/latest/download/latest.json` (`server/tauri.conf.json` →
-`plugins.updater.endpoints`). Браузери перевіряють його за 10 секунд після запуску й далі раз на 4 години.
+`plugins.updater.endpoints`). Браузери перевіряють його за 10 секунд після запуску й далі раз на добу.
 
 ## Ключ підпису
 
