@@ -1282,27 +1282,35 @@ export class Browser {
     void this.screenshot().start(site && { label: this.pageLabel(tab), bounds: this.pageBounds(), url: site.url });
   }
 
-  /** Клік коліщатком: нова вкладка у фоні, як у звичайних браузерах. */
-  protected openLinkInNewTab(url: string): void {
+  /**
+   * Клік коліщатком чи «Відкрити в новій вкладці»: нова вкладка у фоні чи одразу на неї — як у налаштуваннях
+   * («Одразу переходити на нову вкладку»).
+   */
+  protected openLinkInNewTab(url: string, background = !this.settings.switchToNewTab()): void {
     const page = internalPageFor(url);
     if (page) {
       // Внутрішня сторінка має одну вкладку: вже відкрита — нова не потрібна.
-      if (!this.tabs().some((tab) => tab.page === page)) {
-        this.tabs.update((tabs) => [...tabs, { id: this.nextTabId++, page }]);
+      let tab = this.tabs().find((item) => item.page === page);
+      if (!tab) {
+        tab = { id: this.nextTabId++, page };
+        this.tabs.update((tabs) => [...tabs, tab!]);
+      }
+      if (!background) {
+        this.activeTabId.set(tab.id);
       }
       return;
     }
 
     const tab = this.createNewTab();
     this.tabs.update((tabs) => [...tabs, tab]);
-    this.openSite(url, tab, { background: true });
+    this.openSite(url, tab, { background });
   }
 
   /** «Відкрити всі закладки» з панелі: кожна — у новій вкладці, а показується перша з них. */
   protected openAllBookmarks(bookmarks: readonly Bookmark[]): void {
     const firstNewTab = this.nextTabId;
     for (const bookmark of bookmarks) {
-      this.openLinkInNewTab(bookmark.url);
+      this.openLinkInNewTab(bookmark.url, true);
     }
     const opened = this.tabs().find((tab) => tab.id >= firstNewTab);
     if (opened) {
@@ -1481,11 +1489,15 @@ export class Browser {
     this.openPageView(label, url);
   }
 
-  /** Webview сайту на місці області вмісту. */
+  /** Webview сайту на місці області вмісту; якщо, поки він створювався, перейшли на іншу вкладку, — схований. */
   private openPageView(label: string, url: string): void {
     this.pageViews
       .open(label, url, this.pageBounds(), { autoplay: this.autoplay.rules() })
-      .then(() => this.onPageCreated(label))
+      .then(() => {
+        if (!this.onPageCreated(label)) {
+          this.ignore(this.pageViews.setVisible(label, false));
+        }
+      })
       .catch(() => undefined);
   }
 
@@ -2155,7 +2167,7 @@ export class Browser {
    * Сайт відкриває нове вікно — новою вкладкою. Без кліку користувача це спливне вікно: його браузер блокує
    * (кнопка в адресному рядку покаже, що саме), якщо сайтові не дозволено спливні вікна.
    */
-  private onPageNewTab({ label, url, userInitiated }: PageNewTabEvent): void {
+  private onPageNewTab({ label, url, userInitiated, background }: PageNewTabEvent): void {
     const source = this.tabByLabel(label);
     if (!source) {
       return;
@@ -2175,7 +2187,10 @@ export class Browser {
     }
     const tab = this.createNewTab();
     this.tabs.update((tabs) => [...tabs, tab]);
-    this.openSite(url, tab);
+    // Посилання коліщатком чи з Ctrl — у фоні чи одразу на неї, як у налаштуваннях (Shift — навпаки); решта (target="_blank",
+    // window.open) — одразу на нову вкладку.
+    const inBackground = background !== undefined && background !== this.settings.switchToNewTab();
+    this.openSite(url, tab, { background: inBackground });
   }
 
   /** Завантаження записується, навіть коли вкладку вже закрито, — сам файл однаково зберігається. */

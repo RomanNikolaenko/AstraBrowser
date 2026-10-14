@@ -163,6 +163,10 @@ struct NewTabEvent {
   url: String,
   /// Після дії користувача (клік); інакше це спливне вікно, і інтерфейс може його заблокувати.
   user_initiated: bool,
+  /// Лише в посилань, відкритих коліщатком чи з Ctrl (new-tab-page.js): true — без Shift. Чи вкладка піде у фон, вирішує
+  /// інтерфейс за налаштуванням «Одразу переходити на нову вкладку» (Shift — навпаки); без поля — одразу на неї.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  background: Option<bool>,
 }
 
 /// Завантаження почалося, іде чи скінчилося (webview2::watch_downloads, gtk_downloads.rs).
@@ -264,6 +268,11 @@ fn zoom_script(token: &str) -> String {
   format!("({})({});", include_str!("zoom-page.js"), serde_json::Value::from(token))
 }
 
+/// Скрипт сторінки для посилань коліщатком і з Ctrl (new-tab-page.js) з токеном сторінки.
+fn new_tab_script(token: &str) -> String {
+  format!("({})({});", include_str!("new-tab-page.js"), serde_json::Value::from(token))
+}
+
 /// Повідомлення скриптів сторінки: паролі — до passwords.rs, адреси — до addresses.rs, банківські картки — до
 /// cards.rs, переклад виділеного — до translate.rs, крок масштабу — інтерфейсу вікна як гаряча клавіша.
 fn on_page_message(
@@ -275,6 +284,15 @@ fn on_page_message(
   message: &serde_json::Value,
 ) -> Option<serde_json::Value> {
   match message.get("astra")?.as_str()? {
+    // Посилання коліщатком чи з Ctrl (new-tab-page.js): нова вкладка, а у фоні чи ні — вирішує інтерфейс.
+    "open-tab" if message.get("token")?.as_str()? == token => {
+      let url = message.get("url")?.as_str()?;
+      Url::parse(url).ok().filter(is_page_url)?;
+      let background = Some(message.get("background").and_then(serde_json::Value::as_bool).unwrap_or(true));
+      let event = NewTabEvent { label: label.to_string(), url: url.to_string(), user_initiated: true, background };
+      let _ = app.emit_to(ui, "page://new-tab", event);
+      None
+    }
     "zoom" if message.get("token")?.as_str()? == token => {
       let shortcut = match message.get("step")?.as_str()? {
         "in" => "zoom-in",
@@ -394,6 +412,7 @@ pub async fn page_open(
     .initialization_script(crate::passwords::page_script(&page_token))
     .initialization_script(crate::addresses::page_script(&page_token))
     .initialization_script(zoom_script(&page_token))
+    .initialization_script(new_tab_script(&page_token))
     .initialization_script(fullscreen_script(&page_token))
     .initialization_script(crate::translate::page_script(&page_token));
 
@@ -439,6 +458,7 @@ pub async fn page_open(
       crate::passwords::page_script(&page_token),
       crate::addresses::page_script(&page_token),
       zoom_script(&page_token),
+      new_tab_script(&page_token),
       crate::translate::page_script(&page_token),
     ];
     crate::gtk_page::add_page_scripts(&webview, scripts).map_err(|error| error.to_string())?;
@@ -476,12 +496,12 @@ pub async fn page_open(
   // користувача інтерфейс може заблокувати. Посилання на програми (mailto:…) — після запитання.
   events::watch_new_windows(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-    move |url, user_initiated| {
+    move |url, user_initiated, background| {
       let Ok(parsed) = Url::parse(&url) else {
         return;
       };
       if is_page_url(&parsed) {
-        let _ = app.emit_to(&ui, "page://new-tab", NewTabEvent { label: label.clone(), url, user_initiated });
+        let _ = app.emit_to(&ui, "page://new-tab", NewTabEvent { label: label.clone(), url, user_initiated, background });
       } else if crate::external::scheme_of(&parsed).is_some() {
         let _ = app.emit_to(&ui, "page://external", ExternalEvent { label: label.clone(), url });
       }

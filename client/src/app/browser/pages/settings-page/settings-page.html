@@ -125,6 +125,28 @@
     </fieldset>
   </div>
 
+  <h2 class="page__group">{{ 'Вкладки' | t }}</h2>
+  <div class="page__list settings">
+    <div class="settings__row">
+      <span class="settings__text">
+        <span class="page__name" id="settings-switch-to-new-tab-name">{{ 'Одразу переходити на нову вкладку' | t }}</span>
+        <span class="page__meta" id="settings-switch-to-new-tab-hint">
+          {{
+            'Коли посилання відкривають коліщатком, з Ctrl чи через «Відкрити посилання в новій вкладці». На сайті з Shift — навпаки'
+              | t
+          }}
+        </span>
+      </span>
+      <app-switch
+        inputId="settings-switch-to-new-tab"
+        inputName="switch-to-new-tab"
+        ariaLabelledby="settings-switch-to-new-tab-name"
+        ariaDescribedby="settings-switch-to-new-tab-hint"
+        [checked]="settings.switchToNewTab()"
+        (checkedChange)="settings.switchToNewTab.set($event)" />
+    </div>
+  </div>
+
   <h2 class="page__group">{{ 'Пошук' | t }}</h2>
   <div class="page__list settings">
     <fieldset class="settings__row settings__fieldset">

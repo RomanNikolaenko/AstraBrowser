@@ -268,8 +268,10 @@ pub fn set_site_permission(webview: &Webview, origin: String, kind: String, stat
 // --- Нові вікна ---
 
 /// Сайт відкриває нове вікно (посилання з target="_blank", window.open): власного вікна WebView2 не буде —
-/// `report(адреса, після дії користувача)`, а інтерфейс відкриє вкладку чи заблокує спливне вікно.
-pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool) + Send + 'static) -> tauri::Result<()> {
+/// `report(адреса, після дії користувача, None)`, а інтерфейс відкриє вкладку чи заблокує спливне вікно. Чим відкрито
+/// (коліщатком, з Ctrl), WebView2 не каже — такі посилання відкриває скрипт сторінки (new-tab-page.js), а тут — завжди
+/// одразу на нову вкладку.
+pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool, Option<bool>) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let watch = || -> windows_core::Result<()> {
       let handler = NewWindowRequestedEventHandler::create(Box::new(move |_, args| {
@@ -282,7 +284,7 @@ pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool) + Send
           args.IsUserInitiated(&mut user)?;
           args.SetHandled(true)?;
         }
-        report(take_pwstr(uri), user.as_bool());
+        report(take_pwstr(uri), user.as_bool(), None);
         Ok(())
       }));
       let mut token = 0;

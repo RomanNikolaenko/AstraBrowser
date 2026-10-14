@@ -100,6 +100,11 @@ export class SettingsStore {
   readonly smartScreen = storedSignal('astra.settings.smart-screen', true);
   /** Через скільки хвилин бездіяльності фонова вкладка засинає (SLEEP_TABS); 0 — ніколи. */
   readonly sleepTabsAfter = storedSignal('astra.settings.sleep-tabs', 30);
+  /**
+   * Посилання, відкрите коліщатком, з Ctrl чи «Відкрити посилання в новій вкладці»: одразу на нову вкладку чи лишитися,
+   * де був (стандартно, як у Chrome). Shift на сайті — навпаки.
+   */
+  readonly switchToNewTab = storedSignal('astra.settings.switch-to-new-tab', false);
   /** Під час запуску — продовжити з того місця, де зупинилися, чи почати з нової вкладки. */
   readonly startup = storedSignal<StartupPage>('astra.settings.startup', 'restore');
   /** Рівень захисту від стеження (TRACKING_PROTECTION). */
@@ -118,6 +123,7 @@ export class SettingsStore {
     historyDays: this.historyDays as WritableSignal<unknown>,
     downloadsDays: this.downloadsDays as WritableSignal<unknown>,
     startup: this.startup as WritableSignal<unknown>,
+    switchToNewTab: this.switchToNewTab as WritableSignal<unknown>,
     smartScreen: this.smartScreen as WritableSignal<unknown>,
     sleepTabsAfter: this.sleepTabsAfter as WritableSignal<unknown>,
     searchSuggestions: this.searchSuggestions as WritableSignal<unknown>,
@@ -135,6 +141,7 @@ export class SettingsStore {
     'astra.settings.history-days',
     'astra.settings.downloads-days',
     'astra.settings.startup',
+    'astra.settings.switch-to-new-tab',
     'astra.settings.smart-screen',
     'astra.settings.sleep-tabs',
     'astra.settings.search-suggestions',

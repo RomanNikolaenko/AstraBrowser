@@ -635,6 +635,31 @@ describe('Browser with sites', () => {
     expect(titles()).toHaveLength(4);
   });
 
+  it('should open links clicked with the wheel or Ctrl in a background tab', async () => {
+    await typeInOmnibox('example.com');
+    await load(1, 'https://example.com/');
+
+    pages.emit('page://new-tab', { label: label(1), url: 'https://example.com/news', userInitiated: true, background: true });
+    await stable();
+    expect(pages.called('background')).toContainEqual([label(2)]);
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('example.com');
+
+    // target="_blank" чи window.open — одразу на нову вкладку.
+    pages.emit('page://new-tab', { label: label(1), url: 'https://example.org/', userInitiated: true });
+    await stable();
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('example.org');
+
+    // «Одразу переходити на нову вкладку»: коліщатком — на нову, а з Shift — у фоні.
+    TestBed.inject(SettingsStore).switchToNewTab.set(true);
+    pages.emit('page://new-tab', { label: label(1), url: 'https://example.net/', userInitiated: true, background: true });
+    await stable();
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('example.net');
+    pages.emit('page://new-tab', { label: label(1), url: 'https://example.edu/', userInitiated: true, background: false });
+    await stable();
+    expect(pages.called('background')).toContainEqual([label(5)]);
+    expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('example.net');
+  });
+
   it('should run browser actions from the context menu of a site', async () => {
     await typeInOmnibox('example.com');
     await load(1, 'https://example.com/');

@@ -821,6 +821,10 @@ export const EN: Readonly<Record<string, string>> = {
     'History ({0}), cookies, cache, form data and site settings',
   'Очистити…': 'Clear…',
   'Зберігати історію': 'Keep history',
+  Вкладки: 'Tabs',
+  'Одразу переходити на нову вкладку': 'Switch to a new tab right away',
+  'Коли посилання відкривають коліщатком, з Ctrl чи через «Відкрити посилання в новій вкладці». На сайті з Shift — навпаки':
+    'When a link is opened with the mouse wheel, with Ctrl or with “Open link in new tab”. On a site, Shift does the opposite',
   'Зберігати список завантажень': 'Keep the download list',
   'Давніші записи прибираються зі списку самі, а файли лишаються на диску. Щонайбільше — {0} останніх записів':
     'Older entries are removed from the list automatically; the files stay on disk. At most the latest {0} entries are kept',

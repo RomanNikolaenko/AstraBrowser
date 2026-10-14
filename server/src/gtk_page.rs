@@ -52,13 +52,18 @@ pub fn watch_navigation(webview: &Webview, report: impl Fn(String, bool, bool) +
 }
 
 /// Сайт відкриває нове вікно (посилання з target="_blank", window.open): власного вікна WebKit не буде —
-/// `report(адреса, після дії користувача)`, а інтерфейс відкриє вкладку чи заблокує спливне вікно.
-pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool) + Send + 'static) -> tauri::Result<()> {
+/// `report(адреса, після дії користувача, коліщатком чи з Ctrl)`, а інтерфейс відкриє вкладку чи заблокує спливне вікно.
+/// Посилання коліщатком чи з Ctrl — `Some(без Shift)`, як і зі скрипта сторінки (new-tab-page.js), що зазвичай відкриває
+/// їх раніше; решта — `None`.
+pub fn watch_new_windows(webview: &Webview, report: impl Fn(String, bool, Option<bool>) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let view: webkit2gtk::WebView = platform.inner();
     view.connect_create(move |_, action| {
       if let Some(url) = action.request().and_then(|request| request.uri()) {
-        report(url.to_string(), action.is_user_gesture());
+        let modifiers = gdk::ModifierType::from_bits_truncate(action.modifiers());
+        let as_link = action.mouse_button() == 2 || modifiers.contains(gdk::ModifierType::CONTROL_MASK);
+        let background = as_link.then(|| !modifiers.contains(gdk::ModifierType::SHIFT_MASK));
+        report(url.to_string(), action.is_user_gesture(), background);
       }
       None
     });

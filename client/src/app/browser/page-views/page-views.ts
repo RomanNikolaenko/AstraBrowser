@@ -74,6 +74,11 @@ export interface PageNewTabEvent {
   readonly url: string;
   /** Після кліку користувача; `false` — спливне вікно, яке браузер блокує. */
   readonly userInitiated?: boolean;
+  /**
+   * Лише в посилань, відкритих коліщатком чи з Ctrl: true — без Shift. Чи вкладка піде у фон, вирішує налаштування
+   * «Одразу переходити на нову вкладку» (Shift — навпаки); без поля — одразу на неї.
+   */
+  readonly background?: boolean;
 }
 
 /** Завантаження зі сторінки чекає відповіді, куди зберегти файл. */
@@ -240,16 +245,38 @@ export class PageViews {
 
   private readonly pendingBounds = new Map<string, PageBounds>();
   private readonly sendingBounds = new Set<string>();
+  /**
+   * Webview, що ще створюються (у налагоджувальній збірці — й секунди). Команди до них ще нікуди не дійшли б: перехід
+   * чекає, поки webview створиться, а закриття закриває його, щойно створився, — інакше він з'явився б уже зі старою
+   * сторінкою поверх інших.
+   */
+  private readonly creating = new Map<string, Promise<unknown>>();
+  private readonly closedEarly = new Set<string>();
 
   /**
    * `background` — для фонової вкладки: webview прихований і не забирає фокус.
    * `autoplay` — правила автовідтворення сайтів (server/src/audio.rs).
+   * Якщо вкладку закрили, поки webview створювався, він закривається, а обіцянка відхиляється.
    */
   async open(label: string, url: string, bounds: PageBounds, options: PageOpenOptions = {}): Promise<void> {
-    await commands.pageOpen(label, url, bounds, options.background ?? false, autoplayArgs(options.autoplay));
+    const created = commands.pageOpen(label, url, bounds, options.background ?? false, autoplayArgs(options.autoplay));
+    const settled = created.catch(() => undefined);
+    this.creating.set(label, settled);
+    try {
+      await created;
+    } finally {
+      if (this.creating.get(label) === settled) {
+        this.creating.delete(label);
+      }
+    }
+    if (this.closedEarly.delete(label)) {
+      await commands.pageClose(label).catch(() => undefined);
+      throw new Error(`Page ${label} was closed while it was being created`);
+    }
   }
 
   async navigate(label: string, url: string): Promise<void> {
+    await this.creating.get(label);
     await commands.pageNavigate(label, url);
   }
 
@@ -323,6 +350,10 @@ export class PageViews {
   }
 
   async close(label: string): Promise<void> {
+    if (this.creating.has(label)) {
+      this.closedEarly.add(label);
+      return;
+    }
     await commands.pageClose(label);
   }
 
