@@ -26,8 +26,8 @@ use windows::Win32::{
   },
   System::LibraryLoader::GetModuleHandleW,
   UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, GetClientRect, GetParent, GetWindowLongPtrW, GetWindowRect, IsZoomed, RegisterClassExW,
-    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_STYLE, HWND_BOTTOM, HWND_TOP, HWND_TOPMOST,
+    CreateWindowExW, DefWindowProcW, GetClientRect, GetParent, GetWindowLongPtrW, GetWindowRect, IsWindow, IsZoomed, RegisterClassExW,
+    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWLP_HWNDPARENT, GWL_STYLE, HWND_BOTTOM, HWND_TOP, HWND_TOPMOST,
     LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_MAXIMIZE, WNDCLASSEXW,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_MAXIMIZE, WS_POPUP,
   },
@@ -475,11 +475,15 @@ fn set_alpha(overlay: HWND, alpha: u8) {
   }
 }
 
-/// Чорне вікно затемнення над усім екраном: прозоре для миші, без фокуса й кнопки на панелі завдань.
+/// Чорне вікно затемнення над усім екраном: прозоре для миші, без фокуса й кнопки на панелі завдань. Його власник —
+/// вікно, що йде на весь екран: власника Windows піднімає разом із ним, тож із чужим власником (скажімо, звичайним вікном,
+/// коли на весь екран іде приватне) над сайтом лишалося б те інше вікно. Закрили власника — затемнення закрилося з ним,
+/// і створюється знову.
 fn overlay(owner: HWND) -> Option<HWND> {
-  let existing = OVERLAY.get();
-  if existing != 0 {
-    return Some(HWND(existing as _));
+  let existing = HWND(OVERLAY.get() as _);
+  if !existing.is_invalid() && unsafe { IsWindow(Some(existing)) }.as_bool() {
+    unsafe { SetWindowLongPtrW(existing, GWLP_HWNDPARENT, owner.0 as isize) };
+    return Some(existing);
   }
   unsafe extern "system" fn procedure(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     unsafe { DefWindowProcW(window, message, wparam, lparam) }
