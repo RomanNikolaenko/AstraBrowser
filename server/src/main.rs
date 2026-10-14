@@ -1,13 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Astra Browser — для Windows і Linux.
+#[cfg(not(any(windows, target_os = "linux")))]
+compile_error!("Astra Browser збирається лише для Windows і Linux");
+
 mod addresses;
 mod adblock;
 mod audio;
 mod auth;
 mod browsing_data;
-#[cfg(any(windows, target_os = "linux"))]
 mod context_menu;
-// Лише для розробки на macOS і Linux: скрипт із файла — в інтерфейс (debug_eval.rs).
+// Лише для розробки в Linux: скрипт із файла — в інтерфейс (debug_eval.rs).
 #[cfg(all(debug_assertions, not(windows)))]
 mod debug_eval;
 mod cards;
@@ -35,12 +38,11 @@ mod gtk_page;
 mod gtk_permissions;
 #[cfg(target_os = "linux")]
 mod gtk_tracking;
-// Повний екран сайту з затемненням, перетягування вікна й Windows Hello — засобами Windows; на macOS і Linux —
-// свої, простіші варіанти (src/other). Підтвердження особи в Linux — через polkit (polkit.rs).
+// Повний екран сайту з затемненням, перетягування вікна й Windows Hello — засобами Windows; у Linux — свої, простіші
+// варіанти (src/other), а підтвердження особи — через polkit (polkit.rs).
 #[cfg_attr(not(windows), path = "other/fullscreen.rs")]
 mod fullscreen;
 #[cfg_attr(target_os = "linux", path = "polkit.rs")]
-#[cfg_attr(not(any(windows, target_os = "linux")), path = "other/hello.rs")]
 mod hello;
 mod i18n;
 mod ipc;

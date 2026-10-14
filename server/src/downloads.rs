@@ -1,5 +1,5 @@
 //! Завантажені файли: куди їх зберігати (своя тека чи «Завантаження» системи, питати щоразу чи ні),
-//! скасування, відкриття файла й показ у теці (Провіднику, Finder чи файловому менеджері).
+//! скасування, відкриття файла й показ у теці (Провіднику чи файловому менеджері).
 //! Сам перебіг завантажень стежить рушій — webview2::watch_downloads у Windows, gtk_downloads.rs у Linux, — а подія
 //! page://download несе його в інтерфейс.
 
@@ -14,7 +14,6 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-#[cfg(any(windows, target_os = "linux"))]
 use tauri::Url;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_dialog::DialogExt;
@@ -68,7 +67,6 @@ pub struct DownloadSettings {
 }
 
 /// Завантаження, про яке питають, куди зберегти файл: що за файл і куди рушій збирався його покласти.
-#[cfg(any(windows, target_os = "linux"))]
 pub struct DownloadRequest {
   pub id: u64,
   pub url: String,
@@ -78,7 +76,6 @@ pub struct DownloadRequest {
 }
 
 /// Що інтерфейс знає про завантаження.
-#[cfg(any(windows, target_os = "linux"))]
 pub struct DownloadUpdate {
   pub id: u64,
   pub url: String,
@@ -163,7 +160,6 @@ fn apply(app: &AppHandle) -> DownloadSettings {
 
 /// Якщо так налаштовано — просить інтерфейс вікна `ui` показати, куди збережеться файл, і повертає true:
 /// тоді завантаження чекає, поки інтерфейс відповість через download_resolve.
-#[cfg(any(windows, target_os = "linux"))]
 pub fn ask_where(app: &AppHandle, ui: &str, label: &str, request: DownloadRequest) -> bool {
   let downloads = app.state::<Downloads>();
   if !downloads.ask() {
@@ -233,12 +229,6 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
   return app.run_on_main_thread(move || webview2::resolve_download(id, path)).map_err(|error| error.to_string());
   #[cfg(target_os = "linux")]
   return app.run_on_main_thread(move || crate::gtk_downloads::resolve_download(id, path)).map_err(|error| error.to_string());
-  // Завантаження, що чекало б відповіді, тут немає: рушій зберігає файл одразу (pages.rs, on_download).
-  #[cfg(not(any(windows, target_os = "linux")))]
-  {
-    let _ = (app, path);
-    Ok(())
-  }
 }
 
 /// Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються.
@@ -320,11 +310,6 @@ pub fn download_cancel(app: AppHandle, id: u64) -> Result<(), String> {
   return app.run_on_main_thread(move || webview2::cancel_download(id)).map_err(|error| error.to_string());
   #[cfg(target_os = "linux")]
   return app.run_on_main_thread(move || crate::gtk_downloads::cancel_download(id)).map_err(|error| error.to_string());
-  #[cfg(not(any(windows, target_os = "linux")))]
-  {
-    let _ = (app, id);
-    Err(crate::i18n::text("На цій системі цього ще немає", "Not available on this system yet").into())
-  }
 }
 
 /// Відкриває файл програмою, що стоїть для нього в системі (як подвійний клік у Провіднику).
@@ -354,13 +339,9 @@ pub fn download_open(path: String) -> Result<(), String> {
 #[specta::specta]
 pub fn download_show(path: String) -> Result<(), String> {
   let path = Path::new(&path);
-  // macOS: Finder з виділеним файлом; Linux: тека у файловому менеджері (виділити файл xdg-open не вміє).
+  // Linux: тека у файловому менеджері (виділити файл xdg-open не вміє).
   #[cfg(not(windows))]
   {
-    #[cfg(target_os = "macos")]
-    if path.is_file() {
-      return Command::new("open").arg("-R").arg(path).spawn().map(drop).map_err(|error| error.to_string());
-    }
     match path.parent().filter(|folder| folder.is_dir()) {
       Some(folder) => open_with_system(folder),
       None => Err(format!("{} {}", crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"), path.display())),
@@ -381,14 +362,10 @@ pub fn download_show(path: String) -> Result<(), String> {
   explorer.spawn().map(|_| ()).map_err(|error| error.to_string())
 }
 
-/// Файл чи теку — програмою системи: open на macOS, xdg-open у Linux.
+/// Файл чи теку — програмою системи (xdg-open у Linux).
 #[cfg(not(windows))]
 fn open_with_system(path: &Path) -> Result<(), String> {
-  #[cfg(target_os = "macos")]
-  let opener = "open";
-  #[cfg(not(target_os = "macos"))]
-  let opener = "xdg-open";
-  Command::new(opener).arg(path).spawn().map(drop).map_err(|error| error.to_string())
+  Command::new("xdg-open").arg(path).spawn().map(drop).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

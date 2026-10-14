@@ -371,7 +371,7 @@ pub fn start(app: &AppHandle) {
       if updated {
         crate::gtk_tracking::compile(&app, dir.clone());
       }
-      #[cfg(not(target_os = "linux"))]
+      #[cfg(windows)]
       let _ = updated;
       thread::sleep(CHECK_EVERY);
     }

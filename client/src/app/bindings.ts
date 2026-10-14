@@ -420,11 +420,6 @@ export type DnsState = {
 	settings: DnsSettings,
 	/**  Збережене ще не діє: потрібен перезапуск браузера. */
 	restartNeeded: boolean,
-	/**
-	 *  DNS через HTTPS є у WebView2 (Windows) і через проксі в Linux (doh_proxy.rs); на macOS сайти відкриваються через
-	 *  DNS системи.
-	 */
-	supported: boolean,
 };
 
 /**  Налаштування завантажень для інтерфейсу; надсилаються й подією downloads://settings. */

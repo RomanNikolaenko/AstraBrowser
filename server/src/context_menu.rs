@@ -26,8 +26,6 @@ pub struct MenuTarget {
 /// Свої пункти меню: (дія, підпис, адреса чи текст для дії). Порожня дія — роздільник.
 pub type MenuItems = Vec<(&'static str, String, Option<String>)>;
 
-/// Знімок сторінки — у WebView2 і WebKitGTK (Windows і Linux).
-const SCREENSHOT: bool = cfg!(any(windows, target_os = "linux"));
 /// Код сторінки (view-source:) — лише у WebView2: WebKitGTK його не показує.
 const VIEW_SOURCE: bool = cfg!(windows);
 
@@ -57,9 +55,7 @@ pub fn custom_items(target: &MenuTarget) -> (MenuItems, MenuItems) {
   if target.link.is_none() && target.image.is_none() && target.selection.is_none() && !target.editable {
     bottom.push(("", String::new(), None));
     bottom.push(("translate-page", crate::i18n::text("Перекласти сторінку", "Translate page").to_string(), None));
-    if SCREENSHOT {
-      bottom.push(("screenshot", crate::i18n::text("Знімок екрана", "Screenshot").to_string(), None));
-    }
+    bottom.push(("screenshot", crate::i18n::text("Знімок екрана", "Screenshot").to_string(), None));
     // Для розробки: код сторінки (як Ctrl+U) — перед «Перевірити» самого WebView2.
     if let Some(page) = target.page.as_ref().filter(|_| VIEW_SOURCE) {
       bottom.push(("", String::new(), None));
@@ -88,10 +84,9 @@ mod tests {
     top.into_iter().chain(bottom).map(|(action, _, _)| action).filter(|action| !action.is_empty()).collect()
   }
 
-  /// Дії меню сторінки на цій системі: без знімка й коду сторінки там, де їх немає.
+  /// Дії меню сторінки на цій системі: без коду сторінки там, де його немає.
   fn page_actions(list: &[&'static str]) -> Vec<&'static str> {
     list.iter().copied().filter(|action| match *action {
-      "screenshot" => SCREENSHOT,
       "view-source" => VIEW_SOURCE,
       _ => true,
     }).collect()

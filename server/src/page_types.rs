@@ -1,5 +1,5 @@
 //! Типи команд і подій сторінок сайтів, спільні для всіх систем: інтерфейс отримує ті самі прив'язки (bindings.ts) на
-//! Windows, macOS і Linux, а що з ними робити — вирішує код своєї системи (у Windows — webview2.rs і page_events.rs, у
+//! Windows і Linux, а що з ними робити — вирішує код своєї системи (у Windows — webview2.rs і page_events.rs, у
 //! Linux — gtk_*.rs).
 
 use serde::{Deserialize, Serialize};
@@ -77,7 +77,6 @@ pub enum PermissionState {
 }
 
 /// Запит дозволу, який чекає відповіді інтерфейсу.
-#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRequest {
@@ -89,7 +88,6 @@ pub struct PermissionRequest {
 }
 
 /// Що сталося з процесом сторінки.
-#[cfg(any(windows, target_os = "linux"))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Failure {

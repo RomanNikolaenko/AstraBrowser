@@ -132,16 +132,13 @@ pub struct DnsState {
   settings: Settings,
   /// Збережене ще не діє: потрібен перезапуск браузера.
   restart_needed: bool,
-  /// DNS через HTTPS є у WebView2 (Windows) і через проксі в Linux (doh_proxy.rs); на macOS сайти відкриваються через
-  /// DNS системи.
-  supported: bool,
 }
 
 impl Dns {
   fn state(&self) -> DnsState {
     let settings = self.saved.lock().map(|saved| saved.clone()).unwrap_or_default();
     let applied = self.applied.lock().map(|applied| applied.clone()).unwrap_or_default();
-    DnsState { restart_needed: settings != applied, settings, supported: cfg!(any(windows, target_os = "linux")) }
+    DnsState { restart_needed: settings != applied, settings }
   }
 
   /// Тека WebView2 (`user_data`), яку створили вже після запуску (обліковий запис, що вперше ввійшов), — з тими
@@ -182,8 +179,8 @@ fn in_use(folder: &Path) -> bool {
       .is_err_and(|error| error.raw_os_error() == Some(ERROR_SHARING_VIOLATION))
 }
 
-/// Налаштування DNS — у всі теки WebView2, щойно браузер у них вийде (не довше за CLOSE_TIMEOUT). На macOS і Linux
-/// записувати нікуди: там рушій бере DNS системи.
+/// Налаштування DNS — у всі теки WebView2, щойно браузер у них вийде (не довше за CLOSE_TIMEOUT). У Linux записувати
+/// нікуди: там DNS через HTTPS — проксі в самому браузері (doh_proxy.rs).
 fn apply(root: &Path, settings: &Settings) {
   #[cfg(not(windows))]
   let _ = (root, CLOSE_TIMEOUT);
@@ -192,8 +189,6 @@ fn apply(root: &Path, settings: &Settings) {
   // Linux: проксі з DoH (сторінкам його ставить pages.rs, а змінений — dns_set).
   #[cfg(target_os = "linux")]
   crate::doh_proxy::configure(settings);
-  #[cfg(not(any(windows, target_os = "linux")))]
-  let _ = settings;
 }
 
 #[cfg(windows)]
@@ -288,7 +283,7 @@ pub fn dns_set(app: AppHandle, dns: State<'_, Dns>, settings: Settings) -> Resul
     }
     *dns.applied.lock().map_err(|error| error.to_string())? = settings.clone();
   }
-  #[cfg(not(target_os = "linux"))]
+  #[cfg(windows)]
   let _ = app;
   *dns.saved.lock().map_err(|error| error.to_string())? = settings;
   Ok(dns.state())

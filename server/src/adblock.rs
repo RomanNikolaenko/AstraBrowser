@@ -1,10 +1,10 @@
 //! Блокувальник реклами й трекерів, як AdGuard чи uBlock Origin: правила зі списків EasyList, EasyPrivacy,
 //! uBlock і AdGuard перевіряє рушій adblock-rust від Brave.
 //!
-//! Мережеві правила відсікають запити сторінки (у Windows — webview2::block_ads; на macOS і Linux — сам WebKit за
+//! Мережеві правила відсікають запити сторінки (у Windows — webview2::block_ads; у Linux — сам WebKit за
 //! тими самими правилами, перекладеними у формат блокувальників Safari, gtk_adblock.rs), а косметичні — ховають
 //! рекламні блоки й запускають скриптлети uBlock Origin (як проти реклами на YouTube) скриптом на початку документа
-//! (adblock-page.js). На macOS і Linux рушієві мережеві правила не потрібні (їх виконує WebKit), тож він там лише
+//! (adblock-page.js). У Linux рушієві мережеві правила не потрібні (їх виконує WebKit), тож він там лише
 //! косметичний і в кілька разів менший. Скриптлети й підмінні ресурси (порожній скрипт, прозора картинка тощо) беруться з
 //! вихідного коду uBlock Origin. Списки оновлюються у фоні раз на 4 дні, а зібраний рушій кешується
 //! в теці даних застосунку, щоб запуск не розбирав десятки тисяч правил заново.
@@ -64,12 +64,12 @@ const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 /// тоді кеш попередньої версії не підходить і прибирається.
 #[cfg(windows)]
 const ENGINE_FILE: &str = "adblock-engine-v2.dat";
-/// На macOS і Linux рушій лише косметичний (cosmetic_rules) — і кеш свій.
+/// У Linux рушій лише косметичний (cosmetic_rules) — і кеш свій.
 #[cfg(not(windows))]
 const ENGINE_FILE: &str = "adblock-engine-cosmetic-v1.dat";
 const RESOURCES_FILE: &str = "adblock-resources-v2.json";
 const SETTINGS_FILE: &str = "adblock.json";
-/// Мережеві правила у форматі блокувальників Safari — для WebKit (macOS, Linux).
+/// Мережеві правила у форматі блокувальників Safari — для WebKit (Linux).
 #[cfg(not(windows))]
 pub(crate) const CONTENT_FILE: &str = "adblock-content-v1.json";
 
@@ -392,7 +392,7 @@ pub(crate) fn release_memory() {
   }
 }
 
-/// Свіжі списки: рушій, ресурси (скриптлети, підмінні файли) і, для WebKit (macOS, Linux), мережеві правила у
+/// Свіжі списки: рушій, ресурси (скриптлети, підмінні файли) і, для WebKit (Linux), мережеві правила у
 /// форматі блокувальників Safari (JSON; у Windows — порожньо).
 fn build(dir: &Path) -> Result<(Engine, Vec<Resource>, Vec<u8>), String> {
   let urls: Vec<String> = LISTS.iter().map(|list| list.url.to_string()).collect();
@@ -445,7 +445,7 @@ pub(crate) fn content_rules(lists: impl IntoIterator<Item = (String, ParseOption
   serde_json::to_vec(&rules).map_err(|error| error.to_string())
 }
 
-/// Рядки списку, потрібні рушієві там, де запити блокує сам WebKit (macOS, Linux): косметичні правила й скриптлети (усі
+/// Рядки списку, потрібні рушієві там, де запити блокує сам WebKit (Linux): косметичні правила й скриптлети (усі
 /// з `#`, як і директиви `!#if`) і мережеві винятки, що вимикають косметику на сайті ($generichide, $elemhide…), — без
 /// них рушій ховав би блоки й там, де списки цього не дозволяють.
 #[cfg(not(windows))]
@@ -873,7 +873,7 @@ async function trustedSetCookie(name = '') {
 
     let adblock = AdBlock::default();
     adblock.set_engine(engine);
-    // Запити перевіряє лише рушій Windows: на macOS і Linux він косметичний.
+    // Запити перевіряє лише рушій Windows: у Linux він косметичний.
     #[cfg(windows)]
     {
       let ads = adblock.check("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "https://example.com/", "script", "GET");
@@ -895,7 +895,7 @@ async function trustedSetCookie(name = '') {
     (found.hide_selectors, found.procedural_actions, found.exceptions, found.injected_script, found.generichide)
   }
 
-  /// Косметичний рушій (macOS, Linux) ховає й запускає на сторінках те саме, що й повний, — разом із винятками
+  /// Косметичний рушій (Linux) ховає й запускає на сторінках те саме, що й повний, — разом із винятками
   /// $generichide і $elemhide.
   #[cfg(not(windows))]
   #[test]

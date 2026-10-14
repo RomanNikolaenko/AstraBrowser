@@ -69,11 +69,7 @@ pub fn open_external(url: String) -> Result<(), String> {
   {
     let parsed = Url::parse(&url).map_err(|_| crate::i18n::text("Некоректне посилання", "Invalid link").to_string())?;
     scheme_of(&parsed).ok_or(crate::i18n::text("Таке посилання браузер не відкриває", "The browser doesn't open links like this"))?;
-    #[cfg(target_os = "macos")]
-    let opener = "open";
-    #[cfg(not(target_os = "macos"))]
-    let opener = "xdg-open";
-    std::process::Command::new(opener)
+    std::process::Command::new("xdg-open")
       .arg(parsed.as_str())
       .spawn()
       .map(drop)
@@ -86,16 +82,8 @@ pub fn open_external(url: String) -> Result<(), String> {
 #[tauri::command]
 #[specta::specta]
 pub fn external_app(url: String) -> Option<String> {
-  #[cfg(windows)]
-  {
-    let parsed = Url::parse(&url).ok()?;
-    app_name(scheme_of(&parsed)?)
-  }
-  #[cfg(not(windows))]
-  {
-    let parsed = Url::parse(&url).ok()?;
-    app_name(scheme_of(&parsed)?)
-  }
+  let parsed = Url::parse(&url).ok()?;
+  app_name(scheme_of(&parsed)?)
 }
 
 /// Програма Linux для посилань зі схемою `scheme` (xdg-mime): назва з її .desktop-файла чи сам файл.
@@ -113,12 +101,6 @@ pub fn app_name(scheme: &str) -> Option<String> {
     .filter_map(|dir| std::fs::read_to_string(format!("{dir}/applications/{desktop}")).ok())
     .find_map(|file| file.lines().find_map(|line| line.strip_prefix("Name=").map(str::to_string)));
   Some(name.unwrap_or_else(|| desktop.trim_end_matches(".desktop").to_string()))
-}
-
-/// На macOS програму для посилання вибирає система під час відкриття — заздалегідь назви не знаємо.
-#[cfg(target_os = "macos")]
-pub fn app_name(_scheme: &str) -> Option<String> {
-  Some(crate::i18n::text("програмі за замовчуванням", "the default app").into())
 }
 
 #[cfg(test)]

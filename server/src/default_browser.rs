@@ -4,7 +4,7 @@
 //! вибрано, і команда, що відкриває «Параметри» одразу на сторінці Astra.
 //!
 //! У Linux браузер реєструє пакет (.deb чи .rpm) — файлом «Astra Browser.desktop» зі схемами http і https
-//! (server/linux/astra-browser.desktop), а вибрати його основним можна й звідси (GIO). На macOS цього ще немає.
+//! (server/linux/astra-browser.desktop), а вибрати його основним можна й звідси (GIO).
 
 use serde::Serialize;
 
@@ -93,8 +93,6 @@ pub fn default_browser_state() -> DefaultBrowserState {
   }
   #[cfg(target_os = "linux")]
   return DefaultBrowserState { registered: system::registered(), is_default: system::is_default() };
-  #[cfg(not(any(windows, target_os = "linux")))]
-  DefaultBrowserState { registered: false, is_default: false }
 }
 
 /// «Параметри Windows» → «Програми за замовчуванням» на сторінці Astra: там людина вибирає його для посилань. У Linux —
@@ -117,8 +115,6 @@ pub fn default_browser_open_settings() -> Result<(), String> {
   }
   #[cfg(target_os = "linux")]
   return system::make_default();
-  #[cfg(not(any(windows, target_os = "linux")))]
-  Err(crate::i18n::text("На цій системі цього ще немає", "Not available on this system yet").to_string())
 }
 
 #[cfg(all(test, windows))]

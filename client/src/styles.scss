@@ -40,7 +40,7 @@ html.site-visible app-browser {
   border-radius: 0.625rem;
   box-shadow: var(--browser-popover-shadow);
 
-  // Колонкою (flex), а не сіткою: у WebKit (macOS, Linux) сітка з position: fixed і висотою auto розтягується на
+  // Колонкою (flex), а не сіткою: у WebKit (Linux) сітка з position: fixed і висотою auto розтягується на
   // всю висоту вікна.
   &:popover-open {
     display: flex;

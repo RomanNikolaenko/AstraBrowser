@@ -13,7 +13,7 @@ tauri-build = { version = "2.7.1", features = [] }
 tauri = { version = "2.12.1", features = ["unstable", "specta", "devtools"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# content-blocking — правила у форматі блокувальників Safari для WebKit на macOS і Linux (adblock.rs).
+# content-blocking — правила у форматі блокувальників Safari для WebKit у Linux (adblock.rs).
 adblock = { version = "0.13.3", default-features = false, features = ["content-blocking", "css-validation", "embedded-domain-resolver", "full-regex-handling"] }
 ureq = "3"
 base64 = "0.22"
@@ -48,14 +48,11 @@ windows-core = "0.62"
 # Дочекатися відповіді Windows Hello (hello.rs) — та сама версія, що й у windows.
 windows-future = "0.3"
 
-# macOS і Linux: PBKDF2 і випадкові числа — без CNG Windows, а ключ, яким шифруються дані на диску, — у сховищі
+# Linux: PBKDF2 і випадкові числа — без CNG Windows, а ключ, яким шифруються дані на диску, — у сховищі
 # секретів системи (secure.rs).
 [target.'cfg(not(windows))'.dependencies]
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 getrandom = "0.3"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }

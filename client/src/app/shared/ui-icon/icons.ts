@@ -1,6 +1,5 @@
 // Згенеровано client/scripts/icons.mjs (npm run icons) — правте файли в src/assets/icons, а не цей файл.
 import alertSvg from '../../../assets/icons/alert.svg';
-import appleSvg from '../../../assets/icons/apple.svg';
 import appsSvg from '../../../assets/icons/apps.svg';
 import arrowLeftSvg from '../../../assets/icons/arrow-left.svg';
 import arrowRightSvg from '../../../assets/icons/arrow-right.svg';
@@ -81,7 +80,6 @@ import windowSvg from '../../../assets/icons/window.svg';
 /** Розмітка іконок за назвою файлу без .svg. */
 export const ICONS: Readonly<Record<string, string>> = {
   alert: alertSvg,
-  apple: appleSvg,
   apps: appsSvg,
   'arrow-left': arrowLeftSvg,
   'arrow-right': arrowRightSvg,
