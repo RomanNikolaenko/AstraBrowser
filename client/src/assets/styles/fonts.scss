@@ -1,0 +1,27 @@
+// Roboto — шрифт інтерфейсу, вбудований у застосунок: на Windows і Linux однаковий, а не той, що стоїть у системі.
+// Три товщини: 400, 500 і 700 (600 і жирніші браузер бере з 700). Файли й ліцензія — assets/fonts.
+// font-display: block — файли локальні й вантажаться миттєво, тож без мигання запасним шрифтом.
+
+@font-face {
+  font-family: Roboto;
+  font-style: normal;
+  font-weight: 400;
+  src: url('/assets/fonts/Roboto-Regular.woff2') format('woff2');
+  font-display: block;
+}
+
+@font-face {
+  font-family: Roboto;
+  font-style: normal;
+  font-weight: 500;
+  src: url('/assets/fonts/Roboto-Medium.woff2') format('woff2');
+  font-display: block;
+}
+
+@font-face {
+  font-family: Roboto;
+  font-style: normal;
+  font-weight: 700;
+  src: url('/assets/fonts/Roboto-Bold.woff2') format('woff2');
+  font-display: block;
+}

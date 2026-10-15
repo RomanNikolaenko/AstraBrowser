@@ -35,6 +35,10 @@
       media="(prefers-color-scheme: dark)"
       fetchpriority="high" />
     <link rel="preload" as="image" href="logo.webp" type="image/webp" />
+    <!-- Шрифт інтерфейсу (assets/styles/fonts.scss) — одразу, а не коли до нього дійдуть стилі. -->
+    <link rel="preload" as="font" href="assets/fonts/Roboto-Regular.woff2" type="font/woff2" crossorigin />
+    <link rel="preload" as="font" href="assets/fonts/Roboto-Medium.woff2" type="font/woff2" crossorigin />
+    <link rel="preload" as="font" href="assets/fonts/Roboto-Bold.woff2" type="font/woff2" crossorigin />
   </head>
   <body>
     <app-root></app-root>

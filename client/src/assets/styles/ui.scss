@@ -1,4 +1,5 @@
-$font-family-base: 'Inter', 'Segoe UI', sans-serif;
+// Roboto вбудований у застосунок (fonts.scss); решта — лише якщо він чомусь не завантажився.
+$font-family-base: 'Roboto', 'Segoe UI', sans-serif;
 
 :root {
   color-scheme: light;
