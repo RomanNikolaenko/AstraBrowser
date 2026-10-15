@@ -5,7 +5,11 @@
 //! Віддалені сторінки не мають доступу до команд: у Tauri 2 IPC для них закритий без явного дозволу.
 
 use std::path::Path;
-use std::{sync::mpsc, time::Duration};
+use std::{
+  collections::HashSet,
+  sync::{mpsc, LazyLock, Mutex},
+  time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -187,9 +191,35 @@ fn is_web(url: &Url) -> bool {
   matches!(url.scheme(), "http" | "https")
 }
 
-/// Адреса, яку показує вкладка: сайт чи його код (view-source:https://…, Ctrl+U).
+fn is_file(url: &Url) -> bool {
+  url.scheme() == "file"
+}
+
+/// Адреса, яку показує вкладка: сайт, його код (view-source:https://…, Ctrl+U) чи файл комп'ютера (file:, лише у
+/// вкладках, де його відкрив сам користувач, — [`may_open`]).
 fn is_page_url(url: &Url) -> bool {
-  is_web(url) || url.as_str().strip_prefix("view-source:").and_then(|inner| Url::parse(inner).ok()).is_some_and(|inner| is_web(&inner))
+  is_web(url)
+    || is_file(url)
+    || url.as_str().strip_prefix("view-source:").and_then(|inner| Url::parse(inner).ok()).is_some_and(|inner| is_web(&inner))
+}
+
+/// Вкладки (мітки), у яких користувач сам відкрив файл комп'ютера: з Провідника, адресного рядка чи з минулого запуску.
+/// Лише в них можна переходити між файлами й відкривати файли новими вкладками; сайт до файлів комп'ютера не дістанеться
+/// ні переходом, ні новим вікном.
+static LOCAL_PAGES: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(Mutex::default);
+
+/// Чи може вкладка `label` відкрити `url`: сайти — будь-яка, файли комп'ютера — лише та, де їх відкрив користувач.
+fn may_open(label: &str, url: &Url) -> bool {
+  !is_file(url) || LOCAL_PAGES.lock().is_ok_and(|pages| pages.contains(label))
+}
+
+/// Користувач сам відкриває `url` у вкладці `label` (page_open, page_navigate): файлові — дозвіл на файли.
+fn allow_local(label: &str, url: &Url) {
+  if is_file(url) {
+    if let Ok(mut pages) = LOCAL_PAGES.lock() {
+      pages.insert(label.to_string());
+    }
+  }
 }
 
 /// Іконка з вебу або невелика вбудована картинка (data:image/…), щоб не роздувати сховище інтерфейсу.
@@ -235,6 +265,9 @@ pub fn forget_window(window: &Window) {
   }
   if let Ok(mut scripts) = app.state::<crate::tracking::PageScripts>().0.lock() {
     scripts.retain(|label, _| open(label));
+  }
+  if let Ok(mut pages) = LOCAL_PAGES.lock() {
+    pages.retain(|label| open(label));
   }
   app.state::<crate::tracking::Tracking>().forget(window.label());
 }
@@ -287,7 +320,7 @@ fn on_page_message(
     // Посилання коліщатком чи з Ctrl (new-tab-page.js): нова вкладка, а у фоні чи ні — вирішує інтерфейс.
     "open-tab" if message.get("token")?.as_str()? == token => {
       let url = message.get("url")?.as_str()?;
-      Url::parse(url).ok().filter(is_page_url)?;
+      Url::parse(url).ok().filter(|url| is_page_url(url) && may_open(label, url))?;
       let background = Some(message.get("background").and_then(serde_json::Value::as_bool).unwrap_or(true));
       let event = NewTabEvent { label: label.to_string(), url: url.to_string(), user_initiated: true, background };
       let _ = app.emit_to(ui, "page://new-tab", event);
@@ -346,6 +379,7 @@ pub async fn page_open(
     return Err(format!("Page label must start with {PAGE_PREFIX}"));
   }
   let url = web_url(&url)?;
+  allow_local(&label, &url);
   let ui = window.label().to_string();
   let app = window.app_handle().clone();
   // Захист від стеження вікна: мітки стеження (fbclid, gclid…) прибираються з адреси ще до відкриття.
@@ -371,12 +405,13 @@ pub async fn page_open(
     // який у Windows його перехоплює.
     .disable_drag_drop_handler()
     .initialization_script_for_all_frames(audio::guard_script(&autoplay))
-    // Сайт не може перейти на file:, tauri: чи інші не-вебові схеми. Посилання на програму (mailto:, tel:…) —
-    // не перехід: його відкриє програма Windows, якщо дозволить користувач.
+    // Сайт не може перейти на tauri: чи інші не-вебові схеми, а на file: — лише у вкладці, де файл відкрив сам
+    // користувач. Посилання на програму (mailto:, tel:…) — не перехід: його відкриє програма Windows, якщо дозволить
+    // користувач.
     .on_navigation({
       let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
       move |url| {
-        if is_page_url(url) || url.as_str() == "about:blank" {
+        if (is_page_url(url) && may_open(&label, url)) || url.as_str() == "about:blank" {
           return true;
         }
         if crate::external::scheme_of(url).is_some() {
@@ -500,7 +535,7 @@ pub async fn page_open(
       let Ok(parsed) = Url::parse(&url) else {
         return;
       };
-      if is_page_url(&parsed) {
+      if is_page_url(&parsed) && may_open(&label, &parsed) {
         let _ = app.emit_to(&ui, "page://new-tab", NewTabEvent { label: label.clone(), url, user_initiated, background });
       } else if crate::external::scheme_of(&parsed).is_some() {
         let _ = app.emit_to(&ui, "page://external", ExternalEvent { label: label.clone(), url });
@@ -670,7 +705,10 @@ pub async fn page_open(
 #[tauri::command]
 #[specta::specta]
 pub fn page_navigate(window: Window, label: String, url: String) -> Result<(), String> {
-  page(&window, &label)?.navigate(web_url(&url)?).map_err(|error| error.to_string())
+  let webview = page(&window, &label)?;
+  let url = web_url(&url)?;
+  allow_local(&label, &url);
+  webview.navigate(url).map_err(|error| error.to_string())
 }
 
 /// Крок по історії сторінки: -1 — назад, 1 — вперед.
@@ -779,6 +817,7 @@ pub fn page_open_devtools(window: Window, label: String) -> Result<(), String> {
 pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label: String) -> Result<(), String> {
   scripts.0.lock().map_err(|error| error.to_string())?.remove(&label);
   window.state::<crate::tracking::PageScripts>().0.lock().map_err(|error| error.to_string())?.remove(&label);
+  LOCAL_PAGES.lock().map_err(|error| error.to_string())?.remove(&label);
   let Some(webview) = window.get_webview(&label) else {
     return Ok(());
   };
@@ -1035,7 +1074,23 @@ mod tests {
     assert!(is_page_url(&url("http://localhost:4200/")));
     assert!(is_page_url(&url("view-source:https://example.com/a?b=1")));
     assert!(!is_page_url(&url("view-source:file:///C:/secret.txt")));
-    assert!(!is_page_url(&url("file:///C:/secret.txt")));
     assert!(web_url("view-source:javascript:alert(1)").is_err());
+  }
+
+  #[test]
+  fn only_tabs_where_the_user_opened_a_file_may_open_files() {
+    let url = |raw: &str| Url::parse(raw).unwrap();
+    let file = url("file:///C:/Users/me/page.html");
+    assert!(is_page_url(&file));
+    // Сайт не відкриє файл ні переходом, ні новою вкладкою.
+    assert!(!may_open("page-web-1", &file));
+    assert!(may_open("page-web-1", &url("https://example.com/")));
+    // Файл, відкритий користувачем, — і переходи між файлами в цій вкладці.
+    allow_local("page-web-2", &file);
+    assert!(may_open("page-web-2", &url("file:///C:/Users/me/other.html")));
+    assert!(!may_open("page-web-1", &file));
+    // Сайт, відкритий користувачем, дозволу на файли не дає.
+    allow_local("page-web-3", &url("https://example.com/"));
+    assert!(!may_open("page-web-3", &file));
   }
 }

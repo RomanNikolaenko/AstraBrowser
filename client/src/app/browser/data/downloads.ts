@@ -45,6 +45,8 @@ export interface DownloadPromptRequest {
   readonly folder: string;
   /** 0 — розмір невідомий. */
   readonly total: number;
+  /** У теці вже є файл із такою назвою: замінити його чи зберегти обидва. */
+  readonly exists?: boolean;
 }
 
 /** Завантаження, що ще триває. */

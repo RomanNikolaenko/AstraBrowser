@@ -445,9 +445,14 @@ export class PageViews {
     await commands.pageSetAutoplay(label, autoplay);
   }
 
-  /** Відповідь «куди зберегти»: тека чи null — не завантажувати. */
-  async resolveDownload(id: number, folder: string | null): Promise<void> {
-    await commands.downloadResolve(id, folder);
+  /** Відповідь «куди зберегти»: тека чи null — не завантажувати; `replace` — наявний файл із такою назвою замінити. */
+  async resolveDownload(id: number, folder: string | null, replace = false): Promise<void> {
+    await commands.downloadResolve(id, folder, replace);
+  }
+
+  /** Чи є вже в теці файл із такою назвою. */
+  downloadFileExists(folder: string, fileName: string): Promise<boolean> {
+    return commands.downloadsFileExists(folder, fileName);
   }
 
   /** Вікно вибору теки Windows для одного файла; null — теку не вибрали. */

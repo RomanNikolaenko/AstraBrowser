@@ -49,8 +49,31 @@ export function normalizeUrl(value: string): string | null {
   }
 }
 
-/** Введене в адресному рядку: адреса сайту чи його код (view-source:адреса) або `null` — тоді це пошук. */
+/** Файл комп'ютера: адреса file:///… чи шлях Windows (C:\…) — адресою file:, інакше `null`. */
+function fileAddress(value: string): string | null {
+  const text = value.trim();
+  try {
+    if (/^file:\/\//i.test(text)) {
+      return new URL(text).href;
+    }
+    if (/^[a-z]:[\\/]/i.test(text)) {
+      return new URL(`file:///${text.replace(/\\/g, '/')}`).href;
+    }
+  } catch {
+    // Не адреса файла — тоді пошук.
+  }
+  return null;
+}
+
+/**
+ * Введене в адресному рядку: адреса сайту, його код (view-source:адреса) чи файл комп'ютера (file:///…, C:\…) або
+ * `null` — тоді це пошук.
+ */
 export function normalizeAddress(value: string): string | null {
+  const file = fileAddress(value);
+  if (file) {
+    return file;
+  }
   const source = /^\s*view-source:/i.exec(value);
   if (!source) {
     return normalizeUrl(value);

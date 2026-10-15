@@ -45,6 +45,7 @@ fn specta() -> tauri_specta::Builder<Wry> {
       downloads::downloads_set_ask,
       downloads::downloads_open_folder,
       downloads::download_resolve,
+      downloads::downloads_file_exists,
       downloads::downloads_pick_folder,
       downloads::download_cancel,
       downloads::download_open,

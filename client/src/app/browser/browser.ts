@@ -87,7 +87,16 @@ import { ProfilePage } from './pages/profile-page/profile-page';
 import { PasswordsPage } from './pages/passwords-page/passwords-page';
 import { AddressesPage } from './pages/addresses-page/addresses-page';
 import { CardsPage } from './pages/cards-page/cards-page';
-import { InternalPage, TAB_PAGES, TabPage, hostname, internalPageFor, isPageUrl, viewSourceUrl } from './pages/internal-pages';
+import {
+  InternalPage,
+  TAB_PAGES,
+  TabPage,
+  hostname,
+  internalPageFor,
+  isOpenableUrl,
+  isPageUrl,
+  viewSourceUrl,
+} from './pages/internal-pages';
 import { SettingsPage } from './pages/settings-page/settings-page';
 import { PageCrashed } from './page-crashed/page-crashed';
 import { ProfileMenu } from './profile-menu/profile-menu';
@@ -814,7 +823,7 @@ export class Browser {
   private tabFromSaved(item: SavedTab): BrowserTab | null {
     const id = this.nextTabId++;
     const pinned = item.pinned ? { pinned: true } : {};
-    if (item.page === 'web' && item.url && isPageUrl(item.url)) {
+    if (item.page === 'web' && item.url && isOpenableUrl(item.url)) {
       const label = this.newPageLabel({ id, page: 'web' });
       return { id, page: 'web', site: { ...emptySite(label, item.url), title: item.title ?? '', pending: true }, ...pinned };
     }
@@ -1666,11 +1675,11 @@ export class Browser {
   }
 
   /**
-   * Посилання ззовні (Telegram, пошта) — новими вкладками, остання стає активною; порожня нова вкладка
-   * не лишається — її займає посилання. Приватне й гостьове вікна відкривають їх у звичайному.
+   * Посилання ззовні (Telegram, пошта) і файли з Провідника — новими вкладками, остання стає активною; порожня нова
+   * вкладка не лишається — її займає посилання. Приватне й гостьове вікна відкривають їх у звичайному.
    */
   private openLinks(urls: readonly string[]): void {
-    const links = urls.filter((url) => /^https?:\/\//i.test(url));
+    const links = urls.filter(isOpenableUrl);
     if (this.windows.isPrivate || this.isGuest) {
       links.forEach((url) => this.windows.open({ url }));
       return;
@@ -1881,8 +1890,9 @@ export class Browser {
       if (this.shownUrl(site, url) !== url) {
         return { ...site, canGoBack, canGoForward };
       }
-      // У приватному вікні історія не ведеться; та сама адреса (оновлення, зміна лише історії) не дублює запис.
-      if (this.windows.isPrivate || site.historyEntry?.url === url) {
+      // У приватному вікні історія не ведеться; та сама адреса (оновлення, зміна лише історії) не дублює запис. Файлів
+      // комп'ютера в історії теж немає: вона синхронізується, а шляхам до файлів на сервері не місце.
+      if (this.windows.isPrivate || site.historyEntry?.url === url || url.startsWith('file:')) {
         return { ...site, url, canGoBack, canGoForward };
       }
       const id = this.history.record(url, site.title || hostname(url));

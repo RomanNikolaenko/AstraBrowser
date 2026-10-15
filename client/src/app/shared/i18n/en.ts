@@ -420,6 +420,11 @@ export const EN: Readonly<Record<string, string>> = {
 
   // Завантаження
   'Зберегти файл?': 'Save file?',
+  'Такий файл уже є': 'This file already exists',
+  'У цій теці вже є файл із такою назвою. Замінити його чи зберегти обидва (новий — з номером у назві)?':
+    'This folder already has a file with this name. Replace it or keep both (the new one gets a number in its name)?',
+  Замінити: 'Replace',
+  'Зберегти обидва': 'Keep both',
   'Зберегти в теку': 'Save to folder',
   'Змінити…': 'Change…',
   'Більше не питати — зберігати одразу (змінити можна в налаштуваннях)':

@@ -6,15 +6,21 @@
 //! Посилання, з якими браузер щойно запустили, головне вікно забирає саме, коли відновить вкладки ([`launch_urls`]).
 //!
 //! Посилання Windows передає сюди, коли Astra — браузер за замовчуванням: реєструє його інсталятор
-//! (server/windows/installer-hooks.nsh), а стан і кнопку в налаштуваннях дає default_browser.rs.
+//! (server/windows/installer-hooks.nsh), а стан і кнопку в налаштуваннях дає default_browser.rs. Так само — і файли,
+//! які браузер показує сам (сторінки, SVG, PDF): подвійний клік, «Відкрити за допомогою».
 
-use std::sync::Mutex;
+use std::{
+  path::{Path, PathBuf},
+  sync::Mutex,
+};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 /// Скільки посилань із командного рядка приймати за раз.
 const MAX_URLS: usize = 20;
+/// Файли, які браузер показує сам: їх можна відкрити в Astra з Провідника (типи — і в інсталяторі).
+const FILE_TYPES: [&str; 7] = ["htm", "html", "shtml", "xht", "xhtml", "svg", "pdf"];
 
 pub struct Launch {
   /// Посилання, з якими браузер запустили, — поки їх не забрало головне вікно.
@@ -26,19 +32,43 @@ pub struct Launch {
 impl Launch {
   /// `args` — аргументи без першого (шляху до самої програми).
   pub fn new(args: impl IntoIterator<Item = String>) -> Self {
-    Self { pending: Mutex::new(web_urls(args)), last_window: Mutex::default() }
+    let urls = urls_from_args(args, std::env::current_dir().ok().as_deref());
+    Self { pending: Mutex::new(urls), last_window: Mutex::default() }
   }
 }
 
-/// Вебові адреси з аргументів; решту (прапорці, шляхи до файлів) пропускаємо.
-fn web_urls(args: impl IntoIterator<Item = String>) -> Vec<String> {
+/// Адреси з аргументів: вебові й файли, які браузер показує сам (FILE_TYPES), — адресами file:. Відносні шляхи — від
+/// теки `cwd`. Решту (прапорці, інші файли й схеми) пропускаємо.
+fn urls_from_args(args: impl IntoIterator<Item = String>, cwd: Option<&Path>) -> Vec<String> {
   args
     .into_iter()
-    .filter_map(|arg| tauri::Url::parse(arg.trim()).ok())
-    .filter(|url| matches!(url.scheme(), "http" | "https"))
-    .map(String::from)
+    .filter_map(|arg| {
+      let arg = arg.trim();
+      // «C:\…» теж розбирається як адреса (зі схемою «c») — такий аргумент далі береться як шлях.
+      match tauri::Url::parse(arg) {
+        Ok(url) if matches!(url.scheme(), "http" | "https") => Some(url.into()),
+        Ok(url) if url.scheme() == "file" => url.to_file_path().ok().and_then(|path| file_url(&path)),
+        _ => {
+          let path = PathBuf::from(arg);
+          let path = match cwd {
+            Some(cwd) if path.is_relative() => cwd.join(path),
+            _ => path,
+          };
+          file_url(&path)
+        }
+      }
+    })
     .take(MAX_URLS)
     .collect()
+}
+
+/// Адреса file: наявного файла, який браузер показує сам.
+fn file_url(path: &Path) -> Option<String> {
+  let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+  if !FILE_TYPES.contains(&extension.as_str()) || !path.is_file() {
+    return None;
+  }
+  tauri::Url::from_file_path(std::path::absolute(path).ok()?).ok().map(String::from)
 }
 
 /// Звичайне вікно браузера (головне чи нове) — як isNormalWindow у client/src/app/shared/browser-windows.
@@ -55,8 +85,8 @@ struct OpenRequest {
 /// Браузер запустили ще раз: його посилання — у вже відкрите вікно (а без посилань воно відкриє нове вікно).
 // У розробці плагін single-instance вимкнено (main.rs), і цим у debug-збірці ніхто не користується.
 #[cfg_attr(debug_assertions, allow(dead_code))]
-pub fn second_instance(app: &AppHandle, args: Vec<String>) {
-  let urls = web_urls(args.into_iter().skip(1));
+pub fn second_instance(app: &AppHandle, args: Vec<String>, cwd: String) {
+  let urls = urls_from_args(args.into_iter().skip(1), Some(Path::new(&cwd)));
   log::info!("Повторний запуск, посилань: {}", urls.len());
   let Some(window) = target(app) else {
     return;
@@ -101,10 +131,31 @@ mod tests {
   use super::*;
 
   #[test]
-  fn takes_only_web_links_from_the_command_line() {
-    let args = ["https://example.com/a?b=1", "--flag", "C:\\Users\\me\\page.html", "file:///C:/x.html", " http://test.dev ", "mailto:a@b.c"];
-    assert_eq!(web_urls(args.map(String::from)), ["https://example.com/a?b=1", "http://test.dev/"]);
-    assert_eq!(web_urls((0..30).map(|i| format!("https://site{i}.example/"))).len(), MAX_URLS);
+  fn takes_web_links_and_pages_from_the_command_line() {
+    let dir = std::env::temp_dir().join(format!("astra-launch-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let page = dir.join("сторінка.html");
+    std::fs::write(&page, "<p>hi</p>").expect("page");
+    std::fs::write(dir.join("program.exe"), "").expect("program");
+    let page_url = tauri::Url::from_file_path(&page).expect("url").to_string();
+
+    let args = [
+      "https://example.com/a?b=1".to_string(),
+      "--flag".into(),
+      page.to_string_lossy().into_owned(),
+      "сторінка.html".into(),
+      page_url.clone(),
+      dir.join("program.exe").to_string_lossy().into_owned(),
+      dir.join("missing.html").to_string_lossy().into_owned(),
+      " http://test.dev ".into(),
+      "mailto:a@b.c".into(),
+    ];
+    assert_eq!(
+      urls_from_args(args, Some(&dir)),
+      ["https://example.com/a?b=1".to_string(), page_url.clone(), page_url.clone(), page_url, "http://test.dev/".into()]
+    );
+    assert_eq!(urls_from_args((0..30).map(|i| format!("https://site{i}.example/")), None).len(), MAX_URLS);
+    let _ = std::fs::remove_dir_all(&dir);
   }
 
   #[test]

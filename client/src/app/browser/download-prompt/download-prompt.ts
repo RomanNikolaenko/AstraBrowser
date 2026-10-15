@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  computed,
   Injector,
   afterNextRender,
   effect,
@@ -20,7 +21,8 @@ import { TranslatePipe } from '../../shared/i18n/i18n';
 /**
  * Перед завантаженням: що за файл і в яку теку він ляже, з можливістю вибрати іншу теку лише для нього
  * (як «Зберегти як»). Показується, поки в налаштуваннях увімкнено «Питати, куди зберегти файл»;
- * «Більше не питати» це вимикає. Кілька запитів поспіль — по черзі.
+ * «Більше не питати» це вимикає. А ще — завжди, коли в теці вже є файл із такою назвою: замінити його чи зберегти
+ * обидва (новий — «назва (1)»). Кілька запитів поспіль — по черзі.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,6 +42,13 @@ export class DownloadPrompt {
   /** Тека саме для цього файла — спершу та, що в налаштуваннях. */
   protected readonly folder = signal('');
   protected readonly dontAsk = signal(false);
+  /** У вибраній теці вже є файл із такою назвою. */
+  protected readonly exists = signal(false);
+  /**
+   * «Більше не питати» — лише коли питати увімкнено: вікно, що з'явилося лише через наявний файл, і з вимкненим
+   * налаштуванням показується знову, тож пропонувати вимкнути нічого.
+   */
+  protected readonly offerDontAsk = computed(() => !(this.request()?.exists && this.settings.settings()?.ask === false));
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
 
@@ -57,6 +66,7 @@ export class DownloadPrompt {
         this.request.set(next);
         if (next) {
           this.folder.set(next.folder);
+          this.exists.set(!!next.exists);
           this.dontAsk.set(false);
           afterNextRender(
             () => {
@@ -74,16 +84,19 @@ export class DownloadPrompt {
 
   protected async changeFolder(): Promise<void> {
     const picked = await this.pageViews.pickDownloadFolder(this.folder()).catch(() => null);
-    if (picked) {
+    const request = this.request();
+    if (picked && request) {
       this.folder.set(picked);
+      this.exists.set(await this.pageViews.downloadFileExists(picked, request.fileName).catch(() => false));
     }
   }
 
-  protected save(): void {
+  /** `replace` — наявний файл із такою назвою замінити; інакше новий ляже поряд. */
+  protected save(replace: boolean): void {
     if (this.dontAsk()) {
       void this.settings.setAsk(false).catch(() => undefined);
     }
-    this.answer(this.folder());
+    this.answer(this.folder(), replace);
   }
 
   /** «Скасувати», Esc чи клік повз вікно — файл не завантажується. */
@@ -101,7 +114,7 @@ export class DownloadPrompt {
     }
   }
 
-  private answer(folder: string | null): void {
+  private answer(folder: string | null, replace = false): void {
     const request = this.request();
     if (!request) {
       return;
@@ -109,6 +122,6 @@ export class DownloadPrompt {
     this.request.set(null);
     this.dialog().nativeElement.close?.();
     this.downloads.answerPrompt(request.id);
-    void this.pageViews.resolveDownload(request.id, folder).catch(() => undefined);
+    void this.pageViews.resolveDownload(request.id, folder, replace).catch(() => undefined);
   }
 }

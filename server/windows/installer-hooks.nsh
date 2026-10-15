@@ -12,6 +12,28 @@
 ; прочитає цей файл.
 !define BROWSER_KEY "Software\Clients\StartMenuInternet\Astra Browser"
 !define BROWSER_URL_CLASS "Software\Classes\AstraBrowserURL"
+; Файли, які браузер показує сам (сторінки, SVG, PDF; server/src/launch.rs, FILE_TYPES): Windows відкриває їх командою
+; `astra-browser.exe "<шлях>"`, а Astra є серед програм для них («Відкрити за допомогою», «Програми за замовчуванням»).
+!define BROWSER_FILE_CLASS "Software\Classes\AstraBrowserHTML"
+
+!macro ASTRA_FILE_TYPE EXT
+  WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\FileAssociations" "${EXT}" "AstraBrowserHTML"
+  WriteRegStr HKCU "Software\Classes\${EXT}\OpenWithProgids" "AstraBrowserHTML" ""
+!macroend
+
+!macro ASTRA_FORGET_FILE_TYPE EXT
+  DeleteRegValue HKCU "Software\Classes\${EXT}\OpenWithProgids" "AstraBrowserHTML"
+!macroend
+
+!macro ASTRA_FILE_TYPES MACRO
+  !insertmacro ${MACRO} ".htm"
+  !insertmacro ${MACRO} ".html"
+  !insertmacro ${MACRO} ".shtml"
+  !insertmacro ${MACRO} ".xht"
+  !insertmacro ${MACRO} ".xhtml"
+  !insertmacro ${MACRO} ".svg"
+  !insertmacro ${MACRO} ".pdf"
+!macroend
 
 !macro ASTRA_REGISTER_BROWSER
   WriteRegStr HKCU "${BROWSER_URL_CLASS}" "" "Astra Browser URL"
@@ -30,6 +52,14 @@
   WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\StartMenu" "StartMenuInternet" "Astra Browser"
   WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\URLAssociations" "http" "AstraBrowserURL"
   WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\URLAssociations" "https" "AstraBrowserURL"
+
+  WriteRegStr HKCU "${BROWSER_FILE_CLASS}" "" "Astra Browser Document"
+  WriteRegStr HKCU "${BROWSER_FILE_CLASS}\DefaultIcon" "" "$INSTDIR\astra-browser.exe,0"
+  WriteRegStr HKCU "${BROWSER_FILE_CLASS}\shell\open\command" "" '"$INSTDIR\astra-browser.exe" "%1"'
+  WriteRegStr HKCU "${BROWSER_FILE_CLASS}\Application" "ApplicationName" "Astra Browser"
+  WriteRegStr HKCU "${BROWSER_FILE_CLASS}\Application" "ApplicationIcon" "$INSTDIR\astra-browser.exe,0"
+  !insertmacro ASTRA_FILE_TYPES ASTRA_FILE_TYPE
+
   WriteRegStr HKCU "Software\RegisteredApplications" "Astra Browser" "${BROWSER_KEY}\Capabilities"
   ; Оболонка перечитує зв'язки: Astra одразу видно в «Параметрах».
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
@@ -85,6 +115,8 @@
   ${If} $UpdateMode <> 1
     DeleteRegKey HKCU "${BROWSER_KEY}"
     DeleteRegKey HKCU "${BROWSER_URL_CLASS}"
+    DeleteRegKey HKCU "${BROWSER_FILE_CLASS}"
+    !insertmacro ASTRA_FILE_TYPES ASTRA_FORGET_FILE_TYPE
     DeleteRegValue HKCU "Software\RegisteredApplications" "Astra Browser"
     System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
   ${EndIf}

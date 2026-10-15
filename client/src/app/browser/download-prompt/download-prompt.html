@@ -1,7 +1,9 @@
 <dialog #dialog class="download-prompt" aria-labelledby="download-prompt-title" closedby="any" (close)="onClose()">
   @if (request(); as request) {
     <div class="download-prompt__panel">
-      <h2 class="download-prompt__title" id="download-prompt-title">{{ 'Зберегти файл?' | t }}</h2>
+      <h2 class="download-prompt__title" id="download-prompt-title">
+        {{ (exists() ? 'Такий файл уже є' : 'Зберегти файл?') | t }}
+      </h2>
 
       <div class="download-prompt__file">
         <span class="download-prompt__icon"><app-icon icon="file" /></span>
@@ -22,16 +24,29 @@
         <button class="download-prompt__button" type="button" (click)="changeFolder()">{{ 'Змінити…' | t }}</button>
       </div>
 
-      <label class="download-prompt__dont-ask">
-        <input type="checkbox" name="dont-ask" [checked]="dontAsk()" (change)="setDontAsk($event)" />
-        {{ 'Більше не питати — зберігати одразу (змінити можна в налаштуваннях)' | t }}
-      </label>
+      @if (exists()) {
+        <p class="download-prompt__conflict">
+          {{ 'У цій теці вже є файл із такою назвою. Замінити його чи зберегти обидва (новий — з номером у назві)?' | t }}
+        </p>
+      }
+
+      @if (offerDontAsk()) {
+        <label class="download-prompt__dont-ask">
+          <input type="checkbox" name="dont-ask" [checked]="dontAsk()" (change)="setDontAsk($event)" />
+          {{ 'Більше не питати — зберігати одразу (змінити можна в налаштуваннях)' | t }}
+        </label>
+      }
 
       <div class="download-prompt__actions">
         <button class="download-prompt__button" type="button" (click)="cancel()">{{ 'Скасувати' | t }}</button>
-        <!-- Фокус одразу на «Зберегти»: Enter завантажує, Esc скасовує. -->
-        <button class="download-prompt__button download-prompt__button--primary" type="button" autofocus (click)="save()">
-          {{ 'Зберегти' | t }}
+        @if (exists()) {
+          <button class="download-prompt__button download-prompt__button--replace" type="button" (click)="save(true)">
+            {{ 'Замінити' | t }}
+          </button>
+        }
+        <!-- Фокус одразу на «Зберегти»: Enter завантажує (наявний файл не чіпає), Esc скасовує. -->
+        <button class="download-prompt__button download-prompt__button--primary" type="button" autofocus (click)="save(false)">
+          {{ (exists() ? 'Зберегти обидва' : 'Зберегти') | t }}
         </button>
       </div>
     </div>

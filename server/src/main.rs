@@ -91,7 +91,7 @@ fn main() {
 	// Лише в релізі: інакше `tauri dev` при запущеному встановленому Astra Browser (той самий ідентифікатор) не
 	// запустився б, а віддав би свої аргументи йому.
 	#[cfg(not(debug_assertions))]
-	let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| launch::second_instance(app, args)));
+	let builder = builder.plugin(tauri_plugin_single_instance::init(launch::second_instance));
 	// DNS через HTTPS — у налаштування WebView2 ще до першого вікна: браузер читає їх лише під час запуску (dns.rs).
 	// Плагіном одразу після single-instance: повторний запуск завершується, не чекаючи тут.
 	let builder = builder.plugin(dns::plugin());

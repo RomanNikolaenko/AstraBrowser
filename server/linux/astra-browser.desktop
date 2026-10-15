@@ -12,4 +12,4 @@ GenericName[uk]=Веб-браузер
 Terminal=false
 Type=Application
 StartupNotify=true
-MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+MimeType=text/html;application/xhtml+xml;image/svg+xml;x-scheme-handler/http;x-scheme-handler/https;

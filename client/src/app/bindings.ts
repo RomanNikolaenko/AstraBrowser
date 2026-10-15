@@ -48,8 +48,13 @@ export const commands = {
 	downloadsSetAsk: (ask: boolean) => __TAURI_INVOKE<DownloadSettings>("downloads_set_ask", { ask }),
 	/**  Відкриває теку завантажень у Провіднику. */
 	downloadsOpenFolder: () => __TAURI_INVOKE<null>("downloads_open_folder"),
-	/**  Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None). */
-	downloadResolve: (id: number, folder: string | null) => __TAURI_INVOKE<null>("download_resolve", { id, folder }),
+	/**
+	 *  Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None). `replace` — файл із такою
+	 *  назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf».
+	 */
+	downloadResolve: (id: number, folder: string | null, replace: boolean) => __TAURI_INVOKE<null>("download_resolve", { id, folder, replace }),
+	/**  Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли для файла вибрали іншу теку. */
+	downloadsFileExists: (folder: string, fileName: string) => __TAURI_INVOKE<boolean>("downloads_file_exists", { folder, fileName }),
 	/**  Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються. */
 	downloadsPickFolder: (current: string | null) => __TAURI_INVOKE<string | null>("downloads_pick_folder", { current }),
 	downloadCancel: (id: number) => __TAURI_INVOKE<null>("download_cancel", { id }),

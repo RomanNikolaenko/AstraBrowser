@@ -54,6 +54,8 @@ struct PromptEvent {
   file_name: String,
   folder: String,
   total: i64,
+  /// У теці вже є файл із такою назвою: замінити його чи зберегти обидва.
+  exists: bool,
 }
 
 /// Налаштування завантажень для інтерфейсу; надсилаються й подією downloads://settings.
@@ -66,7 +68,8 @@ pub struct DownloadSettings {
   ask: bool,
 }
 
-/// Завантаження, про яке питають, куди зберегти файл: що за файл і куди рушій збирався його покласти.
+/// Завантаження, про яке питають, куди зберегти файл: що за файл і куди рушій збирався його покласти (назва — як
+/// запропонував сайт, і файл із нею там уже може бути).
 pub struct DownloadRequest {
   pub id: u64,
   pub url: String,
@@ -158,11 +161,13 @@ fn apply(app: &AppHandle) -> DownloadSettings {
   status
 }
 
-/// Якщо так налаштовано — просить інтерфейс вікна `ui` показати, куди збережеться файл, і повертає true:
-/// тоді завантаження чекає, поки інтерфейс відповість через download_resolve.
+/// Просить інтерфейс вікна `ui` показати, куди збережеться файл, і повертає true — тоді завантаження чекає, поки
+/// інтерфейс відповість через download_resolve. Питає, якщо так налаштовано, а ще — завжди, коли в теці вже є файл
+/// із такою назвою: замінити його чи зберегти обидва. Інакше (false) рушій зберігає файл одразу, під вільною назвою.
 pub fn ask_where(app: &AppHandle, ui: &str, label: &str, request: DownloadRequest) -> bool {
   let downloads = app.state::<Downloads>();
-  if !downloads.ask() {
+  let exists = request.path.is_file();
+  if !downloads.ask() && !exists {
     return false;
   }
   let file_name = request
@@ -183,6 +188,7 @@ pub fn ask_where(app: &AppHandle, ui: &str, label: &str, request: DownloadReques
     file_name,
     folder: folder.display().to_string(),
     total: request.total,
+    exists,
   };
   app.emit_to(ui, "page://download-prompt", event).is_ok()
 }
@@ -210,10 +216,11 @@ fn free_path(folder: &Path, file_name: &str) -> PathBuf {
     .unwrap_or(candidate)
 }
 
-/// Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None).
+/// Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None). `replace` — файл із такою
+/// назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf».
 #[tauri::command]
 #[specta::specta]
-pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64, folder: Option<String>) -> Result<(), String> {
+pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64, folder: Option<String>, replace: bool) -> Result<(), String> {
   let file_name = downloads.prompts.lock().map_err(|error| error.to_string())?.remove(&id);
   let path = match (folder, file_name) {
     (Some(folder), Some(file_name)) => {
@@ -221,14 +228,23 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
       if !folder.is_dir() {
         return Err(format!("{} {}", crate::i18n::text("Немає теки", "Folder not found:"), folder.display()));
       }
-      Some(free_path(&folder, &file_name))
+      Some(if replace { folder.join(&file_name) } else { free_path(&folder, &file_name) })
     }
     _ => None,
   };
+  // WebView2 файл за явно заданим шляхом і так перезаписує, а WebKit — лише з дозволом.
   #[cfg(windows)]
   return app.run_on_main_thread(move || webview2::resolve_download(id, path)).map_err(|error| error.to_string());
   #[cfg(target_os = "linux")]
-  return app.run_on_main_thread(move || crate::gtk_downloads::resolve_download(id, path)).map_err(|error| error.to_string());
+  return app.run_on_main_thread(move || crate::gtk_downloads::resolve_download(id, path, replace)).map_err(|error| error.to_string());
+}
+
+/// Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли для файла вибрали іншу теку.
+#[tauri::command]
+#[specta::specta]
+pub fn downloads_file_exists(folder: String, file_name: String) -> bool {
+  // Лише назва файла, без шляхів: питають саме про цю теку.
+  Path::new(&file_name).file_name().is_some_and(|name| name == file_name.as_str()) && Path::new(&folder).join(&file_name).is_file()
 }
 
 /// Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються.
@@ -371,6 +387,19 @@ fn open_with_system(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn tells_whether_the_folder_already_has_the_file() {
+    let folder = std::env::temp_dir().join(format!("astra-downloads-exists-{}", std::process::id()));
+    fs::create_dir_all(&folder).expect("folder");
+    fs::write(folder.join("звіт.pdf"), "pdf").expect("file");
+    let path = folder.to_string_lossy().into_owned();
+    assert!(downloads_file_exists(path.clone(), "звіт.pdf".into()));
+    assert!(!downloads_file_exists(path.clone(), "інший.pdf".into()));
+    // Лише назва в цій теці — не шлях деінде.
+    assert!(!downloads_file_exists(path, format!("..{}звіт.pdf", std::path::MAIN_SEPARATOR)));
+    let _ = fs::remove_dir_all(&folder);
+  }
 
   #[test]
   fn free_path_does_not_overwrite_existing_files() {

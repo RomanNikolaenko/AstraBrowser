@@ -95,6 +95,12 @@ describe('normalizeUrl', () => {
     expect(normalizeAddress('view-source:javascript:alert(1)')).toBeNull();
     expect(normalizeAddress('angular.dev')).toBe('https://angular.dev/');
     expect(normalizeAddress('рецепт борщу')).toBeNull();
+    // Файл комп'ютера — адресою file:, а у формах закладок (normalizeUrl) — ні.
+    expect(normalizeAddress('file:///C:/Users/me/page.html')).toBe('file:///C:/Users/me/page.html');
+    expect(normalizeAddress(' C:\\Users\\me\\Мої документи\\звіт.pdf ')).toBe(
+      'file:///C:/Users/me/%D0%9C%D0%BE%D1%97%20%D0%B4%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D0%B8/%D0%B7%D0%B2%D1%96%D1%82.pdf'
+    );
+    expect(normalizeUrl('file:///C:/Users/me/page.html')).toBeNull();
   });
 
   it('should reject non-web and malformed addresses', () => {

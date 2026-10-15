@@ -1,4 +1,4 @@
-import { formatSize, groupByDay, hostname, matchesQuery } from './internal-pages';
+import { formatSize, groupByDay, hostname, isOpenableUrl, matchesQuery } from './internal-pages';
 
 describe('internal page helpers', () => {
   it('should group items into today, yesterday and older dates', () => {
@@ -24,6 +24,18 @@ describe('internal page helpers', () => {
   it('should show a short host name', () => {
     expect(hostname('https://www.youtube.com/watch?v=1')).toBe('youtube.com');
     expect(hostname('not a url')).toBe('not a url');
+    expect(hostname('file:///C:/Users/me/%D0%B7%D0%B2%D1%96%D1%82.pdf')).toBe('звіт.pdf');
+  });
+
+  it('should open from outside only sites and files the browser shows itself', () => {
+    expect(isOpenableUrl('https://example.com/')).toBe(true);
+    expect(isOpenableUrl('view-source:https://example.com/')).toBe(true);
+    expect(isOpenableUrl('file:///C:/Users/me/page.HTML')).toBe(true);
+    expect(isOpenableUrl('file:///home/me/chart.svg')).toBe(true);
+    expect(isOpenableUrl('file:///C:/Users/me/report.pdf')).toBe(true);
+    expect(isOpenableUrl('file:///C:/secret.txt')).toBe(false);
+    expect(isOpenableUrl('file:///C:/Windows/notepad.exe')).toBe(false);
+    expect(isOpenableUrl('javascript:alert(1)')).toBe(false);
   });
 
   it('should search case-insensitively across fields', () => {

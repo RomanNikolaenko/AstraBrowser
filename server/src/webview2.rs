@@ -1274,21 +1274,52 @@ fn on_download_starting(
   let mut path = PWSTR::null();
   unsafe { args.ResultFilePath(&mut path)? };
   // Шлях, заданий явно (а Tauri задає його завжди), WebView2 не змінює, навіть коли такий файл уже є, — і перезаписав би
-  // його. Тож повторне завантаження стає «назва (1).exe».
-  let free = crate::downloads::unused_path(Path::new(&take_pwstr(path)));
-  unsafe { args.SetResultFilePath(&HSTRING::from(free.as_os_str()))? };
-  let path = free.to_string_lossy().into_owned();
+  // його. Тож коли файл уже є, інтерфейс питає, замінити його чи зберегти обидва (downloads::ask_where), а без запитання
+  // повторне завантаження стає «назва (1).exe».
   let id = NEXT_DOWNLOAD.fetch_add(1, Ordering::Relaxed);
   let operation = unsafe { args.DownloadOperation()? };
-  let known = download_update(id, &operation, &path)?;
-  if ask(DownloadRequest { id, url: known.url, path: PathBuf::from(&path), total: known.total }) {
+  let wanted = original_path(&operation, PathBuf::from(take_pwstr(path)));
+  let known = download_update(id, &operation, &wanted.to_string_lossy())?;
+  if ask(DownloadRequest { id, url: known.url, path: wanted.clone(), total: known.total }) {
     let deferral = unsafe { args.GetDeferral()? };
     let pending =
       PendingDownload { args: args.clone(), deferral, report: report.clone(), label: label.to_string(), app: app.clone() };
     PENDING_DOWNLOADS.with(|downloads| downloads.borrow_mut().insert(id, pending));
     return Ok(());
   }
-  begin_download(id, app, label, &operation, path, report)
+  let free = crate::downloads::unused_path(&wanted);
+  unsafe { args.SetResultFilePath(&HSTRING::from(free.as_os_str()))? };
+  begin_download(id, app, label, &operation, free.to_string_lossy().into_owned(), report)
+}
+
+/// Шлях, який файл мав би без перейменування. Коли такий файл уже є, Chromium сам дає вільну назву («звіт (1).pdf»), а
+/// браузерові треба знати про збіг — щоб спитати, замінити наявний чи зберегти обидва. Тож «звіт (1).pdf», поряд з яким
+/// лежить «звіт.pdf», — це «звіт.pdf», якщо тільки сайт сам не назвав файл «звіт (1).pdf».
+fn original_path(operation: &ICoreWebView2DownloadOperation, path: PathBuf) -> PathBuf {
+  let Some(original) = path.file_name().and_then(|name| name.to_str()).and_then(renamed_from).map(|name| path.with_file_name(name)) else {
+    return path;
+  };
+  let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+  let (mut uri, mut disposition) = (PWSTR::null(), PWSTR::null());
+  let read = unsafe { operation.Uri(&mut uri).and_then(|()| operation.ContentDisposition(&mut disposition)) };
+  let (uri, disposition) = (take_pwstr(uri), take_pwstr(disposition));
+  // Не вдалося дізнатися — назва лишається, як дав Chromium.
+  let named_by_site = read.is_err() || uri.replace("%20", " ").contains(&name) || disposition.contains(&name);
+  if original.is_file() && !named_by_site {
+    original
+  } else {
+    path
+  }
+}
+
+/// Назва без номера, який Chromium додає вільній назві: «звіт (1).pdf» → «звіт.pdf»; без номера — None.
+fn renamed_from(name: &str) -> Option<String> {
+  let (stem, extension) = match name.rfind('.') {
+    Some(dot) if dot > 0 => name.split_at(dot),
+    _ => (name, ""),
+  };
+  let (base, number) = stem.strip_suffix(')')?.rsplit_once(" (")?;
+  (!base.is_empty() && !number.is_empty() && number.chars().all(|char| char.is_ascii_digit())).then(|| format!("{base}{extension}"))
 }
 
 /// Користувач вибрав, куди зберегти файл, чи передумав (None — завантаження скасовується).
@@ -1595,4 +1626,20 @@ pub fn cancel_download(id: u64) {
       let _ = unsafe { operation.Cancel() };
     }
   });
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn finds_the_name_chromium_numbered() {
+    assert_eq!(renamed_from("звіт (1).pdf").as_deref(), Some("звіт.pdf"));
+    assert_eq!(renamed_from("архів.tar (12).gz").as_deref(), Some("архів.tar.gz"));
+    assert_eq!(renamed_from("README (3)").as_deref(), Some("README"));
+    assert_eq!(renamed_from("звіт.pdf"), None);
+    assert_eq!(renamed_from("звіт (чернетка).pdf"), None);
+    assert_eq!(renamed_from(" (1).pdf"), None);
+    assert_eq!(renamed_from("звіт ().pdf"), None);
+  }
 }

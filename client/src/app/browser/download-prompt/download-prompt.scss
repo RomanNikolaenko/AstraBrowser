@@ -129,6 +129,13 @@
     color: var(--browser-muted);
   }
 
+  &__conflict {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--browser-text);
+  }
+
   &__dont-ask {
     display: flex;
     gap: 0.5rem;
@@ -154,6 +161,11 @@
 
   &__button {
     @include pill-button(2.5rem);
+
+    // Замінити — назавжди прибрати наявний файл: червоним, як інші незворотні дії.
+    &--replace {
+      color: var(--color-danger);
+    }
 
     &--primary {
       color: #fff;

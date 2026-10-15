@@ -102,17 +102,33 @@ export function formatSize(bytes: number): string {
   return `${formatNumber(value, { maximumFractionDigits: 1 })} ${units[unit]}`;
 }
 
+/** Сайт адреси без www.; у файла комп'ютера — назва файла. */
 export function hostname(url: string): string {
   try {
-    return new URL(url.replace(/^view-source:/i, '')).hostname.replace(/^www\./, '');
+    const parsed = new URL(url.replace(/^view-source:/i, ''));
+    if (parsed.protocol === 'file:') {
+      return decodeURIComponent(parsed.pathname.split('/').pop() ?? '') || url;
+    }
+    return parsed.hostname.replace(/^www\./, '');
   } catch {
     return url;
   }
 }
 
-/** Адреса вкладки сайту: сам сайт (http, https) чи його код (view-source:…, Ctrl+U). */
+/** Адреса вкладки сайту: сам сайт (http, https), його код (view-source:…, Ctrl+U) чи файл комп'ютера (file:). */
 export function isPageUrl(url: string): boolean {
-  return /^(?:view-source:)?https?:/i.test(url);
+  return /^(?:(?:view-source:)?https?:|file:)/i.test(url);
+}
+
+/** Файли комп'ютера, які браузер показує сам: сторінки, SVG, PDF (як FILE_TYPES у server/src/launch.rs). */
+const OPENABLE_FILE = /^file:\/\/\/[^?#]+\.(?:html?|shtml|xht|xhtml|svg|pdf)$/i;
+
+/**
+ * Адреса, яку можна відкрити вкладкою ззовні (з інших програм, з минулого запуску): сайт, його код чи файл, який браузер
+ * показує сам; інших файлів комп'ютера — ні.
+ */
+export function isOpenableUrl(url: string): boolean {
+  return /^(?:view-source:)?https?:/i.test(url) || OPENABLE_FILE.test(url);
 }
 
 /** Код сторінки сайту — адреса для нової вкладки. */

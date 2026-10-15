@@ -145,12 +145,14 @@ fn decide(download: &Download, suggested: &str) -> bool {
   // ~/Downloads може ще не бути.
   let _ = std::fs::create_dir_all(&folder);
   let url = download.request().and_then(|request| request.uri()).map(String::from).unwrap_or_default();
-  let path = unused_path(&folder.join(file_name(suggested)));
+  // Файл із такою назвою вже є — інтерфейс спитає, замінити його чи зберегти обидва (downloads::ask_where); без
+  // запитання — вільна назва поряд.
+  let wanted = folder.join(file_name(suggested));
   let id = NEXT_DOWNLOAD.fetch_add(1, Ordering::Relaxed);
-  if (page.ask)(DownloadRequest { id, url: url.clone(), path: path.clone(), total: total(download) }) {
+  if (page.ask)(DownloadRequest { id, url: url.clone(), path: wanted.clone(), total: total(download) }) {
     PENDING.with(|pending| pending.borrow_mut().insert(id, Pending { download: download.clone(), page, url }));
   } else {
-    begin(id, download, &page.report, url, &path);
+    begin(id, download, &page.report, url, &unused_path(&wanted), false);
   }
   true
 }
@@ -171,8 +173,8 @@ fn total(download: &Download) -> i64 {
   download.response().map_or(0, |response| i64::try_from(response.content_length()).unwrap_or(0))
 }
 
-/// Завантаження йде у файл `path`: відтепер про нього знає інтерфейс.
-fn begin(id: u64, download: &Download, report: &Rc<dyn Fn(DownloadUpdate)>, url: String, path: &Path) {
+/// Завантаження йде у файл `path`: відтепер про нього знає інтерфейс. `replace` — файл, що там уже є, замінити.
+fn begin(id: u64, download: &Download, report: &Rc<dyn Fn(DownloadUpdate)>, url: String, path: &Path, replace: bool) {
   let path = path.to_string_lossy().into_owned();
   let running = Running { download: download.clone(), report: report.clone(), url, path: path.clone(), reported: Instant::now() };
   RUNNING.with(|downloads| downloads.borrow_mut().insert(id, running));
@@ -181,6 +183,7 @@ fn begin(id: u64, download: &Download, report: &Rc<dyn Fn(DownloadUpdate)>, url:
   download.connect_failed(move |_, error| finish(id, if error.matches(DownloadError::CancelledByUser) { "canceled" } else { "failed" }));
   download.connect_finished(move |_| finish(id, "completed"));
   progress(id, true);
+  download.set_allow_overwrite(replace);
   download.set_destination(&path);
 }
 
@@ -219,13 +222,14 @@ fn finish(id: u64, state: &'static str) {
   (running.report)(update(id, &running, state));
 }
 
-/// Користувач вибрав, куди зберегти файл, чи передумав (None — завантаження скасовується). Лише в головному потоці.
-pub fn resolve_download(id: u64, path: Option<PathBuf>) {
+/// Користувач вибрав, куди зберегти файл, чи передумав (None — завантаження скасовується); `replace` — файл, що там уже
+/// є, замінити. Лише в головному потоці.
+pub fn resolve_download(id: u64, path: Option<PathBuf>, replace: bool) {
   let Some(pending) = PENDING.with(|downloads| downloads.borrow_mut().remove(&id)) else {
     return;
   };
   match path {
-    Some(path) => begin(id, &pending.download, &pending.page.report, pending.url, &path),
+    Some(path) => begin(id, &pending.download, &pending.page.report, pending.url, &path, replace),
     None => pending.download.cancel(),
   }
 }

@@ -131,8 +131,12 @@ class FakePageViews {
   showDownload(path: string) {
     return this.record('show-download', path);
   }
-  resolveDownload(id: number, folder: string | null) {
-    return this.record('resolve-download', id, folder);
+  resolveDownload(id: number, folder: string | null, replace = false) {
+    return replace ? this.record('resolve-download', id, folder, 'replace') : this.record('resolve-download', id, folder);
+  }
+  existingFiles: string[] = [];
+  downloadFileExists(folder: string, fileName: string) {
+    return Promise.resolve(this.existingFiles.includes(`${folder}\\${fileName}`));
   }
   pickedFolder: string | null = 'D:\\Файли';
   pickDownloadFolder(current: string) {
@@ -1986,6 +1990,52 @@ describe('Browser with sites', () => {
       await click('.download-prompt__button--primary');
       expect(setAsk).toHaveBeenCalledWith(false);
       expect(pages.called('resolve-download').at(-1)).toEqual([7, 'C:\\Users\\me\\Downloads']);
+    });
+
+    it('should ask whether to replace a file that already exists or keep both', async () => {
+      await typeInOmnibox('angular.dev');
+      const prompt = () => element.querySelector('.download-prompt') as HTMLDialogElement;
+      const ask = async (id: number) => {
+        pages.emit('page://download-prompt', {
+          label: label(1),
+          id,
+          url: 'https://x.example/files/report.pdf',
+          fileName: 'report.pdf',
+          folder: 'C:\\Users\\me\\Downloads',
+          total: 2048,
+          exists: true,
+        });
+        await stable();
+      };
+      const click = async (selector: string) => {
+        prompt().querySelector<HTMLElement>(selector)?.click();
+        await stable();
+      };
+      const primary = () => prompt().querySelector('.download-prompt__button--primary')?.textContent?.trim();
+
+      await ask(8);
+      expect(prompt().querySelector('.download-prompt__title')?.textContent?.trim()).toBe('Такий файл уже є');
+      expect(primary()).toBe('Зберегти обидва');
+      await click('.download-prompt__button--replace');
+      expect(pages.called('resolve-download').at(-1)).toEqual([8, 'C:\\Users\\me\\Downloads', 'replace']);
+
+      // «Зберегти обидва» — новий поряд, наявний не чіпається.
+      await ask(9);
+      await click('.download-prompt__button--primary');
+      expect(pages.called('resolve-download').at(-1)).toEqual([9, 'C:\\Users\\me\\Downloads']);
+
+      // В іншій теці такого файла немає — звичайне «Зберегти».
+      await ask(10);
+      await click('.download-prompt__folder .download-prompt__button');
+      expect(prompt().querySelector('.download-prompt__button--replace')).toBeNull();
+      expect(primary()).toBe('Зберегти');
+      // А в теці, де він є, — знову вибір.
+      pages.existingFiles = ['E:\\Архів\\report.pdf'];
+      pages.pickedFolder = 'E:\\Архів';
+      await click('.download-prompt__folder .download-prompt__button');
+      expect(primary()).toBe('Зберегти обидва');
+      await click('.download-prompt__button--replace');
+      expect(pages.called('resolve-download').at(-1)).toEqual([10, 'E:\\Архів', 'replace']);
     });
 
     it('should let a failed download be removed from the list', async () => {
