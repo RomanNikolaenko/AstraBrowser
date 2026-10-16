@@ -135,8 +135,8 @@ interface Site {
   /** Сторінка зараз грає звук. */
   readonly playing: boolean;
   /**
-   * Сторінка вже грала звук: значок звуку у вкладці лишається, а не блимає щоразу, як звук на мить затихає (паузи в
-   * трансляції, між треками). До нової сторінки чи перезавантаження.
+   * Значок звуку у вкладці: поки сторінка грає звук і ще AUDIBLE_HOLD_MS після того, як він затих, — тож короткі паузи
+   * (у трансляції, між треками) значок не ховають, а зупинене відео ховає.
    */
   readonly audible: boolean;
   /** Звук вкладки вимкнено. */
@@ -167,6 +167,8 @@ interface ClosedTab {
 
 /** Скільки закритих вкладок пам'ятати. */
 const CLOSED_TABS_LIMIT = 25;
+/** Скільки значок звуку лишається у вкладці, коли звук затих (Site.audible). */
+export const AUDIBLE_HOLD_MS = 4000;
 
 /** Вкладка показує внутрішню сторінку або сайт (тоді page === 'web' і є site). */
 interface BrowserTab {
@@ -262,6 +264,10 @@ export class Browser {
   protected readonly omniboxHost = viewChild('omnibox', { read: ElementRef });
   /** Коли фонову сторінку (мітка webview) востаннє бачили — від цього вона засинає. */
   private readonly lastSeen = new Map<string, number>();
+  /** Сторінки (мітки), чий звук затих: значок зникне, якщо звук не повернеться (AUDIBLE_HOLD_MS). */
+  private readonly quietTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Щойно натиснуто Tab (без Shift) в інтерфейсі: фокус іде вперед, а не повернувся з сайту (enterPage). */
+  private tabbingForward = false;
   /** Сторінка, що зараз на передньому плані (у пам'яті як звичайна). */
   private foregroundPage: string | null = null;
   /** Вкладка, для якої відкрито меню вкладки. */
@@ -415,7 +421,6 @@ export class Browser {
   private readonly layerObserver =
     typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.scheduleInputRegion());
 
-  /** Webview сайту, який зараз має бути видно. */
   /** Webview сайту в активній вкладці: для нього панель дозволів сайту. */
   protected readonly activeSitePage = computed(() => {
     const tab = this.activeTab();
@@ -424,7 +429,8 @@ export class Browser {
   /** Сайт вкладки захищено від стеження — щит в адресному рядку. */
   protected readonly siteProtected = computed(() => this.tracking.protects(this.tabUrl(this.activeTab())));
 
-  private readonly visiblePage = computed(() => {
+  /** Webview сайту, який зараз має бути видно. */
+  protected readonly visiblePage = computed(() => {
     const tab = this.activeTab();
     // Сторінка, що впала чи не відповідає, ховається — на її місці екран з кнопкою «Перезавантажити».
     return tab.page === 'web' && !tab.site?.crashed ? this.pageLabel(tab) : null;
@@ -630,6 +636,7 @@ export class Browser {
       });
       const sleepTimer = setInterval(() => this.sleepInactiveTabs(), 60_000);
       destroyRef.onDestroy(() => clearInterval(sleepTimer));
+      destroyRef.onDestroy(() => this.quietTimers.forEach((timer) => clearTimeout(timer)));
       // Захист від стеження (рівень, GPC, винятки) — для запитів і сторінок цього вікна.
       effect(() => {
         const rules = this.tracking.rules();
@@ -700,8 +707,16 @@ export class Browser {
     return tab.site ? tab.site.url : TAB_PAGES[tab.page as TabPage].url;
   }
 
-  protected selectTab(id: number): void {
+  /**
+   * Вибрати вкладку. Мишею (`follow`) — фокус іде за нею, як у Chrome і Firefox: у сайт, тож плеєр чи сторінка
+   * одразу слухають клавіші. Клавішами (Enter на вкладці) — фокус лишається на вкладках.
+   */
+  protected selectTab(id: number, follow = true): void {
     this.activeTabId.set(id);
+    const tab = this.tabs().find((candidate) => candidate.id === id);
+    if (follow && tab) {
+      this.followFocus(tab);
+    }
   }
 
   /**
@@ -716,14 +731,22 @@ export class Browser {
       return;
     }
     this.activeTabId.set(next.id);
+    this.followFocus(next);
+  }
+
+  /**
+   * Фокус — за вкладкою, що стала активною: у її сайт (туди, де був, — скажімо, на плеєр) чи в інтерфейс. Сайт, що
+   * впав, захований — тоді теж в інтерфейс.
+   */
+  private followFocus(tab: BrowserTab): void {
     if (!this.pageViews.available) {
       return;
     }
-    // Після того як webview нової вкладки покажеться: прихований фокус не прийме.
-    afterNextRender(
-      () => this.ignore(next.page === 'web' ? this.pageViews.focus(this.pageLabel(next)) : this.pageViews.focusInterface()),
-      { injector: this.injector }
-    );
+    const focus = () =>
+      tab.page === 'web' && !tab.site?.crashed ? this.pageViews.focus(this.pageLabel(tab)) : this.pageViews.focusInterface();
+    // Після того як webview вкладки покажеться: прихований фокус не прийме. Показ іде чергою (queuePageShow), а до
+    // неї вкладку ставить ефект — ще до малювання, тож тут черга вже з нею.
+    afterNextRender(() => this.ignore(this.pageShow.then(focus)), { injector: this.injector });
   }
 
   protected openNewTab(): void {
@@ -968,6 +991,7 @@ export class Browser {
         this.ignore(this.pageViews.answerPermission(request.id, 'deny', false));
       }
       this.lastSeen.delete(site.label);
+      this.forgetQuiet(site.label);
     }
     // Порожню нову вкладку відновлювати нема чого, як і перенесену в інше вікно.
     if (closed.page !== 'new-tab' && !moved) {
@@ -986,8 +1010,10 @@ export class Browser {
 
     this.tabs.set(remaining);
     if (id === this.activeTabId()) {
-      // Як у Chrome: активною стає вкладка праворуч, а якщо її немає — ліворуч.
-      this.activeTabId.set(remaining[Math.min(index, remaining.length - 1)].id);
+      // Як у Chrome: активною стає вкладка праворуч, а якщо її немає — ліворуч; фокус — за нею.
+      const next = remaining[Math.min(index, remaining.length - 1)];
+      this.activeTabId.set(next.id);
+      this.followFocus(next);
     }
   }
 
@@ -1388,6 +1414,18 @@ export class Browser {
   // event.code, а не key: з українською розкладкою клавіша T дає «е», а N — «т».
   // Коли фокус усередині сайту, клавіші отримує його webview, а не цей документ.
   protected onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const label = this.visiblePage();
+      if (event.shiftKey && label && this.pageViews.available && document.activeElement === tabbables()[0]) {
+        // Shift+Tab з першої кнопки інтерфейсу — коло назад: на останній елемент сайту.
+        event.preventDefault();
+        this.ignore(this.pageViews.focus(label, 'backward'));
+        return;
+      }
+      // Фокус перейде ще за цим натисканням, тож позначка — лише до наступного завдання.
+      this.tabbingForward = !event.shiftKey;
+      setTimeout(() => (this.tabbingForward = false));
+    }
     // F12 з адресного рядка чи панелей — інструменти розробника сайту (у самому сайті їх відкриває WebView2).
     if (event.code === 'F12' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && this.activeTab().site) {
       event.preventDefault();
@@ -1461,6 +1499,22 @@ export class Browser {
         return;
     }
     event.preventDefault();
+  }
+
+  /**
+   * Фокус дійшов до кроку за панелями (browser.html). Клавішею Tab — далі в сайт, на перший його елемент. Інакше сюди
+   * повернулися з сайту назад (Shift+Tab на його початку, webview2::watch_focus_leaving) — тоді на останню кнопку
+   * панелей перед сайтом.
+   */
+  protected enterPage(event: FocusEvent): void {
+    const step = event.target as HTMLElement;
+    const label = this.visiblePage();
+    if (this.tabbingForward && label && this.pageViews.available) {
+      step.blur();
+      this.ignore(this.pageViews.focus(label, 'forward'));
+      return;
+    }
+    tabbableBefore(step)?.focus({ focusVisible: true });
   }
 
   /**
@@ -2003,9 +2057,27 @@ export class Browser {
 
   private onPageAudio({ label, playing, muted }: PageAudioEvent): void {
     const tab = this.tabByLabel(label);
-    if (tab?.site) {
-      this.updateSite(tab.id, (site) => ({ ...site, playing, muted, audible: site.audible || playing }));
+    if (!tab?.site) {
+      return;
     }
+    this.forgetQuiet(label);
+    if (!playing && tab.site.audible) {
+      // Звук затих — значок ще лишається: пауза могла бути короткою.
+      const timer = setTimeout(() => {
+        this.quietTimers.delete(label);
+        const current = this.tabByLabel(label);
+        if (current?.site && !current.site.playing) {
+          this.updateSite(current.id, (site) => ({ ...site, audible: false }));
+        }
+      }, AUDIBLE_HOLD_MS);
+      this.quietTimers.set(label, timer);
+    }
+    this.updateSite(tab.id, (site) => ({ ...site, playing, muted, audible: site.audible || playing }));
+  }
+
+  private forgetQuiet(label: string): void {
+    clearTimeout(this.quietTimers.get(label));
+    this.quietTimers.delete(label);
   }
 
   /**
@@ -2263,6 +2335,27 @@ export class Browser {
   private createNewTab(): BrowserTab {
     return { id: this.nextTabId++, page: 'new-tab' };
   }
+}
+
+/** На що стає фокус клавішею Tab (tabindex > 0 в інтерфейсі немає). */
+const TABBABLE = 'a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]';
+
+/** Елементи інтерфейсу, на які стає Tab, у його порядку: видимі, не вимкнені й не під модальним вікном. */
+function tabbables(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>(TABBABLE)].filter(
+    (element) =>
+      element.tabIndex >= 0 &&
+      !element.matches(':disabled') &&
+      !element.closest('[inert]') &&
+      (element.checkVisibility?.({ visibilityProperty: true }) ?? true)
+  );
+}
+
+/** Останній елемент перед `step`, на який стає Tab. */
+function tabbableBefore(step: HTMLElement): HTMLElement | undefined {
+  return tabbables()
+    .filter((element) => element.compareDocumentPosition(step) & Node.DOCUMENT_POSITION_FOLLOWING)
+    .at(-1);
 }
 
 /** Тип даних перетягуваної вкладки (між вікнами браузера — JSON з SavedTab). */

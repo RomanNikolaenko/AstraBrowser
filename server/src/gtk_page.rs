@@ -24,7 +24,7 @@ pub use crate::gtk_downloads::watch_downloads;
 pub use crate::gtk_permissions::{answer_permission, set_site_permission, site_permissions, watch_permissions};
 use crate::{
   context_menu::{custom_items, ContextAction, MenuTarget},
-  page_types::{ClearKinds, Failure, ReloadMode},
+  page_types::{ClearKinds, Failure, ReloadMode, TabDirection},
 };
 
 /// Повідомляє `report(url, can_go_back, can_go_forward)` на кожну зміну адреси чи історії вкладки — зокрема коли сайт
@@ -155,6 +155,22 @@ pub fn watch_audio(webview: &Webview, report: impl Fn(bool, bool) + Clone + Send
     let notify = move |view: &webkit2gtk::WebView| report(view.is_playing_audio(), view.is_muted());
     view.connect_is_playing_audio_notify(notify.clone());
     view.connect_is_muted_notify(notify);
+  })
+}
+
+/// Фокус — у сайт, як клавішею Tab з інтерфейсу: на перший елемент сторінки чи (`Backward`) на останній.
+pub fn focus_through_tab(webview: &Webview, direction: TabDirection) -> tauri::Result<()> {
+  use gtk::prelude::WidgetExt;
+  webview.with_webview(move |platform| {
+    let view = platform.inner();
+    let direction = match direction {
+      TabDirection::Forward => gtk::DirectionType::TabForward,
+      TabDirection::Backward => gtk::DirectionType::TabBackward,
+    };
+    // Не прийняв фокус так (WebKit) — то хоч сам webview.
+    if !view.child_focus(direction) {
+      view.grab_focus();
+    }
   })
 }
 

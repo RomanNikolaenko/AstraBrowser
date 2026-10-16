@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { commands } from '../../bindings';
+import { commands, TabDirection } from '../../bindings';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { AddressPromptRequest, AutofillKind } from '../data/addresses';
@@ -331,8 +331,9 @@ export class PageViews {
     await commands.pageSetZoom(label, scale);
   }
 
-  async focus(label: string): Promise<void> {
-    await commands.pageFocus(label);
+  /** Фокус — у сайт; з `tab` — як клавішею Tab з інтерфейсу: на перший його елемент чи (`backward`) на останній. */
+  async focus(label: string, tab: TabDirection | null = null): Promise<void> {
+    await commands.pageFocus(label, tab);
   }
 
   /** Фокус — у сам інтерфейс вікна (скажімо, з прихованого щойно сайту). */

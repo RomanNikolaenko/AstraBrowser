@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   audio,
-  page_types::{Area, Autoplay, PermissionState, PictureInPicture, ReloadMode},
+  page_types::{Area, Autoplay, PermissionState, PictureInPicture, ReloadMode, TabDirection},
 };
 #[cfg(windows)]
 use crate::webview2;
@@ -662,6 +662,10 @@ pub async fn page_open(
   })
   .map_err(|error| error.to_string())?;
 
+  // Tab з кінця сайту — назад в інтерфейс (у Linux фокус між webview і так переводить GTK).
+  #[cfg(windows)]
+  webview2::watch_focus_leaving(&webview).map_err(|error| error.to_string())?;
+
   // Завантаження: у вибрану теку (чи щоразу питати куди), а як ідуть і чим скінчилися — для кнопки
   // завантажень і сторінки «Завантаження».
   #[cfg(windows)]
@@ -792,10 +796,17 @@ pub fn page_set_zoom(window: Window, label: String, scale: f64) -> Result<(), St
   page(&window, &label)?.set_zoom(scale).map_err(|error| error.to_string())
 }
 
+/// Фокус — у сайт. З `tab` — так, ніби до нього дійшли клавішею Tab з інтерфейсу: на перший елемент сторінки
+/// (`Forward`) чи останній (`Backward`), як у Chrome, а не туди, де фокус був раніше.
 #[tauri::command]
 #[specta::specta]
-pub fn page_focus(window: Window, label: String) -> Result<(), String> {
-  page(&window, &label)?.set_focus().map_err(|error| error.to_string())
+pub fn page_focus(window: Window, label: String, tab: Option<TabDirection>) -> Result<(), String> {
+  let webview = page(&window, &label)?;
+  match tab {
+    Some(direction) => engine::focus_through_tab(&webview, direction),
+    None => webview.set_focus(),
+  }
+  .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

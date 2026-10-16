@@ -25,7 +25,7 @@ use webview2_com::{
   ClearBrowsingDataCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
   GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
   IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
-  NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
+  MoveFocusRequestedEventHandler, NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
   WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
 };
 use windows::Win32::{
@@ -43,6 +43,7 @@ pub use crate::page_types::{Area, Autoplay, ClearKinds, PictureInPicture, Reload
 use crate::{
   adblock::{AdBlock, Verdict},
   downloads::{DownloadRequest, DownloadUpdate},
+  page_types::TabDirection,
   tracking::{self, Category, Tracking},
 };
 
@@ -215,6 +216,52 @@ pub fn watch_fullscreen(webview: &Webview, report: impl Fn(bool) + Send + 'stati
       unsafe { core(&platform)?.add_ContainsFullScreenElementChanged(&handler, &mut token) }
     };
     let _ = watch();
+  })
+}
+
+impl TabDirection {
+  fn reason(self) -> COREWEBVIEW2_MOVE_FOCUS_REASON {
+    match self {
+      Self::Forward => COREWEBVIEW2_MOVE_FOCUS_REASON_NEXT,
+      Self::Backward => COREWEBVIEW2_MOVE_FOCUS_REASON_PREVIOUS,
+    }
+  }
+}
+
+/// Фокус — у сайт, як клавішею Tab з інтерфейсу: на перший елемент сторінки чи (`Backward`) на останній.
+pub fn focus_through_tab(webview: &Webview, direction: TabDirection) -> tauri::Result<()> {
+  webview.with_webview(move |platform| {
+    let _ = unsafe { platform.controller().MoveFocus(direction.reason()) };
+  })
+}
+
+/// Tab з останнього елемента сайту чи самого інтерфейсу (Shift+Tab — з першого) — в інтерфейс вікна, на його перший
+/// (останній) елемент: фокус ходить колом панелі → сайт → панелі, як у Chrome (з панелей у сайт його веде сам
+/// інтерфейс, Browser.enterPage). Без цього WebView2 сам шукав би, кому віддати фокус: із сайту — колом усередині
+/// нього, й клавішами з сайту було б не вийти. Сайт на весь екран — інтерфейс під ним, тож там фокус лишається в сайті.
+pub fn watch_focus_leaving(webview: &Webview) -> tauri::Result<()> {
+  let page = webview.clone();
+  webview.with_webview(move |platform| {
+    let handler = MoveFocusRequestedEventHandler::create(Box::new(move |_, args| {
+      let Some(args) = args else {
+        return Ok(());
+      };
+      let window = page.window();
+      let Some(interface) = window.get_webview(window.label()).filter(|_| !crate::fullscreen::holds(page.label())) else {
+        return Ok(());
+      };
+      let mut reason = COREWEBVIEW2_MOVE_FOCUS_REASON::default();
+      unsafe {
+        args.Reason(&mut reason)?;
+        args.SetHandled(true)?;
+      }
+      let _ = interface.with_webview(move |platform| {
+        let _ = unsafe { platform.controller().MoveFocus(reason) };
+      });
+      Ok(())
+    }));
+    let mut token = 0;
+    let _ = unsafe { platform.controller().add_MoveFocusRequested(&handler, &mut token) };
   })
 }
 

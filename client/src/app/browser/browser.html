@@ -28,7 +28,7 @@
           [title]="tab.site?.sleeping ? tabTitle(tab) + (' — вкладка спить, щоб заощадити пам’ять' | t) : tabTitle(tab)"
           [class.tab__select--sleeping]="tab.site?.sleeping"
           [class.tab__select--crashed]="!!tab.site?.crashed"
-          (click)="selectTab(tab.id)">
+          (click)="selectTab(tab.id, $event.detail > 0)">
           @if (tab.site?.loading) {
             <span class="tab__spinner" aria-hidden="true"></span>
           } @else if (tab.site) {
@@ -398,3 +398,11 @@
       (closed)="findOpen.set(false)" />
   }
 </div>
+
+<!--
+  Сайт — окремий webview, і документ інтерфейсу про нього не знає: Tab з останньої кнопки панелей (чи пошуку на
+  сторінці) обійшов би його й повернувся на вкладки. Тож за ними — невидимий крок, що передає фокус у сайт.
+-->
+@if (visiblePage()) {
+  <span class="page-entry" tabindex="0" (focus)="enterPage($event)"></span>
+}

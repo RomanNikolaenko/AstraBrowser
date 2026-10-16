@@ -107,6 +107,11 @@
     font-size: 0.8125rem;
     color: inherit;
     text-align: start;
+
+    // Кільце фокуса — довкола всієї вкладки разом із кнопкою закриття (а не лише частини з назвою) і з усіма
+    // заокругленими кутами: рамка поверх вкладки (.tab — найближчий позиціонований предок). Список вкладок обрізає
+    // все, що виходить за його межі, тож кільце — всередині.
+    outline: none;
     background: transparent;
     border: 0;
     border-radius: inherit;
@@ -114,8 +119,20 @@
       outline-color $motion,
       outline-offset $motion;
 
-    // Список вкладок обрізає все, що виходить за його межі, тож кільце — всередині.
-    @include focus-ring(-0.25rem);
+    &::after {
+      position: absolute;
+      inset: 0.25rem;
+      z-index: 1;
+      pointer-events: none;
+      content: '';
+      border: 0.1875rem solid transparent;
+      border-radius: 0.625rem;
+      transition: border-color $motion;
+    }
+
+    &:focus-visible::after {
+      border-color: var(--color-focus);
+    }
 
     // Спляча вкладка — приглушена; та, що впала, — з перекресленим заголовком.
     &--sleeping {
@@ -356,6 +373,15 @@
     padding-top: 3.75rem;
     background: linear-gradient(var(--browser-page) 0 0) top / 100% 3.75rem no-repeat;
   }
+}
+
+// Крок, з якого Tab переходить у сайт (browser.html): у порядку фокуса, але невидимий.
+.page-entry {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 @keyframes tab-spin {

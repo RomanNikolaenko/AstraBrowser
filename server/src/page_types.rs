@@ -38,6 +38,14 @@ pub enum ReloadMode {
   All,
 }
 
+/// Куди йде фокус клавішею Tab: вперед, на наступний елемент, чи (Shift+Tab) назад.
+#[derive(Clone, Copy, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum TabDirection {
+  Forward,
+  Backward,
+}
+
 /// Що очистити в діалозі «Очистити дані перегляду».
 #[derive(Clone, Copy, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]

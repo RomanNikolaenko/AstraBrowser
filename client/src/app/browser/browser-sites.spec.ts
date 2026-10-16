@@ -8,7 +8,7 @@ import { UpdateStore } from './data/updates';
 import { AuthStore } from '../shared/auth/auth';
 import { BrowserWindows } from '../shared/browser-windows/browser-windows';
 import { Titlebar } from '../shared/titlebar/titlebar';
-import { Browser } from './browser';
+import { AUDIBLE_HOLD_MS, Browser } from './browser';
 import { BookmarksStore } from './data/bookmarks';
 import { DownloadSettingsStore } from './data/download-settings';
 import { DownloadsStore } from './data/downloads';
@@ -116,8 +116,8 @@ class FakePageViews {
   setZoom(label: string, scale: number) {
     return this.record('zoom', label, scale);
   }
-  focus(label: string) {
-    return this.record('focus', label);
+  focus(label: string, tab: string | null = null) {
+    return tab ? this.record('focus', label, tab) : this.record('focus', label);
   }
   focusInterface() {
     return this.record('focus-interface');
@@ -1311,15 +1311,26 @@ describe('Browser with sites', () => {
     await stable();
     expect(audio()).toBeTruthy();
 
-    // Звук на мить затих (пауза в трансляції) — значок лишається, а не блимає.
-    pages.emit('page://audio', { label: label(1), playing: false, muted: false });
-    await stable();
-    expect(audio()?.getAttribute('aria-label')).toBe('Вимкнути звук вкладки «youtube.com»');
+    // Звук затих: значок ще лишається — коротка пауза (у трансляції, між треками) його не ховає…
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      pages.emit('page://audio', { label: label(1), playing: false, muted: false });
+      fixture.detectChanges();
+      expect(audio()?.getAttribute('aria-label')).toBe('Вимкнути звук вкладки «youtube.com»');
+      vi.advanceTimersByTime(AUDIBLE_HOLD_MS - 100);
+      pages.emit('page://audio', { label: label(1), playing: true, muted: false });
+      pages.emit('page://audio', { label: label(1), playing: false, muted: false });
+      vi.advanceTimersByTime(AUDIBLE_HOLD_MS - 100);
+      fixture.detectChanges();
+      expect(audio()).toBeTruthy();
 
-    // Нова сторінка без звуку — значка вже немає.
-    pages.emit('page://load', { label: label(1), url: 'https://youtube.com/feed', loading: true });
-    await stable();
-    expect(audio()).toBeNull();
+      // …а зупинене відео — так.
+      vi.advanceTimersByTime(200);
+      fixture.detectChanges();
+      expect(audio()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should zoom with Ctrl and the wheel or the keys, also while the site has focus', async () => {
@@ -1697,9 +1708,11 @@ describe('Browser with sites', () => {
     element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
     await stable();
     const active = () => [...element.querySelectorAll('.tab')].findIndex((tab) => tab.classList.contains('tab--active'));
+    // Фокус — після того як webview вкладки покажеться (черга показу).
     const shortcut = async (from: string, name: 'next-tab' | 'previous-tab') => {
       pages.emit('page://shortcut', { label: from, shortcut: name });
       await stable();
+      await new Promise((resolve) => setTimeout(resolve));
     };
 
     // Клавіші натиснуто в сайті, якого зараз не видно, — не рахуються.
@@ -1716,6 +1729,69 @@ describe('Browser with sites', () => {
     await shortcut(label(1), 'previous-tab');
     expect(active()).toBe(2);
     expect(pages.called('focus-interface')).toEqual([[]]);
+  });
+
+  it('should take the focus into the site of a tab clicked with the mouse, but leave it on the tabs from the keyboard', async () => {
+    await typeInOmnibox('angular.dev');
+    element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
+    await stable();
+    await typeInOmnibox('www.youtube.com');
+    const select = (index: number) => element.querySelectorAll<HTMLButtonElement>('.tab__select')[index];
+    // Фокус — після того як webview вкладки покажеться (черга показу).
+    const settle = async () => {
+      await stable();
+      await new Promise((resolve) => setTimeout(resolve));
+    };
+    const focused = pages.called('focus').length;
+
+    // Enter на вкладці (click без натискань миші) — фокус лишається на вкладках.
+    select(0).click();
+    await settle();
+    expect(element.querySelectorAll('.tab')[0].classList).toContain('tab--active');
+    expect(pages.called('focus')).toHaveLength(focused);
+
+    // Мишею — у сайт вкладки, щоб плеєр одразу слухав клавіші.
+    select(1).dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await settle();
+    expect(pages.called('focus').at(-1)).toEqual([label(2)]);
+
+    // Закрито активну — фокус у сайт тієї, що стала активною.
+    element.querySelectorAll<HTMLButtonElement>('.tab__close')[1].click();
+    await settle();
+    expect(pages.called('focus').at(-1)).toEqual([label(1)]);
+  });
+
+  it('should take the focus into the site with Tab past the panels, and back to them from the site', async () => {
+    const entry = () => element.querySelector<HTMLElement>('.page-entry');
+    expect(entry()).toBeNull();
+    await typeInOmnibox('angular.dev');
+
+    // Tab з останньої кнопки панелей — у сайт, на перший його елемент.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab' }));
+    entry()?.focus();
+    expect(pages.called('focus').at(-1)).toEqual([label(1), 'forward']);
+    expect(document.activeElement).not.toBe(entry());
+
+    // З сайту назад (Shift+Tab на його початку) — на останню кнопку перед ним, а не знову в сайт.
+    await new Promise((resolve) => setTimeout(resolve));
+    const focused = pages.called('focus').length;
+    entry()?.focus();
+    expect(document.activeElement?.closest('.chrome')).toBeTruthy();
+    expect(pages.called('focus')).toHaveLength(focused);
+
+    // Shift+Tab звідти — до попередньої кнопки, як завжди; а з першої кнопки інтерфейсу — коло назад, у кінець сайту.
+    const shiftTab = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', shiftKey: true }));
+    shiftTab();
+    expect(pages.called('focus')).toHaveLength(focused);
+    [...document.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')]
+      .find((candidate) => candidate.tabIndex >= 0 && !candidate.matches(':disabled'))
+      ?.focus();
+    shiftTab();
+    expect(pages.called('focus').at(-1)).toEqual([label(1), 'backward']);
+
+    // На внутрішній сторінці кроку немає: Tab іде далі в неї саму.
+    await typeInOmnibox('astra://history');
+    expect(entry()).toBeNull();
   });
 
   it('should open a site from the history page and come back to it', async () => {

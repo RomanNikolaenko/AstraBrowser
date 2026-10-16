@@ -18,7 +18,11 @@ export const commands = {
 	pageSetBounds: (label: string, bounds: Bounds) => __TAURI_INVOKE<null>("page_set_bounds", { label, bounds }),
 	pageSetVisible: (label: string, visible: boolean) => __TAURI_INVOKE<null>("page_set_visible", { label, visible }),
 	pageSetZoom: (label: string, scale: number | null) => __TAURI_INVOKE<null>("page_set_zoom", { label, scale }),
-	pageFocus: (label: string) => __TAURI_INVOKE<null>("page_focus", { label }),
+	/**
+	 *  Фокус — у сайт. З `tab` — так, ніби до нього дійшли клавішею Tab з інтерфейсу: на перший елемент сторінки
+	 *  (`Forward`) чи останній (`Backward`), як у Chrome, а не туди, де фокус був раніше.
+	 */
+	pageFocus: (label: string, tab: "forward" | "backward" | null) => __TAURI_INVOKE<null>("page_focus", { label, tab }),
 	pagePrint: (label: string) => __TAURI_INVOKE<null>("page_print", { label }),
 	/**  Інструменти розробника сайту (DevTools WebView2) — окремим вікном. */
 	pageOpenDevtools: (label: string) => __TAURI_INVOKE<null>("page_open_devtools", { label }),
@@ -605,6 +609,9 @@ export type SyncRow_Serialize = {
 	/**  Номер зміни на сервері; у записах, що лише надсилаються, його ще немає. */
 	revision?: number | null,
 };
+
+/**  Куди йде фокус клавішею Tab: вперед, на наступний елемент, чи (Shift+Tab) назад. */
+export type TabDirection = "forward" | "backward";
 
 export type UpdateState = {
 	/**  Версія, що працює зараз. */
