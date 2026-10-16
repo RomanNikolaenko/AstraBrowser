@@ -1311,7 +1311,13 @@ describe('Browser with sites', () => {
     await stable();
     expect(audio()).toBeTruthy();
 
+    // Звук на мить затих (пауза в трансляції) — значок лишається, а не блимає.
     pages.emit('page://audio', { label: label(1), playing: false, muted: false });
+    await stable();
+    expect(audio()?.getAttribute('aria-label')).toBe('Вимкнути звук вкладки «youtube.com»');
+
+    // Нова сторінка без звуку — значка вже немає.
+    pages.emit('page://load', { label: label(1), url: 'https://youtube.com/feed', loading: true });
     await stable();
     expect(audio()).toBeNull();
   });

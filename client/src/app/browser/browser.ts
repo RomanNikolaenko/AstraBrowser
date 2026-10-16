@@ -134,6 +134,11 @@ interface Site {
   readonly historyEntry?: { readonly id: string; readonly url: string };
   /** Сторінка зараз грає звук. */
   readonly playing: boolean;
+  /**
+   * Сторінка вже грала звук: значок звуку у вкладці лишається, а не блимає щоразу, як звук на мить затихає (паузи в
+   * трансляції, між треками). До нової сторінки чи перезавантаження.
+   */
+  readonly audible: boolean;
   /** Звук вкладки вимкнено. */
   readonly muted: boolean;
   /** Скільки запитів блокувальник реклами відсік на поточній сторінці. */
@@ -1660,7 +1665,8 @@ export class Browser {
         ...site,
         url: this.shownUrl(site, url),
         loading,
-        ...(loading ? { blockedPopups: [] } : {}),
+        // Нова сторінка — і заблоковані спливні вікна, і значок звуку попередньої вже не про неї.
+        ...(loading ? { blockedPopups: [], audible: site.playing } : {}),
       }));
     }
   }
@@ -1711,7 +1717,7 @@ export class Browser {
   private onPageCrashed({ label, failure }: PageCrashedEvent): void {
     const tab = this.tabByLabel(label);
     if (tab?.site) {
-      this.updateSite(tab.id, (site) => ({ ...site, crashed: failure, loading: false, playing: false }));
+      this.updateSite(tab.id, (site) => ({ ...site, crashed: failure, loading: false, playing: false, audible: false }));
     }
   }
 
@@ -1998,7 +2004,7 @@ export class Browser {
   private onPageAudio({ label, playing, muted }: PageAudioEvent): void {
     const tab = this.tabByLabel(label);
     if (tab?.site) {
-      this.updateSite(tab.id, (site) => ({ ...site, playing, muted }));
+      this.updateSite(tab.id, (site) => ({ ...site, playing, muted, audible: site.audible || playing }));
     }
   }
 
@@ -2272,6 +2278,7 @@ function emptySite(label: string, url: string): Site {
     canGoBack: false,
     canGoForward: false,
     playing: false,
+    audible: false,
     muted: false,
     blocked: 0,
     trackers: [],

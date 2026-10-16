@@ -12,7 +12,7 @@
         class="tab"
         draggable="true"
         [class.tab--active]="tab.id === activeTabId()"
-        [class.tab--audio]="tab.site?.playing || tab.site?.muted"
+        [class.tab--audio]="tab.site?.audible || tab.site?.muted"
         [class.tab--pinned]="tab.pinned"
         [class.tab--drop-before]="dropIndex() === index"
         [class.tab--drop-after]="dropIndex() === tabs().length && index === tabs().length - 1"
@@ -38,7 +38,7 @@
           }
           <span class="tab__title">{{ tabTitle(tab) }}</span>
         </button>
-        @if (tab.site?.playing || tab.site?.muted) {
+        @if (tab.site?.audible || tab.site?.muted) {
           <button
             class="tab__audio"
             type="button"
