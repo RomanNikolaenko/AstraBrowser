@@ -88,25 +88,27 @@ fn main() {
 	let context = tauri::generate_context!();
 	let builder = tauri::Builder::default();
 	// Повторний запуск і посилання з інших програм — у вже запущений браузер (launch.rs); цей плагін — першим.
-	// Лише в релізі: інакше `tauri dev` при запущеному встановленому Astra Browser (той самий ідентифікатор) не
-	// запустився б, а віддав би свої аргументи йому.
-	#[cfg(not(debug_assertions))]
+	// У `tauri dev` свій ідентифікатор (tauri.dev.conf.json), тож зі встановленим Astra Browser вони не змішуються.
+	#[cfg(windows)]
+	launch::pass_foreground_right();
 	let builder = builder.plugin(tauri_plugin_single_instance::init(launch::second_instance));
 	// DNS через HTTPS — у налаштування WebView2 ще до першого вікна: браузер читає їх лише під час запуску (dns.rs).
 	// Плагіном одразу після single-instance: повторний запуск завершується, не чекаючи тут.
 	let builder = builder.plugin(dns::plugin());
-	// Webview інтерфейсу вікна: Tab з його кінця чи Shift+Tab з початку веде фокус колом (webview2::watch_focus_leaving).
-	// Інструменти розробника (feature devtools) — сайтам; інтерфейс самого браузера в релізі їх не відкриває,
-	// як у Chrome. У `tauri dev` вони лишаються й для інтерфейсу.
-	#[cfg(windows)]
+	// Webview інтерфейсу вікна. Вікно приховане, доки інтерфейс не намалюється (launch::reveal_later). Tab з його
+	// кінця чи Shift+Tab з початку веде фокус колом (webview2::watch_focus_leaving). Інструменти розробника (feature
+	// devtools) — сайтам; інтерфейс самого браузера в релізі їх не відкриває, як у Chrome. У `tauri dev` вони
+	// лишаються й для інтерфейсу.
 	let builder = builder.plugin(
 		tauri::plugin::Builder::<tauri::Wry>::new("interface-webview")
 			.on_webview_ready(|webview| {
 				if webview.label().starts_with(pages::PAGE_PREFIX) {
 					return;
 				}
+				launch::reveal_later(webview.window());
+				#[cfg(windows)]
 				let _ = webview2::watch_focus_leaving(&webview);
-				#[cfg(not(debug_assertions))]
+				#[cfg(all(windows, not(debug_assertions)))]
 				let _ = webview2::disable_devtools(&webview);
 			})
 			.build(),

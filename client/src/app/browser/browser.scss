@@ -92,8 +92,13 @@
     left: -0.1875rem;
   }
 
+  // Перед першою й після останньої — всередині вкладки: смуга вкладок обрізає все, що за її краєм.
+  &:first-child.tab--drop-before::before {
+    left: 0;
+  }
+
   &--drop-after::after {
-    right: -0.1875rem;
+    right: 0;
   }
 
   &__select {

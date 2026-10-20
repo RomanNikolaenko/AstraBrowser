@@ -1,12 +1,6 @@
 <!-- Вкладки показуються в спільному заголовку вікна (app-titlebar). -->
 <ng-template appTitlebarContent (spacerMiddleClick)="openNewTab()">
-  <ul
-    class="tab-list"
-    [attr.aria-label]="'Відкриті вкладки' | t"
-    (dblclick)="onChromeDoubleClick($event)"
-    (dragover)="onTabStripDragOver($event)"
-    (dragleave)="onTabStripDragLeave($event)"
-    (drop)="onTabStripDrop($event)">
+  <ul class="tab-list" [attr.aria-label]="'Відкриті вкладки' | t" (dblclick)="onChromeDoubleClick($event)">
     @for (tab of tabs(); track tab.id; let index = $index) {
       <li
         class="tab"

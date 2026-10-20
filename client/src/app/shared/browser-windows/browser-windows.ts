@@ -88,6 +88,8 @@ export class BrowserWindows {
       center: true,
       maximized,
       decorations: false,
+      // Показує його сам інтерфейс, уже намальованим (App), — як і головне.
+      visible: false,
       // Інакше у Windows Tauri забирає собі перетягування, і в інтерфейсі воно не працює (закладки).
       dragDropEnabled: false,
       incognito: kind !== 'normal',
@@ -97,6 +99,16 @@ export class BrowserWindows {
     };
     const webview = new WebviewWindow(label, options);
     void webview.once('tauri://error', (event) => console.error('Failed to open a window', event.payload));
+  }
+
+  /**
+   * Показує вікно. Створюється воно прихованим (tauri.conf.json, open) і з'являється, щойно інтерфейс намальований у
+   * своїй темі (App); поза Tauri — нічого.
+   */
+  async reveal(): Promise<void> {
+    if (isTauri()) {
+      await getCurrentWindow().show();
+    }
   }
 
   /** Починає перетягування вікна за курсором (кнопка миші натиснута); поза Tauri — нічого. */

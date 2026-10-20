@@ -236,6 +236,10 @@ interface BrowserTab {
   templateUrl: './browser.html',
   host: {
     '(document:keydown)': 'onKeydown($event)',
+    // Вкладку скидають будь-де в заголовку вікна, не лише над смугою вкладок (onTabStripDragOver).
+    '(document:dragover)': 'onTabStripDragOver($event)',
+    '(document:dragleave)': 'onTabStripDragLeave($event)',
+    '(document:drop)': 'onTabStripDrop($event)',
   },
 })
 export class Browser {
@@ -885,14 +889,21 @@ export class Browser {
     event.dataTransfer.setData(TAB_MIME, JSON.stringify(this.savedTab(tab)));
   }
 
-  /** Над смугою вкладок — риска там, куди стане вкладка (і з іншого вікна теж). */
+  /**
+   * Над заголовком вікна — риска там, куди стане вкладка (і з іншого вікна теж): між вкладками, а лівіше за першу чи
+   * правіше за останню (кнопка «+», порожнє місце, кнопки вікна) — на початок чи в кінець.
+   */
   protected onTabStripDragOver(event: DragEvent): void {
     if (!event.dataTransfer?.types.includes(TAB_MIME)) {
       return;
     }
+    if (!inTitlebar(event.target)) {
+      this.dropIndex.set(null);
+      return;
+    }
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    const items = [...(event.currentTarget as HTMLElement).querySelectorAll('.tab')];
+    const items = [...document.querySelectorAll('.tab-list .tab')];
     const index = items.findIndex((item) => {
       const rect = item.getBoundingClientRect();
       return event.clientX < rect.left + rect.width / 2;
@@ -901,8 +912,7 @@ export class Browser {
   }
 
   protected onTabStripDragLeave(event: DragEvent): void {
-    const strip = event.currentTarget as HTMLElement;
-    if (!(event.relatedTarget instanceof Node) || !strip.contains(event.relatedTarget)) {
+    if (!inTitlebar(event.relatedTarget)) {
       this.dropIndex.set(null);
     }
   }
@@ -911,7 +921,7 @@ export class Browser {
     const data = event.dataTransfer?.getData(TAB_MIME);
     const index = this.dropIndex() ?? this.tabs().length;
     this.dropIndex.set(null);
-    if (!data) {
+    if (!data || !inTitlebar(event.target)) {
       return;
     }
     event.preventDefault();
@@ -2360,6 +2370,11 @@ function tabbableBefore(step: HTMLElement): HTMLElement | undefined {
 
 /** Тип даних перетягуваної вкладки (між вікнами браузера — JSON з SavedTab). */
 const TAB_MIME = 'application/x-astra-tab';
+
+/** Ціль події — у заголовку вікна (app-titlebar): там вкладки, туди їх і скидають. */
+function inTitlebar(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest('app-titlebar');
+}
 
 /** Сайт вкладки, що тільки відкривається: ще без назви, історії переходів і заблокованого. */
 function emptySite(label: string, url: string): Site {

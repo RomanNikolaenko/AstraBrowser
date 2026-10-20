@@ -12,10 +12,11 @@
 use std::{
   path::{Path, PathBuf},
   sync::Mutex,
+  time::Duration,
 };
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 /// Скільки посилань із командного рядка приймати за раз.
 const MAX_URLS: usize = 20;
@@ -76,15 +77,12 @@ fn is_normal(label: &str) -> bool {
   label == "main" || label.starts_with("window-")
 }
 
-#[cfg_attr(debug_assertions, allow(dead_code))]
 #[derive(Clone, Serialize, specta::Type)]
 struct OpenRequest {
   urls: Vec<String>,
 }
 
 /// Браузер запустили ще раз: його посилання — у вже відкрите вікно (а без посилань воно відкриє нове вікно).
-// У розробці плагін single-instance вимкнено (main.rs), і цим у debug-збірці ніхто не користується.
-#[cfg_attr(debug_assertions, allow(dead_code))]
 pub fn second_instance(app: &AppHandle, args: Vec<String>, cwd: String) {
   let urls = urls_from_args(args.into_iter().skip(1), Some(Path::new(&cwd)));
   log::info!("Повторний запуск, посилань: {}", urls.len());
@@ -93,15 +91,46 @@ pub fn second_instance(app: &AppHandle, args: Vec<String>, cwd: String) {
   };
   let _ = window.unminimize();
   let _ = window.show();
-  let _ = window.set_focus();
+  // Наперед — коли вікно вже розгорнулося з панелі задач: того, що ще згорнуте, tao не фокусує.
+  let front = window.clone();
+  let _ = app.run_on_main_thread(move || {
+    let _ = front.set_focus();
+  });
   let _ = app.emit_to(window.label(), "app://open", OpenRequest { urls });
+}
+
+/// Скільки чекати, доки інтерфейс сам покаже своє вікно ([`reveal_later`]).
+const REVEAL_FALLBACK: Duration = Duration::from_secs(5);
+
+/// Вікно створюється прихованим (tauri.conf.json, browser-windows.ts), а показує його інтерфейс, щойно намалюється у
+/// своїй темі (client/src/app/app.ts): так під час запуску не видно білого тла webview з чорними смугами вікна. Не
+/// показав (інтерфейс не завантажився) — вікно з'являється за REVEAL_FALLBACK усе одно.
+pub fn reveal_later(window: Window) {
+  std::thread::spawn(move || {
+    std::thread::sleep(REVEAL_FALLBACK);
+    if window.is_visible().is_ok_and(|visible| !visible) {
+      log::warn!("Вікно {} показано без інтерфейсу", window.label());
+      let _ = window.show();
+    }
+  });
+}
+
+/// Вивести вікно наперед Windows дає лише процесу, який запустила програма на передньому плані (Telegram, пошта), —
+/// тобто повторному запуску, а не браузеру, що вже працює. Повторний запуск лише передає посилання першому й
+/// завершується, тож і це право передає далі; інакше вікно з посиланням лишалося б позаду. Без права — нічого.
+#[cfg(windows)]
+pub fn pass_foreground_right() {
+  use windows::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY};
+  let _ = unsafe { AllowSetForegroundWindow(ASFW_ANY) };
 }
 
 /// Останнє звичайне вікно у фокусі, інакше головне, інакше будь-яке звичайне. Лишилися тільки приватні чи гостьові
 /// вікна — одне з них: воно саме відкриє звичайне.
-#[cfg_attr(debug_assertions, allow(dead_code))]
-fn target(app: &AppHandle) -> Option<WebviewWindow> {
-  let windows = app.webview_windows();
+///
+/// Саме вікна (`windows`), а не `webview_windows`: вікно з відкритим сайтом має кілька webview, і серед «webview-вікон»
+/// Tauri його вже не лічить — посилання тоді губилися.
+fn target(app: &AppHandle) -> Option<Window> {
+  let windows = app.windows();
   let last = app.state::<Launch>().last_window.lock().ok().and_then(|last| last.clone());
   last
     .and_then(|label| windows.get(&label).cloned())

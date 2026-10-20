@@ -1761,6 +1761,61 @@ describe('Browser with sites', () => {
     expect(pages.called('focus').at(-1)).toEqual([label(1)]);
   });
 
+  it('should drop a dragged tab at the end past the last tab, not only over the tab strip', async () => {
+    await typeInOmnibox('angular.dev');
+    element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
+    element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
+    await stable();
+    const titles = () => [...element.querySelectorAll('.tab__select')].map((tab) => tab.getAttribute('title'));
+    const before = titles();
+    // jsdom не має DragEvent і розмітки: кожна вкладка — 100 пікселів завширшки, одна за одною.
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const index = [...element.querySelectorAll('.tab-list .tab')].indexOf(this);
+      return {
+        left: index * 100,
+        right: index * 100 + 100,
+        width: 100,
+        top: 0,
+        bottom: 44,
+        height: 44,
+        x: index * 100,
+        y: 0,
+      } as DOMRect;
+    });
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      get types() {
+        return [...data.keys()];
+      },
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? '',
+      effectAllowed: '',
+      dropEffect: '',
+    };
+    const drag = (target: Element, type: string, clientX: number) => {
+      const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), { clientX, dataTransfer });
+      target.dispatchEvent(event);
+      return event;
+    };
+    try {
+      const spacer = element.querySelector('.titlebar__spacer') as Element;
+      drag(element.querySelectorAll('.tab')[0], 'dragstart', 50);
+      // Правіше за останню вкладку, над порожнім місцем заголовка — у кінець, з рискою після останньої.
+      expect(drag(spacer, 'dragover', 900).defaultPrevented).toBe(true);
+      await stable();
+      expect(element.querySelectorAll('.tab')[2].classList).toContain('tab--drop-after');
+      drag(spacer, 'drop', 900);
+      await stable();
+      expect(titles()).toEqual([before[1], before[2], before[0]]);
+
+      // Поза заголовком вікна вкладку не скидають.
+      drag(element.querySelectorAll('.tab')[2], 'dragstart', 250);
+      expect(drag(element.querySelector('.viewport') as Element, 'dragover', 900).defaultPrevented).toBe(false);
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
   it('should take the focus into the site with Tab past the panels, and back to them from the site', async () => {
     const entry = () => element.querySelector<HTMLElement>('.page-entry');
     expect(entry()).toBeNull();

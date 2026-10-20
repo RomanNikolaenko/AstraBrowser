@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { LaunchLinks } from './browser/launch/launch-links';
+import { BrowserWindows } from './shared/browser-windows/browser-windows';
 import { closePopoversOnOutsidePress } from './shared/popover/outside-press';
 import { SettingsStore } from './shared/settings/settings';
 import { Titlebar } from './shared/titlebar/titlebar';
@@ -21,5 +22,9 @@ export class App {
     inject(LaunchLinks);
     closePopoversOnOutsidePress();
     enableWindowDrag();
+    // Вікно створюється прихованим і з'являється вже в темі інтерфейсу: інакше під час запуску на мить видно біле тло
+    // webview з чорними смугами вікна (server/src/launch.rs, reveal_later).
+    const windows = inject(BrowserWindows);
+    afterNextRender(() => windows.reveal().catch(() => undefined));
   }
 }
