@@ -758,6 +758,40 @@ describe('Browser with sites', () => {
     expect(pages.called('set-background').at(-1)).toEqual([label(1), false]);
   });
 
+  it('should not put a background tab to sleep at a quiet moment of its video, only once it has been silent a while', async () => {
+    await typeInOmnibox('youtube.com');
+    await load(1, 'https://youtube.com/');
+    button('Нова вкладка').click();
+    await stable();
+    await typeInOmnibox('github.com');
+    const browser = fixture.debugElement.query(By.directive(Browser)).componentInstance as unknown as {
+      sleepInactiveTabs(now: number): void;
+    };
+    const minutes = (count: number) => Date.now() + count * 60_000;
+    const later = minutes(40);
+    const clock = vi.spyOn(Date, 'now');
+    try {
+      // Відео грає у фоні вже 40 хвилин, і саме зараз тихе місце (між треками, перед рекламою): WebView2 каже, що
+      // звуку немає. Засинати рано — відео зупинилося б.
+      clock.mockReturnValue(later);
+      pages.emit('page://audio', { label: label(1), playing: true, muted: false });
+      pages.emit('page://audio', { label: label(1), playing: false, muted: false });
+      await stable();
+      browser.sleepInactiveTabs(later + 1000);
+      await new Promise((resolve) => setTimeout(resolve));
+      await stable();
+      expect(pages.called('suspend')).toEqual([]);
+
+      // Затихло й 30 хвилин не поверталося — тоді засинає.
+      browser.sleepInactiveTabs(later + 31 * 60_000);
+      await new Promise((resolve) => setTimeout(resolve));
+      await stable();
+      expect(pages.called('suspend')).toEqual([[label(1)]]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('should unload a tab that has slept for hours and load it again when opened', async () => {
     await typeInOmnibox('example.com');
     await load(1, 'https://example.com/');
