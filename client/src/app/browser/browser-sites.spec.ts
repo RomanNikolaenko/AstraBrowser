@@ -792,6 +792,56 @@ describe('Browser with sites', () => {
     }
   });
 
+  describe('a background tab with a video', () => {
+    let browser: { sleepInactiveTabs(now: number): void };
+    const sleepAfter = async (minutes: number) => {
+      browser.sleepInactiveTabs(Date.now() + minutes * 60_000);
+      await new Promise((resolve) => setTimeout(resolve));
+      await stable();
+    };
+
+    beforeEach(async () => {
+      await typeInOmnibox('youtube.com');
+      await load(1, 'https://youtube.com/');
+      button('Нова вкладка').click();
+      await stable();
+      await typeInOmnibox('github.com');
+      browser = fixture.debugElement.query(By.directive(Browser)).componentInstance as unknown as typeof browser;
+    });
+
+    it('should never fall asleep while the video plays with sound, however long it is quiet', async () => {
+      // Відео грає зі звуком, а на ньому вже дві години тиша: WebView2 каже, що звуку немає.
+      pages.emit('page://media', { label: label(1), playing: true });
+      pages.emit('page://audio', { label: label(1), playing: false, muted: false });
+      await stable();
+      await sleepAfter(120);
+      expect(pages.called('suspend')).toEqual([]);
+
+      // Відео на паузі (чи звук вимкнено в плеєрі) — засинає, як звичайна вкладка.
+      pages.emit('page://media', { label: label(1), playing: false });
+      await stable();
+      await sleepAfter(31);
+      expect(pages.called('suspend')).toEqual([[label(1)]]);
+    });
+
+    it('should fall asleep when its sound is muted, even though the video plays on', async () => {
+      pages.emit('page://media', { label: label(1), playing: true });
+      pages.emit('page://audio', { label: label(1), playing: true, muted: true });
+      await stable();
+      await sleepAfter(31);
+      expect(pages.called('suspend')).toEqual([[label(1)]]);
+    });
+
+    it('should forget the video of the previous page', async () => {
+      pages.emit('page://media', { label: label(1), playing: true });
+      pages.emit('page://load', { label: label(1), url: 'https://youtube.com/feed', loading: true });
+      pages.emit('page://load', { label: label(1), url: 'https://youtube.com/feed', loading: false });
+      await stable();
+      await sleepAfter(31);
+      expect(pages.called('suspend')).toEqual([[label(1)]]);
+    });
+  });
+
   it('should unload a tab that has slept for hours and load it again when opened', async () => {
     await typeInOmnibox('example.com');
     await load(1, 'https://example.com/');

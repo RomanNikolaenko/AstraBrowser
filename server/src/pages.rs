@@ -90,6 +90,13 @@ struct AudioEvent {
   muted: bool,
 }
 
+/// Відео чи аудіо на сторінці почало чи перестало грати зі звуком (media-page.js).
+#[derive(Clone, Serialize, specta::Type)]
+struct MediaEvent {
+  label: String,
+  playing: bool,
+}
+
 #[derive(Clone, Serialize, specta::Type)]
 struct FaviconEvent {
   label: String,
@@ -306,6 +313,11 @@ fn new_tab_script(token: &str) -> String {
   format!("({})({});", include_str!("new-tab-page.js"), serde_json::Value::from(token))
 }
 
+/// Скрипт сторінки, що каже, чи грає на ній відео чи аудіо зі звуком (media-page.js), з токеном сторінки.
+fn media_script(token: &str) -> String {
+  format!("({})({});", include_str!("media-page.js"), serde_json::Value::from(token))
+}
+
 /// Повідомлення скриптів сторінки: паролі — до passwords.rs, адреси — до addresses.rs, банківські картки — до
 /// cards.rs, переклад виділеного — до translate.rs, крок масштабу — інтерфейсу вікна як гаряча клавіша.
 fn on_page_message(
@@ -324,6 +336,12 @@ fn on_page_message(
       let background = Some(message.get("background").and_then(serde_json::Value::as_bool).unwrap_or(true));
       let event = NewTabEvent { label: label.to_string(), url: url.to_string(), user_initiated: true, background };
       let _ = app.emit_to(ui, "page://new-tab", event);
+      None
+    }
+    // Таку вкладку інтерфейс не присипляє.
+    "media" if message.get("token")?.as_str()? == token => {
+      let playing = message.get("playing")?.as_bool()?;
+      let _ = app.emit_to(ui, "page://media", MediaEvent { label: label.to_string(), playing });
       None
     }
     "zoom" if message.get("token")?.as_str()? == token => {
@@ -448,6 +466,7 @@ pub async fn page_open(
     .initialization_script(crate::addresses::page_script(&page_token))
     .initialization_script(zoom_script(&page_token))
     .initialization_script(new_tab_script(&page_token))
+    .initialization_script(media_script(&page_token))
     .initialization_script(fullscreen_script(&page_token))
     .initialization_script(crate::translate::page_script(&page_token));
 
@@ -494,6 +513,7 @@ pub async fn page_open(
       crate::addresses::page_script(&page_token),
       zoom_script(&page_token),
       new_tab_script(&page_token),
+      media_script(&page_token),
       crate::translate::page_script(&page_token),
     ];
     crate::gtk_page::add_page_scripts(&webview, scripts).map_err(|error| error.to_string())?;

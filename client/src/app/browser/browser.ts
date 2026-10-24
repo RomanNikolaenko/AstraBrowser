@@ -63,6 +63,7 @@ import {
   PageContextEvent,
   PageTrackersEvent,
   PageAudioEvent,
+  PageMediaEvent,
   PageBounds,
   PageDownloadEvent,
   PageFaviconEvent,
@@ -141,6 +142,11 @@ interface Site {
   readonly audible: boolean;
   /** Звук вкладки вимкнено. */
   readonly muted: boolean;
+  /**
+   * На сторінці грає відео чи аудіо зі звуком (server/src/media-page.js): не на паузі, і звук у плеєрі не вимкнено.
+   * Така вкладка не засинає, хоч би як довго на відео було тихо, — поки її звук не вимкнули.
+   */
+  readonly mediaPlaying?: boolean;
   /** Скільки запитів блокувальник реклами відсік на поточній сторінці. */
   readonly blocked: number;
   /** Елементи стеження, які захист від стеження заблокував на поточній сторінці. */
@@ -667,6 +673,7 @@ export class Browser {
         this.pageViews.on('page://navigation', (event) => this.onPageNavigation(event)),
         this.pageViews.on('page://title', (event) => this.onPageTitle(event)),
         this.pageViews.on('page://audio', (event) => this.onPageAudio(event)),
+        this.pageViews.on('page://media', (event) => this.onPageMedia(event)),
         this.pageViews.on('page://fullscreen', (event) => this.queueFullscreen(() => this.onPageFullscreen(event))),
         this.pageViews.on('page://favicon', (event) => this.onPageFavicon(event)),
         this.pageViews.on('page://new-tab', (event) => this.onPageNewTab(event)),
@@ -1730,7 +1737,7 @@ export class Browser {
         url: this.shownUrl(site, url),
         loading,
         // Нова сторінка — і заблоковані спливні вікна, і значок звуку попередньої вже не про неї.
-        ...(loading ? { blockedPopups: [], audible: site.playing } : {}),
+        ...(loading ? { blockedPopups: [], audible: site.playing, mediaPlaying: false } : {}),
       }));
     }
   }
@@ -1889,8 +1896,9 @@ export class Browser {
 
   /**
    * Присипляє фонові вкладки, яких не відкривали довше, ніж вибрано в налаштуваннях, а ті, що проспали понад
-   * UNLOAD_AFTER_MS, вивантажує зовсім. Не засинають ті, що грають звук (і стільки ж після того, як він затих —
-   * onPageAudio), вантажаться, впали чи ще не завантажені.
+   * UNLOAD_AFTER_MS, вивантажує зовсім. Не засинають ті, що грають відео чи аудіо зі звуком (і стільки ж після того,
+   * як звук затих, — onPageAudio), вантажаться, впали чи ще не завантажені. Вкладка з вимкненим звуком засинає, хоч би
+   * що на ній грало.
    */
   protected sleepInactiveTabs(now = Date.now()): void {
     const minutes = this.settings.sleepTabsAfter();
@@ -1900,7 +1908,11 @@ export class Browser {
     const active = this.activeTab().id;
     for (const tab of this.tabs()) {
       const site = tab.site;
-      if (tab.id === active || !site || site.pending || site.crashed || site.playing || site.loading) {
+      if (tab.id === active || !site || site.pending || site.crashed || site.loading) {
+        continue;
+      }
+      // Звук вимкнено — засинає, хоч би що грало.
+      if ((site.playing || site.mediaPlaying) && !site.muted) {
         continue;
       }
       const seen = this.lastSeen.get(site.label);
@@ -2074,8 +2086,8 @@ export class Browser {
     this.forgetQuiet(label);
     // Фонова сторінка, що грала, — не «давно не відкривали»: до сну рахуємо від миті, коли звук затих. Сторінок, що
     // грають, перевірка сну не чіпає, але на тихому місці (між треками, перед рекламою) WebView2 вважає, що звуку
-    // немає, — і вкладка засинала б посеред відео, а воно зупинялося.
-    if (label !== this.foregroundPage) {
+    // немає, — і вкладка засинала б посеред відео, а воно зупинялося. Вкладка з вимкненим звуком засинає як звичайна.
+    if (label !== this.foregroundPage && !muted) {
       this.lastSeen.set(label, Date.now());
     }
     if (!playing && tab.site.audible) {
@@ -2090,6 +2102,18 @@ export class Browser {
       this.quietTimers.set(label, timer);
     }
     this.updateSite(tab.id, (site) => ({ ...site, playing, muted, audible: site.audible || playing }));
+  }
+
+  /** Відео чи аудіо почало чи перестало грати зі звуком; коли перестало — до сну рахуємо від цієї миті. */
+  private onPageMedia({ label, playing }: PageMediaEvent): void {
+    const tab = this.tabByLabel(label);
+    if (!tab?.site) {
+      return;
+    }
+    if (label !== this.foregroundPage) {
+      this.lastSeen.set(label, Date.now());
+    }
+    this.updateSite(tab.id, (site) => ({ ...site, mediaPlaying: playing }));
   }
 
   private forgetQuiet(label: string): void {

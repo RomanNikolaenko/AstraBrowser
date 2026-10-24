@@ -98,6 +98,12 @@ export interface PageAudioEvent {
   readonly muted: boolean;
 }
 
+/** Відео чи аудіо на сторінці почало чи перестало грати зі звуком (server/src/media-page.js). */
+export interface PageMediaEvent {
+  readonly label: string;
+  readonly playing: boolean;
+}
+
 /** Правила автовідтворення (server/src/audio.rs): решта сайтів — «Блокувати аудіо та відео». */
 export interface AutoplayRules {
   /** Сайти (origin), яким дозволено все. */
@@ -209,6 +215,7 @@ interface PageEvents {
   'page://load': PageLoadEvent;
   'page://navigation': PageNavigationEvent;
   'page://audio': PageAudioEvent;
+  'page://media': PageMediaEvent;
   'page://fullscreen': PageFullscreenEvent;
   'page://title': PageTitleEvent;
   'page://favicon': PageFaviconEvent;
