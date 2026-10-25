@@ -175,6 +175,12 @@ export const commands = {
 	cardsSyncApply: (changes: SyncChange[]) => __TAURI_INVOKE<SyncApplied>("cards_sync_apply", { changes }),
 	windowFillMonitor: () => __TAURI_INVOKE<null>("window_fill_monitor"),
 	windowStartDrag: () => __TAURI_INVOKE<null>("window_start_drag"),
+	/**
+	 *  Показати вікно, створене прихованим (tauri.conf.json, browser-windows.ts), — розгорнутим. Розгортається воно саме
+	 *  тут, а не параметром вікна: розмір звичайного вікна з минулого запуску (tauri-plugin-window-state) розгортання
+	 *  знімає. Уже показане вікно (інтерфейс перезавантажився) лишається, яким було.
+	 */
+	windowReveal: () => __TAURI_INVOKE<null>("window_reveal"),
 	/**  Значок сайту з адресою `url` (беремо його головну сторінку); `None` — не знайшли. */
 	faviconFind: (url: string) => __TAURI_INVOKE<string | null>("favicon_find", { url }),
 	browsingDataSizes: () => __TAURI_INVOKE<BrowsingDataSizes>("browsing_data_sizes"),

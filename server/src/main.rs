@@ -66,6 +66,7 @@ mod updates;
 mod webview2;
 #[cfg_attr(not(windows), path = "other/window_drag.rs")]
 mod window_drag;
+mod window_size;
 
 /// Параметри WebView2 для кожного вікна й вебв'ю застосунку. wry за замовчуванням вимикає разом із міні-меню Edge
 /// і Microsoft Defender SmartScreen (msSmartScreenProtection) — тут він лишається: захист від фішингу й шкідливих
@@ -95,7 +96,7 @@ fn main() {
 	// DNS через HTTPS — у налаштування WebView2 ще до першого вікна: браузер читає їх лише під час запуску (dns.rs).
 	// Плагіном одразу після single-instance: повторний запуск завершується, не чекаючи тут.
 	let builder = builder.plugin(dns::plugin());
-	// Webview інтерфейсу вікна. Вікно приховане, доки інтерфейс не намалюється (launch::reveal_later). Tab з його
+	// Webview інтерфейсу вікна. Вікно приховане, доки інтерфейс не намалюється (window_size::reveal_later). Tab з його
 	// кінця чи Shift+Tab з початку веде фокус колом (webview2::watch_focus_leaving). Інструменти розробника (feature
 	// devtools) — сайтам; інтерфейс самого браузера в релізі їх не відкриває, як у Chrome. У `tauri dev` вони
 	// лишаються й для інтерфейсу.
@@ -105,7 +106,7 @@ fn main() {
 				if webview.label().starts_with(pages::PAGE_PREFIX) {
 					return;
 				}
-				launch::reveal_later(webview.window());
+				window_size::reveal_later(webview.window());
 				#[cfg(windows)]
 				let _ = webview2::watch_focus_leaving(&webview);
 				#[cfg(all(windows, not(debug_assertions)))]
@@ -123,14 +124,11 @@ fn main() {
 		.plugin(logging::plugin())
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_updater::Builder::new().build())
-		// Головне вікно відкривається там і такого розміру, як його лишили (розгорнуте чи ні).
+		// Головне вікно відкривається розгорнутим (window_size::window_reveal), а звичайним стає там і такого розміру,
+		// як його лишили.
 		.plugin(
 			tauri_plugin_window_state::Builder::default()
-				.with_state_flags(
-					tauri_plugin_window_state::StateFlags::SIZE
-						| tauri_plugin_window_state::StateFlags::POSITION
-						| tauri_plugin_window_state::StateFlags::MAXIMIZED,
-				)
+				.with_state_flags(tauri_plugin_window_state::StateFlags::SIZE | tauri_plugin_window_state::StateFlags::POSITION)
 				.with_filter(|label| label == "main")
 				.build(),
 		)
@@ -157,8 +155,11 @@ fn main() {
 		.on_page_load(pages::close_orphans)
 		.on_window_event(|window, event| match event {
 			tauri::WindowEvent::Focused(true) => launch::focused(window),
-			tauri::WindowEvent::Destroyed => pages::forget_window(window),
-			_ => {}
+			tauri::WindowEvent::Destroyed => {
+				pages::forget_window(window);
+				window_size::forget(window);
+			}
+			_ => window_size::on_window_event(window, event),
 		})
 		.invoke_handler(ipc::handler())
 		.build(context)

@@ -16,6 +16,54 @@
 ; `astra-browser.exe "<шлях>"`, а Astra є серед програм для них («Відкрити за допомогою», «Програми за замовчуванням»).
 !define BROWSER_FILE_CLASS "Software\Classes\AstraBrowserHTML"
 
+; Чи запрацює браузер на цьому комп'ютері — інакше інсталятор нічого не встановлює, а пояснює чому. Браузер 64-бітний
+; і на WebView2, тож потрібна 64-бітна Windows 10 чи новіша (32-бітних збірок немає). Це — ще до першої сторінки
+; інсталятора: MUI викликає AstraCheckWindows з .onGUIInit (свого шаблон Tauri не має). Чи підходить сама збірка
+; (x64 чи arm64) — у NSIS_HOOK_PREINSTALL: ARCH шаблон визначає вже після цього файла. Тихе встановлення (/S) вікна
+; не має, тож там перевіряється все разом, у NSIS_HOOK_PREINSTALL.
+!include WinVer.nsh
+
+; Тека встановлення в NSIS_HOOK_PREINSTALL уже створена (SetOutPath у шаблоні) — порожню прибираємо. Вона ж тоді
+; поточна тека інсталятора, а таку Windows не видаляє, тож спершу виходимо з неї. RMDir без /r теку з файлами
+; (попередньо встановлену версію) не чіпає, а до першої сторінки її ще й немає.
+!macro ASTRA_UNSUPPORTED MESSAGE
+  SetOutPath "$TEMP"
+  RMDir "$INSTDIR"
+  MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}" /SD IDOK
+  SetErrorLevel 2
+  Quit
+!macroend
+
+!macro ASTRA_CHECK_WINDOWS
+  ${IfNot} ${RunningX64}
+    !insertmacro ASTRA_UNSUPPORTED "Astra Browser needs 64-bit Windows 10 or later. This computer runs 32-bit Windows, so Astra Browser can't be installed on it."
+  ${EndIf}
+  ${IfNot} ${AtLeastWin10}
+    !insertmacro ASTRA_UNSUPPORTED "Astra Browser needs Windows 10 or later, so it can't be installed on this version of Windows."
+  ${EndIf}
+!macroend
+
+!define MUI_CUSTOMFUNCTION_GUIINIT AstraCheckWindows
+Function AstraCheckWindows
+  !insertmacro ASTRA_CHECK_WINDOWS
+FunctionEnd
+
+; Збірка для іншого процесора не запуститься. x64 працює на звичайному 64-бітному комп'ютері, а на ARM64 — лише у
+; Windows 11, де x64-програми йдуть через емуляцію (у Windows 10 на ARM її немає). arm64 — лише на ARM64.
+!macro NSIS_HOOK_PREINSTALL
+  !insertmacro ASTRA_CHECK_WINDOWS
+  !if "${ARCH}" == "x64"
+    ${If} ${IsNativeARM64}
+    ${AndIfNot} ${AtLeastWin11}
+      !insertmacro ASTRA_UNSUPPORTED "This Astra Browser installer is for x64 computers. On ARM64 it needs Windows 11, which can run x64 apps, so it can't be installed on this computer."
+    ${EndIf}
+  !else if "${ARCH}" == "arm64"
+    ${IfNot} ${IsNativeARM64}
+      !insertmacro ASTRA_UNSUPPORTED "This Astra Browser installer is for ARM64 computers, and this computer has a different processor. Download the x64 version of Astra Browser instead."
+    ${EndIf}
+  !endif
+!macroend
+
 !macro ASTRA_FILE_TYPE EXT
   WriteRegStr HKCU "${BROWSER_KEY}\Capabilities\FileAssociations" "${EXT}" "AstraBrowserHTML"
   WriteRegStr HKCU "Software\Classes\${EXT}\OpenWithProgids" "AstraBrowserHTML" ""

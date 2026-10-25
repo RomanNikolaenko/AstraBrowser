@@ -12,7 +12,6 @@
 use std::{
   path::{Path, PathBuf},
   sync::Mutex,
-  time::Duration,
 };
 
 use serde::Serialize;
@@ -97,22 +96,6 @@ pub fn second_instance(app: &AppHandle, args: Vec<String>, cwd: String) {
     let _ = front.set_focus();
   });
   let _ = app.emit_to(window.label(), "app://open", OpenRequest { urls });
-}
-
-/// Скільки чекати, доки інтерфейс сам покаже своє вікно ([`reveal_later`]).
-const REVEAL_FALLBACK: Duration = Duration::from_secs(5);
-
-/// Вікно створюється прихованим (tauri.conf.json, browser-windows.ts), а показує його інтерфейс, щойно намалюється у
-/// своїй темі (client/src/app/app.ts): так під час запуску не видно білого тла webview з чорними смугами вікна. Не
-/// показав (інтерфейс не завантажився) — вікно з'являється за REVEAL_FALLBACK усе одно.
-pub fn reveal_later(window: Window) {
-  std::thread::spawn(move || {
-    std::thread::sleep(REVEAL_FALLBACK);
-    if window.is_visible().is_ok_and(|visible| !visible) {
-      log::warn!("Вікно {} показано без інтерфейсу", window.label());
-      let _ = window.show();
-    }
-  });
 }
 
 /// Вивести вікно наперед Windows дає лише процесу, який запустила програма на передньому плані (Telegram, пошта), —

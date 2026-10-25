@@ -8,11 +8,22 @@
 
 use tauri::{ipc::Invoke, Wry};
 
-use crate::{addresses, adblock, auth, cards, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, updates, window_drag};
+use crate::{addresses, adblock, auth, cards, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, updates, window_drag, window_size};
 
 /// Прив'язки для інтерфейсу (оновлюються під час розробки й перевіряються тестом).
 #[cfg(any(debug_assertions, test))]
 const BINDINGS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../client/src/app/bindings.ts");
+
+/// Оновлює client/src/app/bindings.ts, лише якщо прив'язки змінилися, — через тимчасовий файл поруч і перейменування.
+/// Запис просто у файл, обірваний на півдорозі (скажімо, разом із `tauri dev`), лишав його з самих нульових байтів, і
+/// збірка інтерфейсу на ньому зависала.
+#[cfg(debug_assertions)]
+fn export_bindings(builder: &tauri_specta::Builder<Wry>) -> Result<(), String> {
+  let fresh = format!("{BINDINGS}.tmp");
+  builder.export(typescript(), &fresh).map_err(|error| error.to_string())?;
+  let changed = std::fs::read(&fresh).ok() != std::fs::read(BINDINGS).ok();
+  if changed { std::fs::rename(&fresh, BINDINGS) } else { std::fs::remove_file(&fresh) }.map_err(|error| error.to_string())
+}
 
 fn specta() -> tauri_specta::Builder<Wry> {
   tauri_specta::Builder::<Wry>::new()
@@ -95,6 +106,7 @@ fn specta() -> tauri_specta::Builder<Wry> {
       cards::cards_sync_apply,
       fullscreen::window_fill_monitor,
       window_drag::window_start_drag,
+      window_size::window_reveal,
       favicons::favicon_find,
       browsing_data::browsing_data_sizes,
       browsing_data::browsing_data_clear,
@@ -138,7 +150,7 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
   // Обробник позичає builder до кінця роботи браузера (так влаштовано invoke_handler), тож той живе вічно — він один.
   let builder: &'static tauri_specta::Builder<Wry> = Box::leak(Box::new(specta()));
   #[cfg(debug_assertions)]
-  if let Err(error) = builder.export(typescript(), BINDINGS) {
+  if let Err(error) = export_bindings(builder) {
     eprintln!("Не вдалося оновити client/src/app/bindings.ts: {error}");
   }
   let typed = builder.invoke_handler();

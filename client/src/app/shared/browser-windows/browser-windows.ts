@@ -72,9 +72,6 @@ export class BrowserWindows {
   }
 
   private async openWindow(kind: WindowKind, session?: string, url?: string): Promise<void> {
-    const maximized = await getCurrentWindow()
-      .isMaximized()
-      .catch(() => false);
     const { prefix, title } = WINDOWS[kind];
     const label = `${prefix}${crypto.randomUUID()}`;
     const options: WindowOptions = {
@@ -86,9 +83,8 @@ export class BrowserWindows {
       minWidth: 800,
       minHeight: 600,
       center: true,
-      maximized,
       decorations: false,
-      // Показує його сам інтерфейс, уже намальованим (App), — як і головне.
+      // Показує його сам інтерфейс, уже намальованим і розгорнутим (App, reveal), — як і головне.
       visible: false,
       // Інакше у Windows Tauri забирає собі перетягування, і в інтерфейсі воно не працює (закладки).
       dragDropEnabled: false,
@@ -102,12 +98,12 @@ export class BrowserWindows {
   }
 
   /**
-   * Показує вікно. Створюється воно прихованим (tauri.conf.json, open) і з'являється, щойно інтерфейс намальований у
-   * своїй темі (App); поза Tauri — нічого.
+   * Показує вікно розгорнутим. Створюється воно прихованим (tauri.conf.json, open) і з'являється, щойно інтерфейс
+   * намальований у своїй темі (App); уже показане лишається, яким було (server/src/window_size.rs). Поза Tauri — нічого.
    */
   async reveal(): Promise<void> {
     if (isTauri()) {
-      await getCurrentWindow().show();
+      await commands.windowReveal();
     }
   }
 
