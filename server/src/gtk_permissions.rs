@@ -242,7 +242,13 @@ pub fn site_permissions(webview: &Webview, origin: String, reply: Reply<HashMap<
 }
 
 /// Зберігає дозвіл `kind` для сайту `origin`.
-pub fn set_site_permission(webview: &Webview, origin: String, kind: String, state: PermissionState, reply: Reply<()>) -> tauri::Result<()> {
+pub fn set_site_permission(
+  webview: &Webview,
+  origin: String,
+  kind: String,
+  state: PermissionState,
+  reply: Reply<()>,
+) -> tauri::Result<()> {
   let result = match (place_of(webview), KINDS.contains(&kind.as_str())) {
     (Some(place), true) => {
       save(&place, &origin, &kind, state);

@@ -23,7 +23,9 @@ fn agent() -> &'static ureq::Agent {
     ureq::Agent::config_builder()
       .timeout_global(Some(Duration::from_secs(15)))
       // Без браузерного User-Agent Google вважає запит автоматичним і не відповідає.
-      .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+      .user_agent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+      )
       .build()
       .into()
   })
@@ -67,7 +69,10 @@ fn parse(reply: &Value) -> Option<Translation> {
 }
 
 fn translate(text: &str, source: &str, target: &str) -> Result<Translation, String> {
-  let offline = crate::i18n::text("Не вдалося перекласти: немає з'єднання з Google Перекладачем.", "Couldn't translate: no connection to Google Translate.");
+  let offline = crate::i18n::text(
+    "Не вдалося перекласти: немає з'єднання з Google Перекладачем.",
+    "Couldn't translate: no connection to Google Translate.",
+  );
   let mut response = agent()
     .post(ENDPOINT)
     .query("client", "dict-chrome-ex")
@@ -76,10 +81,13 @@ fn translate(text: &str, source: &str, target: &str) -> Result<Translation, Stri
     .send_form([("q", text)])
     .map_err(|_| offline.to_string())?;
   let body = response.body_mut().read_to_string().map_err(|_| offline.to_string())?;
-  serde_json::from_str::<Value>(&body)
-    .ok()
-    .and_then(|reply| parse(&reply))
-    .ok_or_else(|| crate::i18n::text("Google Перекладач зараз не відповідає. Спробуйте трохи згодом.", "Google Translate isn't responding right now. Try again a bit later.").to_string())
+  serde_json::from_str::<Value>(&body).ok().and_then(|reply| parse(&reply)).ok_or_else(|| {
+    crate::i18n::text(
+      "Google Перекладач зараз не відповідає. Спробуйте трохи згодом.",
+      "Google Translate isn't responding right now. Try again a bit later.",
+    )
+    .to_string()
+  })
 }
 
 /// Прохання скрипта сторінки `label` перекласти виділене: переклад іде у фоні, а відповідь — тій сторінці.
@@ -121,7 +129,9 @@ mod tests {
   fn reads_the_translation_and_the_detected_language() {
     assert_eq!(
       parse(&json!([["Ми не претендуємо на право власності.", "en"]])),
-      Some(Translation { text: "Ми не претендуємо на право власності.".into(), source: "en".into() })
+      Some(Translation {
+        text: "Ми не претендуємо на право власності.".into(), source: "en".into()
+      })
     );
     assert_eq!(parse(&json!(["Привіт"])), Some(Translation { text: "Привіт".into(), source: String::new() }));
     assert_eq!(parse(&json!({ "error": "x" })), None);

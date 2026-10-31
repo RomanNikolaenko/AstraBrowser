@@ -174,8 +174,8 @@
     min-width: 0;
     overflow-x: clip;
     text-overflow: ellipsis;
-    white-space: nowrap;
     text-box: trim-both cap alphabetic;
+    white-space: nowrap;
   }
 
   &__audio,

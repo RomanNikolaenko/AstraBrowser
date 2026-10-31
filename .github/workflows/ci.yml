@@ -1,5 +1,6 @@
-# Перевірки на кожен пуш у main і pull request: форматування, лінтери, переклад, тести й збірка інтерфейсу,
-# тести й clippy Rust (обидва профілі) на Windows і Linux. Секретів не потрібно — ключа підпису тут немає.
+# Перевірки на кожен пуш у main і pull request. Інтерфейс: вразливості залежностей (pnpm audit), форматування (Oxfmt),
+# Oxlint, ESLint (angular-eslint), Stylelint, переклад, тести й збірка. Rust: форматування (rustfmt), вразливості залежностей (cargo-audit), тести й
+# Clippy (обидва профілі) на Windows і Linux. Секретів не потрібно — ключа підпису тут немає.
 name: CI
 
 on:
@@ -25,37 +26,81 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
+      # pnpm (версія — packageManager у client/package.json) і Node.js; кеш сховища pnpm — за client/pnpm-lock.yaml.
+      - name: pnpm і Node.js
+        uses: pnpm/setup@v3
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+          working-directory: client
+          runtime: node@24
+          cache: true
+          cache-dependency-path: client/pnpm-lock.yaml
+          install: false
 
       - name: Залежності
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Форматування
-        run: npm run format:check
+      # Відомі вразливості бібліотек, що потрапляють у збірку інтерфейсу (dependencies), — тоді падає.
+      - name: Вразливості залежностей (pnpm audit)
+        run: pnpm audit --prod --audit-level=moderate
 
-      - name: ESLint
-        run: npm run lint
+      - name: Форматування (Oxfmt)
+        run: pnpm run format:check
+
+      - name: Oxlint
+        run: pnpm run lint:ox
+
+      # Правила Angular — для TypeScript і шаблонів; загальні JS/TS тут вимкнені (їх перевіряє Oxlint).
+      - name: ESLint (angular-eslint)
+        run: pnpm run lint
 
       - name: Stylelint
-        run: npm run lint:styles
+        run: pnpm run lint:styles
 
       # Кожен текст інтерфейсу має англійський переклад (client/src/app/shared/i18n/en.ts).
       - name: Переклад
-        run: npm run i18n:check
+        run: pnpm run i18n:check
 
       # Іконки вбудовані в збірку: src/app/shared/ui-icon/icons.ts має відповідати src/assets/icons.
       - name: Іконки
-        run: npm run icons -- --check
+        run: pnpm run icons --check
 
       - name: Тести
-        run: npx ng test --watch=false
+        run: pnpm run test:ci
 
       - name: Збірка
-        run: npm run build
+        run: pnpm run build
+
+  # Без збірки: rustfmt і cargo-audit читають лише код і Cargo.lock.
+  rust-checks:
+    name: Rust (форматування й аудит)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_AUDIT_VERSION: 0.22.2
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: rustfmt
+        run: cargo fmt --check
+
+      # cargo-audit збирається з коду кілька хвилин, тож сам інструмент — з кешу (ключ — його версія).
+      - name: Кеш cargo-audit
+        id: cargo-audit
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-${{ env.CARGO_AUDIT_VERSION }}
+
+      - name: Встановити cargo-audit
+        if: steps.cargo-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked --version ${{ env.CARGO_AUDIT_VERSION }}
+
+      # Відомі вразливості й відкликані версії залежностей (база RustSec) — тоді падає. Попередження (непідтримувані
+      # бібліотеки в залежностях Tauri й GTK) лише виводяться.
+      - name: cargo-audit
+        run: cargo audit
 
   server:
     name: Rust (${{ matrix.name }})
@@ -105,11 +150,15 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
             libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev build-essential file patchelf
 
-      - uses: actions/setup-node@v7
+      # pnpm (версія — packageManager у client/package.json) і Node.js; кеш сховища pnpm — за client/pnpm-lock.yaml.
+      - name: pnpm і Node.js
+        uses: pnpm/setup@v3
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+          working-directory: client
+          runtime: node@24
+          cache: true
+          cache-dependency-path: client/pnpm-lock.yaml
+          install: false
 
       - name: Кеш Rust
         uses: actions/cache@v6
@@ -125,8 +174,8 @@ jobs:
       - name: Збірка інтерфейсу
         working-directory: client
         run: |
-          npm ci
-          npm run build
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       # Серед тестів — і перевірка, що client/src/app/bindings.ts відповідає командам Rust.
       - name: Перевірка

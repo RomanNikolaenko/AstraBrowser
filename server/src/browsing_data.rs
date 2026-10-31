@@ -4,22 +4,22 @@
 //! (gtk_page::clear_browsing_data): для цього створюється прихований webview у тому самому профілі. Історію й список
 //! завантажень браузера чистить інтерфейс — вони його власні.
 
-use std::{sync::mpsc, time::Duration};
 use std::{
   fs,
   path::{Path, PathBuf},
   sync::atomic::{AtomicU64, Ordering},
 };
+use std::{sync::mpsc, time::Duration};
 
 use serde::Serialize;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Url, WebviewBuilder, WebviewUrl, Window};
 
-use crate::{page_types::ClearKinds, profiles};
 /// Очищення — засобами рушія системи.
 #[cfg(target_os = "linux")]
 use crate::gtk_page as engine;
 #[cfg(windows)]
 use crate::webview2 as engine;
+use crate::{page_types::ClearKinds, profiles};
 
 /// Що в профілі WebView2 — дані сайтів, а що — кеш (шляхи всередині теки профілю).
 #[cfg(windows)]
@@ -38,8 +38,17 @@ const SITE_DATA: [&str; 9] = [
 const CACHE: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"];
 /// Те саме в теці даних WebKitGTK (Linux).
 #[cfg(target_os = "linux")]
-const SITE_DATA: [&str; 9] =
-  ["cookies", "localstorage", "databases", "storage", "serviceworkers", "CacheStorage", "mediakeys", "deviceidhashsalts", "hsts-storage.sqlite"];
+const SITE_DATA: [&str; 9] = [
+  "cookies",
+  "localstorage",
+  "databases",
+  "storage",
+  "serviceworkers",
+  "CacheStorage",
+  "mediakeys",
+  "deviceidhashsalts",
+  "hsts-storage.sqlite",
+];
 #[cfg(target_os = "linux")]
 const CACHE: [&str; 1] = ["WebKitCache"];
 /// Скільки чекати, поки рушій очистить дані (великий кеш — це не миттєво).
@@ -116,9 +125,8 @@ pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, 
   if let Some(dir) = &separate {
     builder = builder.data_directory(dir.clone());
   }
-  let webview = window
-    .add_child(builder, LogicalPosition::new(0.0, 0.0), LogicalSize::new(0.0, 0.0))
-    .map_err(|error| error.to_string())?;
+  let webview =
+    window.add_child(builder, LogicalPosition::new(0.0, 0.0), LogicalSize::new(0.0, 0.0)).map_err(|error| error.to_string())?;
 
   let result = {
     let (reply, receiver) = mpsc::channel();
@@ -126,7 +134,9 @@ pub async fn browsing_data_clear(window: Window, kinds: ClearKinds, since: f64, 
       Ok(()) => tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(CLEAR_TIMEOUT))
         .await
         .map_err(|error| error.to_string())
-        .and_then(|received| received.map_err(|_| crate::i18n::text("Очищення триває задовго", "Clearing is taking too long").to_string()))
+        .and_then(|received| {
+          received.map_err(|_| crate::i18n::text("Очищення триває задовго", "Clearing is taking too long").to_string())
+        })
         .and_then(|cleared| cleared),
       Err(error) => Err(error.to_string()),
     }

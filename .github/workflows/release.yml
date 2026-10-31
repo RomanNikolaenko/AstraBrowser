@@ -54,8 +54,21 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+
+      # pnpm тієї версії, що в packageManager (client/package.json), — з реєстру npm, без сторонніх дій. Його
+      # скрипт встановлення (рідний бінарник замість запуску через Node.js) нові npm запускають лише з --allow-scripts.
+      - name: pnpm
+        shell: bash
+        run: |
+          npm install -g "$(node -p "require('./client/package.json').packageManager")" --allow-scripts=pnpm
+          echo "PNPM_STORE=$(pnpm --dir client store path)" >> "$GITHUB_ENV"
+
+      - name: Кеш pnpm
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: pnpm-release-${{ runner.os }}-${{ hashFiles('client/pnpm-lock.yaml') }}
+          restore-keys: pnpm-release-${{ runner.os }}-
 
       - name: Кеш Rust
         uses: actions/cache@v6
@@ -69,12 +82,12 @@ jobs:
 
       - name: Залежності
         working-directory: client
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       # Кожен текст інтерфейсу має англійський переклад (client/src/app/shared/i18n/en.ts).
       - name: Переклад
         working-directory: client
-        run: npm run i18n:check
+        run: pnpm run i18n:check
 
       - name: Збірка й підпис
         working-directory: client
@@ -84,9 +97,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           export RELEASE_NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
-          npm run release
+          pnpm run release
 
-      # Пакети й latest.json цієї системи, як їх склав npm run release (client/scripts/release.mjs).
+      # Пакети й latest.json цієї системи, як їх склав pnpm run release (client/scripts/release.mjs).
       - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.system }}

@@ -34,20 +34,44 @@ pub fn custom_items(target: &MenuTarget) -> (MenuItems, MenuItems) {
   let mut top = Vec::new();
   let mut bottom = Vec::new();
   if let Some(link) = &target.link {
-    top.push(("open-link-tab", crate::i18n::text("Відкрити посилання в новій вкладці", "Open link in new tab").to_string(), Some(link.clone())));
-    top.push(("open-link-window", crate::i18n::text("Відкрити посилання в новому вікні", "Open link in new window").to_string(), Some(link.clone())));
-    top.push(("open-link-private", crate::i18n::text("Відкрити посилання в приватному вікні", "Open link in private window").to_string(), Some(link.clone())));
+    top.push((
+      "open-link-tab",
+      crate::i18n::text("Відкрити посилання в новій вкладці", "Open link in new tab").to_string(),
+      Some(link.clone()),
+    ));
+    top.push((
+      "open-link-window",
+      crate::i18n::text("Відкрити посилання в новому вікні", "Open link in new window").to_string(),
+      Some(link.clone()),
+    ));
+    top.push((
+      "open-link-private",
+      crate::i18n::text("Відкрити посилання в приватному вікні", "Open link in private window").to_string(),
+      Some(link.clone()),
+    ));
     top.push(("", String::new(), None));
   }
   if let Some(image) = &target.image {
-    top.push(("open-image-tab", crate::i18n::text("Відкрити зображення в новій вкладці", "Open image in new tab").to_string(), Some(image.clone())));
+    top.push((
+      "open-image-tab",
+      crate::i18n::text("Відкрити зображення в новій вкладці", "Open image in new tab").to_string(),
+      Some(image.clone()),
+    ));
     top.push(("", String::new(), None));
   }
   if let Some(text) = &target.selection {
     let short = shorten(text);
-    top.push(("search", crate::i18n::text("Шукати в інтернеті «{0}»", "Search the web for “{0}”").replace("{0}", &short), Some(text.clone())));
+    top.push((
+      "search",
+      crate::i18n::text("Шукати в інтернеті «{0}»", "Search the web for “{0}”").replace("{0}", &short),
+      Some(text.clone()),
+    ));
     if !target.editable {
-      top.push(("translate-text", crate::i18n::text("Перекласти «{0}»", "Translate “{0}”").replace("{0}", &short), Some(text.clone())));
+      top.push((
+        "translate-text",
+        crate::i18n::text("Перекласти «{0}»", "Translate “{0}”").replace("{0}", &short),
+        Some(text.clone()),
+      ));
     }
     top.push(("", String::new(), None));
   }
@@ -59,7 +83,11 @@ pub fn custom_items(target: &MenuTarget) -> (MenuItems, MenuItems) {
     // Для розробки: код сторінки (як Ctrl+U) — перед «Перевірити» самого WebView2.
     if let Some(page) = target.page.as_ref().filter(|_| VIEW_SOURCE) {
       bottom.push(("", String::new(), None));
-      bottom.push(("view-source", crate::i18n::text("Переглянути джерело сторінки", "View page source").to_string(), Some(page.clone())));
+      bottom.push((
+        "view-source",
+        crate::i18n::text("Переглянути джерело сторінки", "View page source").to_string(),
+        Some(page.clone()),
+      ));
     }
   }
   (top, bottom)
@@ -86,10 +114,14 @@ mod tests {
 
   /// Дії меню сторінки на цій системі: без коду сторінки там, де його немає.
   fn page_actions(list: &[&'static str]) -> Vec<&'static str> {
-    list.iter().copied().filter(|action| match *action {
-      "view-source" => VIEW_SOURCE,
-      _ => true,
-    }).collect()
+    list
+      .iter()
+      .copied()
+      .filter(|action| match *action {
+        "view-source" => VIEW_SOURCE,
+        _ => true,
+      })
+      .collect()
   }
 
   #[test]

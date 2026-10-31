@@ -18,12 +18,13 @@
           class="tab__select"
           type="button"
           [attr.aria-current]="tab.id === activeTabId() ? 'page' : null"
-          [attr.aria-busy]="tab.site?.loading || null"
+          [attr.aria-busy]="(tab.site?.loading && !tab.site?.pending) || null"
           [title]="tab.site?.sleeping ? tabTitle(tab) + (' — вкладка спить, щоб заощадити пам’ять' | t) : tabTitle(tab)"
           [class.tab__select--sleeping]="tab.site?.sleeping"
           [class.tab__select--crashed]="!!tab.site?.crashed"
           (click)="selectTab(tab.id, $event.detail > 0)">
-          @if (tab.site?.loading) {
+          <!-- Відновлену вкладку, яку ще не відкривали (pending), не вантажимо — у ній значок сайту, як у Chrome. -->
+          @if (tab.site?.loading && !tab.site?.pending) {
             <span class="tab__spinner" aria-hidden="true"></span>
           } @else if (tab.site) {
             <app-site-icon class="tab__favicon" [url]="tab.site.url" [size]="18" />

@@ -13,12 +13,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-  audio,
-  page_types::{Area, Autoplay, PermissionState, PictureInPicture, ReloadMode, TabDirection},
-};
-#[cfg(windows)]
-use crate::webview2;
 /// Події й керування сторінкою — засобами рушія системи: WebView2 (Windows) чи WebKitGTK (Linux, gtk_page.rs).
 #[cfg(target_os = "linux")]
 use crate::gtk_page as engine;
@@ -27,7 +21,13 @@ use crate::gtk_page as events;
 #[cfg(windows)]
 use crate::page_events as events;
 #[cfg(windows)]
+use crate::webview2;
+#[cfg(windows)]
 use crate::webview2 as engine;
+use crate::{
+  audio,
+  page_types::{Area, Autoplay, PermissionState, PictureInPicture, ReloadMode, TabDirection},
+};
 use tauri::{
   webview::{PageLoadEvent, PageLoadPayload},
   AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl, Window,
@@ -459,7 +459,8 @@ pub async fn page_open(
   // формах (один скрипт, autofill-page.js).
   // Global Privacy Control: navigator.globalPrivacyControl (а заголовок Sec-GPC додає webview2::block_ads).
   #[cfg(windows)]
-  let builder = if privacy.gpc { builder.initialization_script_for_all_frames(crate::tracking::page_script(true)) } else { builder };
+  let builder =
+    if privacy.gpc { builder.initialization_script_for_all_frames(crate::tracking::page_script(true)) } else { builder };
   #[cfg(windows)]
   let builder = builder
     .initialization_script(crate::passwords::page_script(&page_token))
@@ -781,9 +782,7 @@ pub fn page_exit_fullscreen(window: Window, label: String) -> Result<(), String>
   }
   #[cfg(not(windows))]
   {
-    page(&window, &label)?
-    .eval("document.fullscreenElement && document.exitFullscreen()")
-    .map_err(|error| error.to_string())
+    page(&window, &label)?.eval("document.fullscreenElement && document.exitFullscreen()").map_err(|error| error.to_string())
   }
 }
 
@@ -791,7 +790,16 @@ pub fn page_exit_fullscreen(window: Window, label: String) -> Result<(), String>
 #[specta::specta]
 pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<(), String> {
   let webview = page(&window, &label)?;
-  if visible { webview.show() } else { webview.hide() }.map_err(|error| error.to_string())
+  if !visible {
+    return webview.hide().map_err(|error| error.to_string());
+  }
+  // Показаний сайт — над рештою сайтів вікна (під інтерфейсом). Кожен новий лягає в самий низ, тож вкладку, відкриту
+  // пізніше за попередню, інакше було б видно, лише коли та сховається (інтерфейс ховає її вже після показу нової).
+  #[cfg(windows)]
+  for other in window.webviews().into_iter().filter(|other| other.label() != label && other.label().starts_with(PAGE_PREFIX)) {
+    let _ = webview2::send_to_back(&other);
+  }
+  webview.show().map_err(|error| error.to_string())
 }
 
 /// Де інтерфейс вікна ловить мишу (webview2::set_input_region): поза сторінкою, а над нею — лише відкриті панелі й
@@ -1034,12 +1042,7 @@ pub fn page_set_background(window: Window, label: String, background: bool) -> R
 /// Відповідь користувача на запит дозволу сайту.
 #[tauri::command]
 #[specta::specta]
-pub fn page_permission_answer(
-  app: AppHandle,
-  id: u64,
-  state: PermissionState,
-  remember: bool,
-) -> Result<(), String> {
+pub fn page_permission_answer(app: AppHandle, id: u64, state: PermissionState, remember: bool) -> Result<(), String> {
   app.run_on_main_thread(move || events::answer_permission(id, state, remember)).map_err(|error| error.to_string())
 }
 
@@ -1059,12 +1062,7 @@ pub async fn page_permissions(
 /// Зберігає дозвіл сайту вкладки (з панелі дозволів).
 #[tauri::command]
 #[specta::specta]
-pub async fn page_set_permission(
-  window: Window,
-  label: String,
-  kind: String,
-  state: PermissionState,
-) -> Result<(), String> {
+pub async fn page_set_permission(window: Window, label: String, kind: String, state: PermissionState) -> Result<(), String> {
   let webview = page(&window, &label)?;
   let (reply, receiver) = mpsc::channel();
   events::set_site_permission(&webview, page_origin(&webview)?, kind, state, reply).map_err(|error| error.to_string())?;

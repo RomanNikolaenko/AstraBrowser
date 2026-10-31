@@ -11,8 +11,8 @@ export async function resizeImage(file: Blob, width: number, height: number, fit
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error(translate('Це не зображення')));
+      element.addEventListener('load', () => resolve(element), { once: true });
+      element.addEventListener('error', () => reject(new Error(translate('Це не зображення'))), { once: true });
       element.src = url;
     });
     const scale =

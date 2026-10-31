@@ -22,14 +22,18 @@ use windows::Win32::{
   Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
   Graphics::{
     Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED},
-    Gdi::{GetMonitorInfoW, GetStockObject, MonitorFromWindow, ScreenToClient, BLACK_BRUSH, HBRUSH, MONITORINFO, MONITOR_DEFAULTTONEAREST},
+    Gdi::{
+      GetMonitorInfoW, GetStockObject, MonitorFromWindow, ScreenToClient, BLACK_BRUSH, HBRUSH, MONITORINFO,
+      MONITOR_DEFAULTTONEAREST,
+    },
   },
   System::LibraryLoader::GetModuleHandleW,
   UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, GetClientRect, GetParent, GetWindowLongPtrW, GetWindowRect, IsWindow, IsZoomed, RegisterClassExW,
-    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWLP_HWNDPARENT, GWL_STYLE, HWND_BOTTOM, HWND_TOP, HWND_TOPMOST,
-    LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_MAXIMIZE, WNDCLASSEXW,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_MAXIMIZE, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, GetClientRect, GetParent, GetWindowLongPtrW, GetWindowRect, IsWindow, IsZoomed,
+    RegisterClassExW, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWLP_HWNDPARENT, GWL_STYLE,
+    HWND_BOTTOM, HWND_TOP, HWND_TOPMOST, LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE,
+    SW_MAXIMIZE, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_MAXIMIZE,
+    WS_POPUP,
   },
 };
 use windows_core::{w, BOOL};
@@ -525,16 +529,11 @@ fn overlay(owner: HWND) -> Option<HWND> {
 fn prepare(page: &Webview) -> Before {
   let window = page.window();
   let was_fullscreen = window.is_fullscreen().unwrap_or(false);
-  let maximized = window
-    .is_maximized()
-    .unwrap_or(false)
-    .then(|| window.hwnd().ok())
-    .flatten()
-    .map(|hwnd| {
-      let mut rect = RECT::default();
-      let _ = unsafe { GetWindowRect(HWND(hwnd.0 as _), &mut rect) };
-      rect
-    });
+  let maximized = window.is_maximized().unwrap_or(false).then(|| window.hwnd().ok()).flatten().map(|hwnd| {
+    let mut rect = RECT::default();
+    let _ = unsafe { GetWindowRect(HWND(hwnd.0 as _), &mut rect) };
+    rect
+  });
   let interface = interface_bounds(&window, None);
   if !was_fullscreen {
     let _ = window.set_fullscreen(true);
@@ -585,7 +584,13 @@ fn enter(page: &Webview, before: Before) {
     };
     let bounds = rect_in(window, site);
     // Сайт тепер на весь екран — ще до змін вікна: межі з інтерфейсу його вже не стосуються.
-    held().push(Held { label, site: site.0 as isize, bounds, was_fullscreen: before.was_fullscreen, maximized: before.maximized });
+    held().push(Held {
+      label,
+      site: site.0 as isize,
+      bounds,
+      was_fullscreen: before.was_fullscreen,
+      maximized: before.maximized,
+    });
     if !before.was_fullscreen {
       // tao ставить межі монітора асинхронно, а розгорнутому вікну лишає робочу область (без панелі завдань). Тож
       // синхронно: розгортання — геть (без відновлення до звичайного розміру, яке показало б проміжне вікно), межі —
@@ -670,7 +675,12 @@ fn leave(page: &Webview) {
 }
 
 /// Webview сайту — на місце `bounds` (у координатах вікна) і в z-порядку після `after`.
-fn place(controller: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Controller, site: HWND, after: HWND, bounds: RECT) {
+fn place(
+  controller: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Controller,
+  site: HWND,
+  after: HWND,
+  bounds: RECT,
+) {
   let (width, height) = (bounds.right - bounds.left, bounds.bottom - bounds.top);
   unsafe {
     let _ = SetWindowPos(site, Some(after), bounds.left, bounds.top, width, height, SWP_NOACTIVATE);
@@ -700,12 +710,8 @@ fn monitor_rect(window: HWND) -> RECT {
 fn without_transitions(window: HWND, change: impl FnOnce()) {
   let set = |disabled: bool| unsafe {
     let value = BOOL::from(disabled);
-    let _ = DwmSetWindowAttribute(
-      window,
-      DWMWA_TRANSITIONS_FORCEDISABLED,
-      &value as *const BOOL as *const _,
-      size_of::<BOOL>() as u32,
-    );
+    let _ =
+      DwmSetWindowAttribute(window, DWMWA_TRANSITIONS_FORCEDISABLED, &value as *const BOOL as *const _, size_of::<BOOL>() as u32);
   };
   set(true);
   change();

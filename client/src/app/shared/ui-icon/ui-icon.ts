@@ -18,7 +18,7 @@ export function iconMarkup(name: string | undefined): string {
 }
 
 /**
- * Іконка `<app-icon icon="назва" />`. Іконки вбудовані в збірку (icons.ts, npm run icons), тож малюються разом з
+ * Іконка `<app-icon icon="назва" />`. Іконки вбудовані в збірку (icons.ts, pnpm run icons), тож малюються разом з
  * усім іншим — без окремого запиту на кожну й без миготіння під час запуску.
  */
 @Component({

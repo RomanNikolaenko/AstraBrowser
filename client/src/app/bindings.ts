@@ -22,7 +22,7 @@ export const commands = {
 	 *  Фокус — у сайт. З `tab` — так, ніби до нього дійшли клавішею Tab з інтерфейсу: на перший елемент сторінки
 	 *  (`Forward`) чи останній (`Backward`), як у Chrome, а не туди, де фокус був раніше.
 	 */
-	pageFocus: (label: string, tab: "forward" | "backward" | null) => __TAURI_INVOKE<null>("page_focus", { label, tab }),
+	pageFocus: (label: string, tab: TabDirection | null) => __TAURI_INVOKE<null>("page_focus", { label, tab }),
 	pagePrint: (label: string) => __TAURI_INVOKE<null>("page_print", { label }),
 	/**  Інструменти розробника сайту (DevTools WebView2) — окремим вікном. */
 	pageOpenDevtools: (label: string) => __TAURI_INVOKE<null>("page_open_devtools", { label }),
@@ -117,9 +117,9 @@ export const commands = {
 	 *  Записи з номером ревізії, більшим за `after`, — за порядком ревізій, не більше сторінки. `collection` — лише
 	 *  записи цієї колекції (наприклад, паролі наново після зміни пароля облікового запису).
 	 */
-	syncPull: (after: number, collection: string | null) => __TAURI_INVOKE<SyncRow_Serialize[]>("sync_pull", { after, collection }),
+	syncPull: (after: number, collection: string | null) => __TAURI_INVOKE<SyncRow[]>("sync_pull", { after, collection }),
 	/**  Змінені записи на сервер. Повертає ті, що сервер відхилив, бо в нього новіші, — з його версією. */
-	syncPush: (items: SyncRow_Deserialize[]) => __TAURI_INVOKE<SyncRow_Serialize[]>("sync_push", { items }),
+	syncPush: (items: SyncRow[]) => __TAURI_INVOKE<SyncRow[]>("sync_push", { items }),
 	/**  Усі паролі облікового запису, зашифровані для синхронізації (і список «ніколи не зберігати» — записом `never`). */
 	passwordsSyncItems: () => __TAURI_INVOKE<SyncItems>("passwords_sync_items"),
 	/**  Записи з сервера: нові й змінені паролі — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є. */
@@ -194,12 +194,7 @@ export const commands = {
 	 *  Де інтерфейс вікна ловить мишу (webview2::set_input_region): поза сторінкою, а над нею — лише відкриті панелі й
 	 *  вікна. `page: None` — увесь інтерфейс.
 	 */
-	interfaceSetInputRegion: (page: {
-	x: number | null,
-	y: number | null,
-	width: number | null,
-	height: number | null,
-} | null, keep: Area[]) => __TAURI_INVOKE<null>("interface_set_input_region", { page, keep }),
+	interfaceSetInputRegion: (page: Area | null, keep: Area[]) => __TAURI_INVOKE<null>("interface_set_input_region", { page, keep }),
 	/**
 	 *  Вивести сайт із повного екрана, хоч сторінка його й не покидала (інша вкладка, модальне вікно): вікно й webview —
 	 *  як були до нього.
@@ -582,26 +577,7 @@ export type SyncItems = {
 };
 
 /**  Рядок таблиці sync_items (supabase/sync.sql). Інші стовпці (user_id) сервер теж віддає — їх пропускаємо. */
-export type SyncRow = SyncRow_Serialize | SyncRow_Deserialize;
-
-/**  Рядок таблиці sync_items (supabase/sync.sql). Інші стовпці (user_id) сервер теж віддає — їх пропускаємо. */
-export type SyncRow_Deserialize = {
-	collection: string,
-	id: string,
-	/**
-	 *  Дані запису як є (у кожної колекції свої — їх розбирає інтерфейс); null у видаленого. У TypeScript — `unknown`:
-	 *  сам serde_json::Value specta описати не може, бо зациклюється на його вкладеності.
-	 */
-	data: unknown,
-	deleted: boolean,
-	/**  Час зміни, мс. */
-	updated_at: number,
-	/**  Номер зміни на сервері; у записах, що лише надсилаються, його ще немає. */
-	revision?: number | null,
-};
-
-/**  Рядок таблиці sync_items (supabase/sync.sql). Інші стовпці (user_id) сервер теж віддає — їх пропускаємо. */
-export type SyncRow_Serialize = {
+export type SyncRow = {
 	collection: string,
 	id: string,
 	/**

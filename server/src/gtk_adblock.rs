@@ -18,9 +18,9 @@ use tauri::{AppHandle, Manager, Url, Webview};
 use webkit2gtk::{LoadEvent, UserContentInjectedFrames, UserContentManagerExt, UserScript, UserScriptInjectionTime, WebViewExt};
 use webkit2gtk_sys::{
   webkit_user_content_filter_store_load, webkit_user_content_filter_store_load_finish, webkit_user_content_filter_store_new,
-  webkit_user_content_filter_store_save, webkit_user_content_filter_store_save_finish,
-  webkit_user_content_filter_unref, webkit_user_content_manager_add_filter, webkit_user_content_manager_remove_filter,
-  webkit_user_content_manager_remove_script, WebKitUserContentFilter, WebKitUserContentFilterStore,
+  webkit_user_content_filter_store_save, webkit_user_content_filter_store_save_finish, webkit_user_content_filter_unref,
+  webkit_user_content_manager_add_filter, webkit_user_content_manager_remove_filter, webkit_user_content_manager_remove_script,
+  WebKitUserContentFilter, WebKitUserContentFilterStore,
 };
 
 use crate::adblock::{AdBlock, CONTENT_FILE};

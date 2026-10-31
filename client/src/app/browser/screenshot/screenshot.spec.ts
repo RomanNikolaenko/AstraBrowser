@@ -54,13 +54,11 @@ describe('Screenshot', () => {
 
   describe('keyboard', () => {
     // jsdom не розкодовує картинок і не малює на canvas: знімок «читається» одразу, а вирізання дає готовий PNG.
-    class LoadedImage {
+    class LoadedImage extends EventTarget {
       naturalWidth = 1600;
       naturalHeight = 1200;
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
       set src(_url: string) {
-        setTimeout(() => this.onload?.());
+        setTimeout(() => this.dispatchEvent(new Event('load')));
       }
     }
 

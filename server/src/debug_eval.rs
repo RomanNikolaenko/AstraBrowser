@@ -24,9 +24,12 @@ pub fn start(app: &AppHandle) {
       continue;
     };
     // Не eval(): його не дає CSP інтерфейсу; скрипт — вираз (чи стрілкова функція, що одразу викликається).
-    let wrapped = format!("(() => {{ try {{ return JSON.stringify(({script})); }} catch (error) {{ return 'error: ' + error; }} }})()");
+    let wrapped =
+      format!("(() => {{ try {{ return JSON.stringify(({script})); }} catch (error) {{ return 'error: ' + error; }} }})()");
     #[cfg(target_os = "linux")]
-    if let Some(world) = script.lines().nth(1).and_then(|line| line.strip_prefix("// world: ")).map(|world| world.trim().to_string()) {
+    if let Some(world) =
+      script.lines().nth(1).and_then(|line| line.strip_prefix("// world: ")).map(|world| world.trim().to_string())
+    {
       let _ = webview.with_webview(move |platform| {
         use javascriptcore::ValueExt;
         use webkit2gtk::WebViewExt;

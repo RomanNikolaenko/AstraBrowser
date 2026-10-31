@@ -1,0 +1,7 @@
+# rustfmt: `cargo fmt` форматує, `cargo fmt --check` перевіряє (CI). Близько до стилю, яким код писався вручну:
+# відступ — 2 пробіли, рядок — до 130 символів (як printWidth у client/.oxfmtrc.json), а переносів — якомога менше.
+edition = "2021"
+max_width = 130
+tab_spaces = 2
+use_small_heuristics = "Max"
+newline_style = "Unix"

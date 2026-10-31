@@ -443,6 +443,11 @@ describe('Browser with sites', () => {
 
     expect(titles()).toEqual(['Angular', 'GitHub', 'Історія']);
     expect(element.querySelector('.tab--active .tab__title')?.textContent?.trim()).toBe('GitHub');
+    // Вкладку Angular ще не відкривали — сайт не вантажиться, тож у ній значок сайту, а не лоадер.
+    const angularTab = () =>
+      [...element.querySelectorAll<HTMLElement>('.tab')].find((tab) => tab.textContent?.includes('Angular'));
+    expect(angularTab()?.querySelector('.tab__spinner')).toBeNull();
+    expect(angularTab()?.querySelector('app-site-icon')).toBeTruthy();
     expect(pages.called('open')).toEqual([[label(3), 'https://github.com/']]);
     // Поки webview створювався, межі до нього не доходили (а розкладка під час запуску ще змінюється) — тож ще раз.
     const calls = pages.calls.map(([name, page]) => `${name} ${String(page)}`);
@@ -741,10 +746,14 @@ describe('Browser with sites', () => {
     const browser = fixture.debugElement.query(By.directive(Browser)).componentInstance as unknown as {
       sleepInactiveTabs(now: number): void;
     };
-    expect(pages.called('set-background')).toContainEqual([label(1), true]);
+    // Щойно залишена вкладка — ще не в режимі малої пам'яті: до неї найчастіше й повертаються, а з нього довше.
+    browser.sleepInactiveTabs(Date.now() + 60_000);
+    await stable();
+    expect(pages.called('set-background')).toEqual([]);
 
     browser.sleepInactiveTabs(Date.now() + 5 * 60_000);
     await stable();
+    expect(pages.called('set-background')).toEqual([[label(1), true]]);
     expect(pages.called('suspend')).toEqual([]);
     browser.sleepInactiveTabs(Date.now() + 31 * 60_000);
     await new Promise((resolve) => setTimeout(resolve));
@@ -1338,6 +1347,34 @@ describe('Browser with sites', () => {
     expect(pages.called('open').at(-1)).toEqual([label(2), 'https://github.com/angular']);
   });
 
+  it('should put tabs opened from a site next to it, in the order they were opened, as Firefox does', async () => {
+    await typeInOmnibox('angular.dev');
+    element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
+    await stable();
+    await typeInOmnibox('example.com');
+    element.querySelectorAll<HTMLButtonElement>('.tab__select')[0].click();
+    await stable();
+    expect(titles()).toEqual(['angular.dev', 'example.com']);
+
+    // Посилання з першої вкладки у фоні — одразу за нею, кожне наступне — за попереднім, а не в кінці.
+    pages.emit('page://new-tab', { label: label(1), url: 'https://github.com/angular', userInitiated: true, background: true });
+    pages.emit('page://new-tab', { label: label(1), url: 'https://npmjs.com/', userInitiated: true, background: true });
+    await stable();
+    expect(titles()).toEqual(['angular.dev', 'github.com', 'npmjs.com', 'example.com']);
+
+    // Нова порожня вкладка — як і раніше, в кінці.
+    element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
+    await stable();
+    expect(titles().at(-1)).toBe('Нова вкладка');
+
+    // Перейшли на іншу вкладку й назад — ланцюжок почався знову: нове посилання знову одразу за першою.
+    element.querySelectorAll<HTMLButtonElement>('.tab__select')[0].click();
+    await stable();
+    pages.emit('page://new-tab', { label: label(1), url: 'https://deno.land/', userInitiated: true, background: true });
+    await stable();
+    expect(titles().slice(0, 3)).toEqual(['angular.dev', 'deno.land', 'github.com']);
+  });
+
   it('should show the icon a site reported in its tab and bookmark', async () => {
     TestBed.inject(BookmarksStore).add('YouTube', 'https://www.youtube.com/');
     const tabIcon = () => element.querySelector<HTMLImageElement>('.tab__favicon img');
@@ -1508,11 +1545,11 @@ describe('Browser with sites', () => {
       await stable();
     };
     const openPanel = () => open(panel());
-    const choose = async (label: string) => {
+    const choose = async (name: string) => {
       const list = panel().querySelector(`#${autoplay().getAttribute('aria-controls')}`);
       await open(list);
       [...(list?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])]
-        .find((option) => option.textContent?.trim() === label)
+        .find((option) => option.textContent?.trim() === name)
         ?.click();
       await stable();
       await stable();
@@ -1648,9 +1685,9 @@ describe('Browser with sites', () => {
       menu().querySelector<HTMLButtonElement>('.extensions-menu__open')?.click();
       await stable();
     };
-    const action = async (label: string) => {
+    const action = async (name: string) => {
       [...element.querySelectorAll<HTMLButtonElement>('.extension-actions__item')]
-        .find((item) => item.textContent?.trim() === label)
+        .find((item) => item.textContent?.trim() === name)
         ?.click();
       await stable();
     };
@@ -1850,8 +1887,8 @@ describe('Browser with sites', () => {
     element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
     element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
     await stable();
-    const titles = () => [...element.querySelectorAll('.tab__select')].map((tab) => tab.getAttribute('title'));
-    const before = titles();
+    const order = () => [...element.querySelectorAll('.tab__select')].map((tab) => tab.getAttribute('title'));
+    const before = order();
     // jsdom не має DragEvent і розмітки: кожна вкладка — 100 пікселів завширшки, одна за одною.
     const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
       const index = [...element.querySelectorAll('.tab-list .tab')].indexOf(this);
@@ -1890,7 +1927,7 @@ describe('Browser with sites', () => {
       expect(element.querySelectorAll('.tab')[2].classList).toContain('tab--drop-after');
       drag(spacer, 'drop', 900);
       await stable();
-      expect(titles()).toEqual([before[1], before[2], before[0]]);
+      expect(order()).toEqual([before[1], before[2], before[0]]);
 
       // Поза заголовком вікна вкладку не скидають.
       drag(element.querySelectorAll('.tab')[2], 'dragstart', 250);
@@ -2064,7 +2101,7 @@ describe('Browser with sites', () => {
   });
 
   describe('downloads', () => {
-    const button = () => element.querySelector('.downloads-button') as HTMLButtonElement;
+    const downloadsButton = () => element.querySelector('.downloads-button') as HTMLButtonElement;
     const rows = () =>
       [...element.querySelectorAll('.downloads-menu__row')].map((row) => [
         row.querySelector('.downloads-menu__name')?.textContent?.trim(),
@@ -2090,11 +2127,11 @@ describe('Browser with sites', () => {
 
     it('should show a downloads button with the progress once something downloads', async () => {
       await typeInOmnibox('angular.dev');
-      expect(button()).toBeNull();
+      expect(downloadsButton()).toBeNull();
 
       await download(1024);
-      expect(button().getAttribute('aria-label')).toBe('Завантаження: триває 1');
-      expect(button().classList).toContain('downloads-button--busy');
+      expect(downloadsButton().getAttribute('aria-label')).toBe('Завантаження: триває 1');
+      expect(downloadsButton().classList).toContain('downloads-button--busy');
       expect(element.querySelector('.downloads-button__value')?.getAttribute('stroke-dasharray')).toBe('25 100');
       expect(rows()).toEqual([['a.zip', '1 КБ з 4 КБ']]);
       // Перехід став завантаженням — вкладка вже не вантажиться.
@@ -2104,9 +2141,9 @@ describe('Browser with sites', () => {
       expect(pages.called('cancel-download')).toEqual([[3]]);
 
       await download(4096, 'completed');
-      expect(button().getAttribute('aria-label')).toBe('Завантаження');
+      expect(downloadsButton().getAttribute('aria-label')).toBe('Завантаження');
       expect(element.querySelector('.downloads-button__ring')).toBeNull();
-      expect(button().classList).not.toContain('downloads-button--busy');
+      expect(downloadsButton().classList).not.toContain('downloads-button--busy');
       expect(rows()).toEqual([['a.zip', 'Завантажено · 4 КБ · x.example']]);
       // Запізнілі звістки про те, що вже скінчилося, список не змінюють.
       await download(4096, 'canceled');
@@ -2162,7 +2199,7 @@ describe('Browser with sites', () => {
         ?.click();
       await stable();
       expect(TestBed.inject(DownloadsStore).entries()).toEqual([]);
-      expect(button()).toBeNull();
+      expect(downloadsButton()).toBeNull();
     });
 
     it('should ask where to save a file and let the folder change for it alone', async () => {
@@ -2267,7 +2304,7 @@ describe('Browser with sites', () => {
       element.querySelector<HTMLButtonElement>('[aria-label="Прибрати «a.zip» зі списку"]')?.click();
       await stable();
       expect(TestBed.inject(DownloadsStore).entries()).toEqual([]);
-      expect(button()).toBeNull();
+      expect(downloadsButton()).toBeNull();
     });
   });
 

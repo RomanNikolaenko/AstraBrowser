@@ -1,11 +1,14 @@
 // @ts-check
-// ESLint: TypeScript і шаблони Angular. Перевірка — `npm run lint`, автовиправлення — `npm run lint:fix`.
+// ESLint: правила Angular (angular-eslint) для TypeScript і шаблонів. Загальні правила JS/TS перевіряє Oxlint
+// (.oxlintrc.json, `pnpm run lint:ox`) — тут вони вимкнені (eslint-plugin-oxlint), щоб не перевіряти двічі.
+// Перевірка — `pnpm run lint`, автовиправлення — `pnpm run lint:fix`.
 const path = require('node:path');
 const { includeIgnoreFile } = require('@eslint/compat');
 const eslint = require('@eslint/js');
 const { defineConfig } = require('eslint/config');
 const tseslint = require('typescript-eslint');
 const angular = require('angular-eslint');
+const oxlint = require('eslint-plugin-oxlint');
 
 module.exports = defineConfig([
   // Що не перевіряти — у .eslintignore (сам ESLint 9+ цей файл уже не читає).
@@ -50,4 +53,6 @@ module.exports = defineConfig([
     extends: [angular.configs.templateRecommended, angular.configs.templateAccessibility],
     rules: {},
   },
+  // Останнім: вимикає правила, які вже перевіряє Oxlint.
+  ...oxlint.buildFromOxlintConfig(require('./.oxlintrc.json')),
 ]);

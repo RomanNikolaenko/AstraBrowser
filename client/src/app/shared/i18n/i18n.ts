@@ -105,7 +105,7 @@ export class I18n {
   });
 
   constructor() {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias -- один сервіс мови на вікно, для функцій поза компонентами
+    // oxlint-disable-next-line typescript/no-this-alias -- один сервіс мови на вікно, для функцій поза компонентами
     active = this;
     // Знищений сервіс (між тестами) більше не задає мову: функції поза компонентами повертаються до української.
     inject(DestroyRef).onDestroy(() => {

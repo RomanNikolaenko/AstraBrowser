@@ -8,9 +8,39 @@ use tauri::Url;
 /// Схеми, яких браузер не відкриває програмою ніколи: внутрішні, локальні файли, скрипти й ті, через які
 /// атакували Windows (ms-msdt — Follina, search-ms, ms-officecmd, ms-appinstaller тощо).
 const BLOCKED: &[&str] = &[
-  "http", "https", "about", "blob", "chrome", "data", "devtools", "edge", "file", "filesystem", "hcp", "its", "javascript",
-  "jar", "mhtml", "mk", "ms-appinstaller", "ms-cxh", "ms-cxh-full", "ms-its", "ms-msdt", "ms-officecmd", "res", "search",
-  "search-ms", "shell", "tauri", "ipc", "asset", "vbscript", "view-source", "ws", "wss",
+  "http",
+  "https",
+  "about",
+  "blob",
+  "chrome",
+  "data",
+  "devtools",
+  "edge",
+  "file",
+  "filesystem",
+  "hcp",
+  "its",
+  "javascript",
+  "jar",
+  "mhtml",
+  "mk",
+  "ms-appinstaller",
+  "ms-cxh",
+  "ms-cxh-full",
+  "ms-its",
+  "ms-msdt",
+  "ms-officecmd",
+  "res",
+  "search",
+  "search-ms",
+  "shell",
+  "tauri",
+  "ipc",
+  "asset",
+  "vbscript",
+  "view-source",
+  "ws",
+  "wss",
 ];
 
 /// Схема посилання, яке можна запропонувати відкрити програмою; `None` — не можна.
@@ -31,7 +61,9 @@ pub fn app_name(scheme: &str) -> Option<String> {
   let mut length = 0u32;
   unsafe { AssocQueryStringW(flags, ASSOCSTR_FRIENDLYAPPNAME, &scheme, None, None, &mut length) }.ok().ok()?;
   let mut buffer = vec![0u16; length as usize];
-  unsafe { AssocQueryStringW(flags, ASSOCSTR_FRIENDLYAPPNAME, &scheme, None, Some(PWSTR(buffer.as_mut_ptr())), &mut length) }.ok().ok()?;
+  unsafe { AssocQueryStringW(flags, ASSOCSTR_FRIENDLYAPPNAME, &scheme, None, Some(PWSTR(buffer.as_mut_ptr())), &mut length) }
+    .ok()
+    .ok()?;
   let name = String::from_utf16_lossy(&buffer[..buffer.iter().position(|&char| char == 0).unwrap_or(buffer.len())]);
   Some(name.trim().to_string()).filter(|name| !name.is_empty())
 }
@@ -49,9 +81,16 @@ pub fn open_external(url: String) -> Result<(), String> {
     use windows_core::{w, HSTRING, PCWSTR};
 
     let parsed = Url::parse(&url).map_err(|_| crate::i18n::text("Некоректне посилання", "Invalid link").to_string())?;
-    let scheme = scheme_of(&parsed).ok_or(crate::i18n::text("Таке посилання браузер не відкриває", "The browser doesn't open links like this"))?;
+    let scheme = scheme_of(&parsed)
+      .ok_or(crate::i18n::text("Таке посилання браузер не відкриває", "The browser doesn't open links like this"))?;
     if app_name(scheme).is_none() {
-      return Err(crate::i18n::text("На цьому комп’ютері немає програми, що відкриває такі посилання", "There's no app on this computer that opens links like this").into());
+      return Err(
+        crate::i18n::text(
+          "На цьому комп’ютері немає програми, що відкриває такі посилання",
+          "There's no app on this computer that opens links like this",
+        )
+        .into(),
+      );
     }
     let file = HSTRING::from(parsed.as_str());
     let mut info = SHELLEXECUTEINFOW {
@@ -63,17 +102,26 @@ pub fn open_external(url: String) -> Result<(), String> {
       nShow: SW_SHOWNORMAL.0,
       ..Default::default()
     };
-    unsafe { ShellExecuteExW(&mut info) }.map_err(|_| crate::i18n::text("На цьому комп’ютері немає програми, що відкриває такі посилання", "There's no app on this computer that opens links like this").to_string())
+    unsafe { ShellExecuteExW(&mut info) }.map_err(|_| {
+      crate::i18n::text(
+        "На цьому комп’ютері немає програми, що відкриває такі посилання",
+        "There's no app on this computer that opens links like this",
+      )
+      .to_string()
+    })
   }
   #[cfg(not(windows))]
   {
     let parsed = Url::parse(&url).map_err(|_| crate::i18n::text("Некоректне посилання", "Invalid link").to_string())?;
-    scheme_of(&parsed).ok_or(crate::i18n::text("Таке посилання браузер не відкриває", "The browser doesn't open links like this"))?;
-    std::process::Command::new("xdg-open")
-      .arg(parsed.as_str())
-      .spawn()
-      .map(drop)
-      .map_err(|_| crate::i18n::text("На цьому комп’ютері немає програми, що відкриває такі посилання", "There's no app on this computer that opens links like this").to_string())
+    scheme_of(&parsed)
+      .ok_or(crate::i18n::text("Таке посилання браузер не відкриває", "The browser doesn't open links like this"))?;
+    std::process::Command::new("xdg-open").arg(parsed.as_str()).spawn().map(drop).map_err(|_| {
+      crate::i18n::text(
+        "На цьому комп’ютері немає програми, що відкриває такі посилання",
+        "There's no app on this computer that opens links like this",
+      )
+      .to_string()
+    })
   }
 }
 
@@ -89,7 +137,8 @@ pub fn external_app(url: String) -> Option<String> {
 /// Програма Linux для посилань зі схемою `scheme` (xdg-mime): назва з її .desktop-файла чи сам файл.
 #[cfg(target_os = "linux")]
 pub fn app_name(scheme: &str) -> Option<String> {
-  let output = std::process::Command::new("xdg-mime").args(["query", "default", &format!("x-scheme-handler/{scheme}")]).output().ok()?;
+  let output =
+    std::process::Command::new("xdg-mime").args(["query", "default", &format!("x-scheme-handler/{scheme}")]).output().ok()?;
   let desktop = String::from_utf8_lossy(&output.stdout).trim().to_string();
   if desktop.is_empty() {
     return None;
@@ -124,7 +173,9 @@ mod tests {
     assert_eq!(scheme("tel:+380441234567").as_deref(), Some("tel"));
     assert_eq!(scheme("magnet:?xt=urn:btih:abc").as_deref(), Some("magnet"));
     assert_eq!(scheme("tg://resolve?domain=astra").as_deref(), Some("tg"));
-    for blocked in ["https://example.com/", "file:///C:/Windows/notepad.exe", "javascript:alert(1)", "ms-msdt:/id", "search-ms:query=x"] {
+    for blocked in
+      ["https://example.com/", "file:///C:/Windows/notepad.exe", "javascript:alert(1)", "ms-msdt:/id", "search-ms:query=x"]
+    {
       assert_eq!(scheme(blocked), None, "{blocked}");
     }
   }

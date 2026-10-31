@@ -1,17 +1,10 @@
-// Перевірка перекладу інтерфейсу: npm run i18n:check
+// Перевірка перекладу інтерфейсу: pnpm run i18n:check
 //
 // Ключ перекладу — сам український текст (src/app/shared/i18n/i18n.ts). Скрипт збирає ключі з шаблонів
 // ('Текст' | t) і коду (tr('…'), translate('…')) і перевіряє, що в EN (src/app/shared/i18n/en.ts) є англійський
 // переклад кожного з тими самими {0}, {1}…, що в словнику немає зайвого і що ніде не лишилося українського тексту
 // поза перекладом. --missing — лише ключі без перекладу, JSON-масивом.
-import {
-  parseTemplate,
-  BindingPipe,
-  Interpolation,
-  LiteralPrimitive,
-  RecursiveAstVisitor,
-  TmplAstRecursiveVisitor,
-} from '@angular/compiler';
+import { parseTemplate, RecursiveAstVisitor, TmplAstRecursiveVisitor } from '@angular/compiler';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
@@ -187,7 +180,7 @@ const tree = ts.createSourceFile(dictionary, readFileSync(dictionary, 'utf8'), t
 const literal = (node) => (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) ? node.text : null);
 tree.forEachChild(function visit(node) {
   if (ts.isPropertyAssignment(node)) {
-    // Однослівний ключ Prettier пише без лапок.
+    // Однослівний ключ Oxfmt пише без лапок.
     const key = ts.isIdentifier(node.name) ? node.name.text : literal(node.name);
     const value = literal(node.initializer);
     if (key === null || value === null) {

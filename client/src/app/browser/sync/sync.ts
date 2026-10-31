@@ -1,6 +1,5 @@
 import { DestroyRef, Injectable, computed, effect, inject, untracked } from '@angular/core';
 import { commands } from '../../bindings';
-import { listen } from '@tauri-apps/api/event';
 import { AuthStore, isAuthError } from '../../shared/auth/auth';
 import { BrowserWindows } from '../../shared/browser-windows/browser-windows';
 import { SettingsStore } from '../../shared/settings/settings';
@@ -47,10 +46,12 @@ interface SyncState {
 /** Скільки записів сервер віддає за раз (server/src/sync.rs) і скільки надсилати за раз. */
 const PAGE = 500;
 const PUSH_BATCH = 200;
-/** Затримка після локальної зміни, звичайний інтервал і як часто питати сервер про ім'я облікового запису. */
-const CHANGE_DELAY = 2000;
-const INTERVAL = 60_000;
-const USER_RELOAD_EVERY = 5;
+/**
+ * Як часто синхронізувати, поки браузер відкритий (а ще — під час запуску й на «Синхронізувати зараз»), і через скільки
+ * повторити прохід, якщо про нього попросили посеред іншого.
+ */
+const INTERVAL = 24 * 60 * 60_000;
+const AGAIN_DELAY = 2000;
 /** Позначка ключа паролів: колекція й id запису. */
 const KEYS_COLLECTION = 'keys';
 const PASSWORDS_KEY_ITEM = 'passwords';
@@ -115,11 +116,10 @@ export class SyncService {
   private running = false;
   private again = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
-  private runs = 0;
   /**
    * Колекції, змінені тут після того, як їх востаннє надіслали: лише їх читають, порівнюють із сервером і надсилають.
-   * Інакше кожен прохід (щохвилини й щоразу, як вікно отримує фокус) перебирав би всю історію й закладки. Спершу —
-   * усі. Паролі й адреси — завжди: їх відбитки готові з Rust, а зміни приходять подіями.
+   * Інакше кожен прохід перебирав би всю історію й закладки. Спершу — усі. Паролі, адреси й картки — завжди: їх
+   * відбитки готові з Rust.
    */
   private readonly changed = new Set(this.collections.map((collection) => collection.name));
 
@@ -162,29 +162,16 @@ export class SyncService {
     this.request.set(Date.now());
   }
 
-  /** Веде синхронізацію, поки живе вікно: проміс не завершується, тож блокування тримається. */
+  /**
+   * Веде синхронізацію, поки живе вікно: проміс не завершується, тож блокування тримається. Прохід — одразу, далі раз
+   * на INTERVAL і на «Синхронізувати зараз» (request). Зміни тут лише позначаються (changed) і йдуть на сервер з
+   * найближчим проходом: синхронізація після кожної (а історія змінюється з кожною сторінкою) марно навантажувала б
+   * браузер.
+   */
   private lead(): Promise<void> {
     this.leading = true;
-    const watched = new Set(this.collections.flatMap((collection) => collection.keys));
-    const unsubscribe = onStoredChange((key) => {
-      if (watched.has(key)) {
-        this.schedule(CHANGE_DELAY);
-      }
-    });
-    const sealedChanged = ['passwords://changed', 'addresses://changed', 'cards://changed'].map((event) =>
-      listen(event, () => this.schedule(CHANGE_DELAY))
-    );
     const interval = setInterval(() => this.schedule(0), INTERVAL);
-    const onFocus = () => this.schedule(0);
-    window.addEventListener('focus', onFocus);
-    this.destroyRef.onDestroy(() => {
-      unsubscribe();
-      for (const changed of sealedChanged) {
-        void changed.then((unlisten) => unlisten());
-      }
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    });
+    this.destroyRef.onDestroy(() => clearInterval(interval));
     this.schedule(0);
     return new Promise(() => undefined);
   }
@@ -206,7 +193,7 @@ export class SyncService {
       this.running = false;
       if (this.again) {
         this.again = false;
-        this.schedule(CHANGE_DELAY);
+        this.schedule(AGAIN_DELAY);
       }
     }
   }
@@ -236,9 +223,8 @@ export class SyncService {
       await this.pull(state, { passwords });
       this.saveState(state);
       this.setStatus({ state: 'idle', at: Date.now(), passwords });
-      if (this.runs++ % USER_RELOAD_EVERY === 0) {
-        await this.auth.reloadUser().catch(() => undefined);
-      }
+      // Ім'я облікового запису могли змінити на іншому комп'ютері.
+      await this.auth.reloadUser().catch(() => undefined);
     } catch (error) {
       this.saveState(state);
       const code = isAuthError(error) ? error.code : '';

@@ -14,7 +14,8 @@ const MAX_HOPS: usize = 5;
 const MAX_HTML: u64 = 512 * 1024;
 const MAX_ICON: u64 = 2 * 1024 * 1024;
 
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+const USER_AGENT: &str =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
 /// Для сторінок: переадресації — самі, бо значок шукаємо на кожному кроці.
 fn pages() -> &'static ureq::Agent {
@@ -69,7 +70,9 @@ fn icon_in_html(html: &str, base: &Url) -> Option<Url> {
         let sizes = attribute(tag, "sizes").unwrap_or_default();
         // Для панелі закладок і вкладок найкраще 32×32: чітко й на екранах зі збільшенням.
         let size = if sizes.contains("32x32") { 2 } else { u8::from(sizes.contains("16x16") || sizes.contains("48x48")) };
-        let format = [".ico", ".png", ".svg"].iter().any(|extension| href.to_ascii_lowercase().split('?').next().is_some_and(|path| path.ends_with(extension)));
+        let format = [".ico", ".png", ".svg"]
+          .iter()
+          .any(|extension| href.to_ascii_lowercase().split('?').next().is_some_and(|path| path.ends_with(extension)));
         3 + size + u8::from(format)
       } else if words.iter().any(|word| word.starts_with("apple-touch-icon")) {
         1
@@ -93,7 +96,8 @@ fn favicon_ico(page: &Url) -> Option<Url> {
   let icon = page.join("/favicon.ico").ok()?;
   let mut response = icons().get(icon.as_str()).call().ok()?;
   let icon = Url::parse(&response.get_uri().to_string()).unwrap_or(icon);
-  let kind = response.headers().get("content-type").and_then(|value| value.to_str().ok()).unwrap_or_default().to_ascii_lowercase();
+  let kind =
+    response.headers().get("content-type").and_then(|value| value.to_str().ok()).unwrap_or_default().to_ascii_lowercase();
   let image = kind.starts_with("image/") || kind.contains("octet-stream") || kind.is_empty();
   let size = response.body_mut().with_config().limit(MAX_ICON).read_to_vec().ok()?.len();
   (response.status() == 200 && image && size > 0).then_some(icon)
@@ -142,7 +146,8 @@ mod tests {
     </head>"#;
     assert_eq!(icon_in_html(html, &base).map(String::from), Some("https://supabase.com/favicon/favicon.ico".into()));
 
-    let sizes = r#"<link rel="icon" type="image/png" sizes="192x192" href="/big.png"><link href='/small.png?v=2' sizes="32x32" rel=icon>"#;
+    let sizes =
+      r#"<link rel="icon" type="image/png" sizes="192x192" href="/big.png"><link href='/small.png?v=2' sizes="32x32" rel=icon>"#;
     assert_eq!(icon_in_html(sizes, &base).map(String::from), Some("https://supabase.com/small.png?v=2".into()));
 
     assert_eq!(icon_in_html(r#"<link rel="stylesheet" href="/a.css">"#, &base), None);

@@ -274,6 +274,10 @@ export class Browser {
   protected readonly omniboxHost = viewChild('omnibox', { read: ElementRef });
   /** Коли фонову сторінку (мітка webview) востаннє бачили — від цього вона засинає. */
   private readonly lastSeen = new Map<string, number>();
+  /** Фонові сторінки (мітки), що вже в режимі малої пам'яті WebView2 (sleepInactiveTabs). */
+  private readonly lowMemory = new Set<string>();
+  /** Остання вкладка, відкрита з сайту вкладки `opener` (insertRelated): наступна з неї ж стане за нею. */
+  private related: { opener: number; last: number } | null = null;
   /** Сторінки (мітки), чий звук затих: значок зникне, якщо звук не повернеться (AUDIBLE_HOLD_MS). */
   private readonly quietTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Щойно натиснуто Tab (без Shift) в інтерфейсі: фокус іде вперед, а не повернувся з сайту (enterPage). */
@@ -844,6 +848,19 @@ export class Browser {
     }
   }
 
+  /**
+   * Вкладка, відкрита з сайту вкладки `opener` (посилання, контекстне меню, спливне вікно), — поряд із нею, як у
+   * Firefox: одразу за нею, а кожна наступна з неї ж — за попередньою такою, щоб ішли в тому порядку, в якому їх
+   * відкривали. Ланцюжок обривається, щойно перейти на іншу вкладку (bringToFront).
+   */
+  private insertRelated(opener: number, tab: BrowserTab): void {
+    const tabs = this.tabs();
+    const last = this.related?.opener === opener ? tabs.findIndex((item) => item.id === this.related?.last) : -1;
+    const index = last !== -1 ? last : tabs.findIndex((item) => item.id === opener);
+    this.insertTab(tab, index === -1 ? tabs.length : index + 1);
+    this.related = { opener, last: tab.id };
+  }
+
   /** Вкладка на місце `index`, не порушуючи порядку: закріплені — завжди перші. */
   private insertTab(tab: BrowserTab, index: number): void {
     const tabs = this.tabs();
@@ -1008,6 +1025,7 @@ export class Browser {
         this.ignore(this.pageViews.answerPermission(request.id, 'deny', false));
       }
       this.lastSeen.delete(site.label);
+      this.lowMemory.delete(site.label);
       this.forgetQuiet(site.label);
     }
     // Порожню нову вкладку відновлювати нема чого, як і перенесену в інше вікно.
@@ -1341,9 +1359,9 @@ export class Browser {
 
   /**
    * Клік коліщатком чи «Відкрити в новій вкладці»: нова вкладка у фоні чи одразу на неї — як у налаштуваннях
-   * («Одразу переходити на нову вкладку»).
+   * («Одразу переходити на нову вкладку»). З сайту вкладки `opener` — поряд із нею, інакше (закладки, історія) — в кінці.
    */
-  protected openLinkInNewTab(url: string, background = !this.settings.switchToNewTab()): void {
+  protected openLinkInNewTab(url: string, background = !this.settings.switchToNewTab(), opener?: number): void {
     const page = internalPageFor(url);
     if (page) {
       // Внутрішня сторінка має одну вкладку: вже відкрита — нова не потрібна.
@@ -1359,7 +1377,11 @@ export class Browser {
     }
 
     const tab = this.createNewTab();
-    this.tabs.update((tabs) => [...tabs, tab]);
+    if (opener === undefined) {
+      this.tabs.update((tabs) => [...tabs, tab]);
+    } else {
+      this.insertRelated(opener, tab);
+    }
     this.openSite(url, tab, { background });
   }
 
@@ -1562,11 +1584,7 @@ export class Browser {
       this.lastSeen.set(label, Date.now());
       this.pageViews
         .open(label, url, { x: 0, y: 0, width: 0, height: 0 }, { background, autoplay })
-        .then(() => {
-          if (!this.onPageCreated(label)) {
-            this.ignore(this.pageViews.setBackground(label, true));
-          }
-        })
+        .then(() => this.onPageCreated(label))
         .catch(() => undefined);
       return;
     }
@@ -1827,7 +1845,7 @@ export class Browser {
       case 'open-link-tab':
       case 'open-image-tab':
         if (url) {
-          this.openLinkInNewTab(url);
+          this.openLinkInNewTab(url, undefined, tab.id);
         }
         break;
       case 'open-link-window':
@@ -1838,12 +1856,12 @@ export class Browser {
         break;
       case 'search':
         if (text) {
-          this.openInNewTab(this.settings.searchUrl(text));
+          this.openInNewTab(this.settings.searchUrl(text), tab.id);
         }
         break;
       case 'translate-text':
         if (text) {
-          this.openInNewTab(translateTextUrl(text, this.translateLanguage.language()));
+          this.openInNewTab(translateTextUrl(text, this.translateLanguage.language()), tab.id);
         }
         break;
       case 'translate-page':
@@ -1857,16 +1875,16 @@ export class Browser {
         break;
       case 'view-source':
         if (url) {
-          this.openInNewTab(viewSourceUrl(url));
+          this.openInNewTab(viewSourceUrl(url), tab.id);
         }
         break;
     }
   }
 
-  /** Нова вкладка поряд і одразу на неї (пошук чи переклад виділеного). */
-  private openInNewTab(url: string): void {
+  /** Нова вкладка поряд із вкладкою `opener` і одразу на неї (пошук чи переклад виділеного, код сторінки). */
+  private openInNewTab(url: string, opener = this.activeTab().id): void {
     const tab = this.createNewTab();
-    this.tabs.update((tabs) => [...tabs, tab]);
+    this.insertRelated(opener, tab);
     this.openSite(url, tab);
   }
 
@@ -1877,15 +1895,22 @@ export class Browser {
     this.openInNewTab(url);
   }
 
-  /** Активна вкладка — у пам'яті як звичайна (і прокинулась, якщо спала), попередня — у фон. */
+  /**
+   * Активна вкладка — у пам'яті як звичайна (і прокинулась, якщо спала), попередня — у фон: від цієї миті рахується,
+   * коли вона перейде в режим малої пам'яті й засне (sleepInactiveTabs).
+   */
   private bringToFront(tab: BrowserTab, label: string | null): void {
+    if (this.related && this.related.opener !== tab.id) {
+      this.related = null;
+    }
     if (this.foregroundPage && this.foregroundPage !== label) {
       this.lastSeen.set(this.foregroundPage, Date.now());
-      this.ignore(this.pageViews.setBackground(this.foregroundPage, true));
     }
     if (label) {
       this.lastSeen.delete(label);
-      this.ignore(this.pageViews.setBackground(label, false));
+      if (this.lowMemory.delete(label)) {
+        this.ignore(this.pageViews.setBackground(label, false));
+      }
       if (tab.site?.sleeping) {
         // Показана сторінка прокидається сама (WebView2).
         this.updateSite(tab.id, (site) => ({ ...site, sleeping: false }));
@@ -1895,16 +1920,13 @@ export class Browser {
   }
 
   /**
-   * Присипляє фонові вкладки, яких не відкривали довше, ніж вибрано в налаштуваннях, а ті, що проспали понад
-   * UNLOAD_AFTER_MS, вивантажує зовсім. Не засинають ті, що грають відео чи аудіо зі звуком (і стільки ж після того,
-   * як звук затих, — onPageAudio), вантажаться, впали чи ще не завантажені. Вкладка з вимкненим звуком засинає, хоч би
-   * що на ній грало.
+   * Фонові вкладки, яких не відкривали LOW_MEMORY_AFTER_MS, переводить у режим малої пам'яті; яких не відкривали довше,
+   * ніж вибрано в налаштуваннях, — присипляє, а ті, що проспали понад UNLOAD_AFTER_MS, вивантажує зовсім. Не чіпає
+   * тих, що грають відео чи аудіо зі звуком (і стільки ж після того, як звук затих, — onPageAudio), вантажаться, впали
+   * чи ще не завантажені. Вкладка з вимкненим звуком засинає, хоч би що на ній грало.
    */
   protected sleepInactiveTabs(now = Date.now()): void {
     const minutes = this.settings.sleepTabsAfter();
-    if (!minutes) {
-      return;
-    }
     const active = this.activeTab().id;
     for (const tab of this.tabs()) {
       const site = tab.site;
@@ -1918,6 +1940,13 @@ export class Browser {
       const seen = this.lastSeen.get(site.label);
       if (seen === undefined) {
         this.lastSeen.set(site.label, now);
+        continue;
+      }
+      if (now - seen >= LOW_MEMORY_AFTER_MS && !this.lowMemory.has(site.label)) {
+        this.lowMemory.add(site.label);
+        this.ignore(this.pageViews.setBackground(site.label, true));
+      }
+      if (!minutes) {
         continue;
       }
       if (site.sleeping) {
@@ -1948,6 +1977,7 @@ export class Browser {
    */
   private unloadTab(tab: BrowserTab, site: Site): void {
     this.lastSeen.delete(site.label);
+    this.lowMemory.delete(site.label);
     this.ignore(this.pageViews.close(site.label));
     this.replaceTab({
       ...tab,
@@ -2315,7 +2345,7 @@ export class Browser {
       return;
     }
     const tab = this.createNewTab();
-    this.tabs.update((tabs) => [...tabs, tab]);
+    this.insertRelated(source.id, tab);
     // Посилання коліщатком чи з Ctrl — у фоні чи одразу на неї, як у налаштуваннях (Shift — навпаки); решта (target="_blank",
     // window.open) — одразу на нову вкладку.
     const inBackground = background !== undefined && background !== this.settings.switchToNewTab();
@@ -2466,8 +2496,8 @@ function layerMargins(layer: HTMLElement): readonly number[] | null {
 /** Сторінка відео на YouTube (зокрема Shorts, трансляції й вбудований плеєр). */
 function isYouTubeVideo(url: string): boolean {
   try {
-    const { hostname, pathname } = new URL(url);
-    return /(^|\.)youtube\.com$/.test(hostname) && /^\/(watch|shorts\/|live\/|embed\/)/.test(pathname);
+    const { hostname: host, pathname } = new URL(url);
+    return /(^|\.)youtube\.com$/.test(host) && /^\/(watch|shorts\/|live\/|embed\/)/.test(pathname);
   } catch {
     return false;
   }
@@ -2475,6 +2505,12 @@ function isYouTubeVideo(url: string): boolean {
 
 /** Скільки вкладка має проспати, щоб її вивантажили зовсім (sleepInactiveTabs). */
 const UNLOAD_AFTER_MS = 6 * 60 * 60_000;
+
+/**
+ * Скільки фонову вкладку не відкривали, щоб вона перейшла в режим малої пам'яті WebView2 (sleepInactiveTabs). Не
+ * одразу: повертатися з нього довше (WebView2 відновлює звільнене), а повертаються найчастіше до нещодавніх вкладок.
+ */
+const LOW_MEMORY_AFTER_MS = 5 * 60_000;
 
 /** Скільки тримати кнопку «Оновити», щоб відкрилося меню оновлення. */
 const RELOAD_HOLD_MS = 500;

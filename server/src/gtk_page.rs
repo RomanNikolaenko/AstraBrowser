@@ -6,16 +6,16 @@
 
 use std::rc::Rc;
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use gtk::{
   gdk, gio,
   glib::{self, object::ObjectExt},
 };
 use javascriptcore::ValueExt;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use tauri::{Manager, Url, Webview};
 use webkit2gtk::{
-  ContextMenuAction, ContextMenuExt, ContextMenuItem, ContextMenuItemExt, HardwareAccelerationPolicy, HitTestResultExt, SettingsExt,
-  SnapshotOptions, SnapshotRegion, URIRequestExt, UserContentInjectedFrames, UserContentManagerExt, UserScript,
+  ContextMenuAction, ContextMenuExt, ContextMenuItem, ContextMenuItemExt, HardwareAccelerationPolicy, HitTestResultExt,
+  SettingsExt, SnapshotOptions, SnapshotRegion, URIRequestExt, UserContentInjectedFrames, UserContentManagerExt, UserScript,
   UserScriptInjectionTime, WebContextExt, WebInspectorExt, WebProcessTerminationReason, WebViewExt, WebsiteDataManagerExt,
   WebsiteDataManagerExtManual, WebsiteDataTypes,
 };
@@ -89,7 +89,8 @@ pub fn add_page_scripts(webview: &Webview, scripts: Vec<String>) -> tauri::Resul
     };
     let own = [include_str!("webkit-bridge.js"), include_str!("webkit-context.js")].map(str::to_string);
     for source in own.into_iter().chain(scripts) {
-      let script = UserScript::for_world(&source, UserContentInjectedFrames::TopFrame, UserScriptInjectionTime::Start, WORLD, &[], &[]);
+      let script =
+        UserScript::for_world(&source, UserContentInjectedFrames::TopFrame, UserScriptInjectionTime::Start, WORLD, &[], &[]);
       manager.add_script(&script);
     }
   })
@@ -270,8 +271,10 @@ fn small(icon: &gtk::cairo::Surface) -> Result<gtk::cairo::Surface, String> {
     return Ok(icon.clone());
   }
   let scale = f64::from(FAVICON_SIZE) / f64::from(width.max(height));
-  let (to_width, to_height) = (((f64::from(width) * scale).round() as i32).max(1), ((f64::from(height) * scale).round() as i32).max(1));
-  let target = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, to_width, to_height).map_err(|error| error.to_string())?;
+  let (to_width, to_height) =
+    (((f64::from(width) * scale).round() as i32).max(1), ((f64::from(height) * scale).round() as i32).max(1));
+  let target =
+    gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, to_width, to_height).map_err(|error| error.to_string())?;
   let cairo = gtk::cairo::Context::new(&target).map_err(|error| error.to_string())?;
   cairo.scale(scale, scale);
   cairo.set_source_surface(icon, 0.0, 0.0).map_err(|error| error.to_string())?;
@@ -394,7 +397,11 @@ pub fn clear_browsing_data(
           let records: Vec<_> = records
             .unwrap_or_default()
             .into_iter()
-            .filter(|record| record.name().is_some_and(|name| hosts.iter().any(|host| host == name.as_str() || host.ends_with(&format!(".{name}")))))
+            .filter(|record| {
+              record
+                .name()
+                .is_some_and(|name| hosts.iter().any(|host| host == name.as_str() || host.ends_with(&format!(".{name}"))))
+            })
             .collect();
           let records: Vec<_> = records.iter().collect();
           manager.remove(WebsiteDataTypes::LOCAL_STORAGE, &records, None::<&gio::Cancellable>, move |removed| {
@@ -533,7 +540,9 @@ fn shortcut(event: &gdk::EventKey) -> Option<Shortcut> {
   }
   match () {
     // Shift+Tab GTK дає як ISO_Left_Tab.
-    _ if is(&[key::Tab, key::KP_Tab, key::ISO_Left_Tab]) => Some(Shortcut::Interface(if shift { "previous-tab" } else { "next-tab" })),
+    _ if is(&[key::Tab, key::KP_Tab, key::ISO_Left_Tab]) => {
+      Some(Shortcut::Interface(if shift { "previous-tab" } else { "next-tab" }))
+    }
     _ if shift && is(&[key::t]) => Some(Shortcut::Interface("reopen-tab")),
     _ if shift && is(&[key::s]) => Some(Shortcut::Interface("screenshot")),
     _ if is(&[key::equal, key::plus, key::KP_Add]) => Some(Shortcut::Interface("zoom-in")),
@@ -550,7 +559,9 @@ fn shortcut(event: &gdk::EventKey) -> Option<Shortcut> {
 /// літера — щоб Ctrl+Shift+T працював і з українською розкладкою.
 fn latin_key(event: &gdk::EventKey) -> gdk::keys::Key {
   let translated = gdk::Display::default().and_then(|display| gdk::Keymap::for_display(&display)).and_then(|keymap| {
-    keymap.translate_keyboard_state(u32::from(event.hardware_keycode()), event.state(), 0).map(|(key, ..)| gdk::keys::Key::from(key))
+    keymap
+      .translate_keyboard_state(u32::from(event.hardware_keycode()), event.state(), 0)
+      .map(|(key, ..)| gdk::keys::Key::from(key))
   });
   translated.unwrap_or_else(|| event.keyval()).to_lower()
 }
@@ -578,7 +589,9 @@ pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) 
       // Виділене WebKit не називає — його щойно перед меню надіслав скрипт сторінки (у фреймах його немає, тож і
       // пунктів для виділеного там не буде).
       let selection = unsafe { view.steal_data::<String>(SELECTION_DATA) };
-      let web = |url: Option<glib::GString>| url.map(String::from).filter(|url| url.starts_with("http://") || url.starts_with("https://"));
+      let web = |url: Option<glib::GString>| {
+        url.map(String::from).filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+      };
       let target = MenuTarget {
         page: web(view.uri()),
         link: if hit.context_is_link() { web(hit.link_uri()) } else { None },
@@ -603,7 +616,12 @@ pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) 
   })
 }
 
-fn menu_item(action: &'static str, label: &str, value: Option<String>, report: impl Fn(ContextAction) + 'static) -> ContextMenuItem {
+fn menu_item(
+  action: &'static str,
+  label: &str,
+  value: Option<String>,
+  report: impl Fn(ContextAction) + 'static,
+) -> ContextMenuItem {
   if action.is_empty() {
     return ContextMenuItem::new_separator();
   }

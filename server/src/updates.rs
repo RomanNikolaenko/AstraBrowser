@@ -54,7 +54,8 @@ pub async fn app_update_check(app: AppHandle, updates: State<'_, Updates>) -> Re
     .map_err(|error| error.to_string())
     .inspect_err(|error| log::warn!("Не вдалося перевірити оновлення: {error}"))?;
   let available = update.as_ref().map(|update| AvailableUpdate { version: update.version.clone(), notes: update.body.clone() });
-  *updates.pending.lock().map_err(|_| crate::i18n::text("Оновлення недоступне.", "The update isn't available.").to_string())? = update;
+  *updates.pending.lock().map_err(|_| crate::i18n::text("Оновлення недоступне.", "The update isn't available.").to_string())? =
+    update;
   Ok(UpdateState { current, available })
 }
 

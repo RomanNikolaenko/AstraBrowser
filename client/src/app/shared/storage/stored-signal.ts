@@ -46,7 +46,7 @@ export function adoptLegacyData(id: string): void {
 export function removeAccountData(id: string): void {
   try {
     const prefix = `astra.${id}.`;
-    for (const key of Object.keys(localStorage).filter((key) => key.startsWith(prefix))) {
+    for (const key of Object.keys(localStorage).filter((name) => name.startsWith(prefix))) {
       localStorage.removeItem(key);
     }
   } catch {

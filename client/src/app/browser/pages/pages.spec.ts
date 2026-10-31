@@ -92,6 +92,8 @@ describe('internal pages', () => {
         }
       );
       const reachEnd = async () => {
+        // Копія: колбек може відписатися (observers.delete) просто під час обходу.
+        // oxlint-disable-next-line unicorn/no-useless-spread
         for (const { callback, target } of [...observers]) {
           callback([{ isIntersecting: true, target } as IntersectionObserverEntry], {} as IntersectionObserver);
         }

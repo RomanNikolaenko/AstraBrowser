@@ -42,6 +42,7 @@ pub fn known() -> Option<bool> {
 pub fn verify(window: isize, message: &str) -> Result<bool, String> {
   let interop = factory::<UserConsentVerifier, IUserConsentVerifierInterop>().map_err(|error| error.to_string())?;
   let operation: IAsyncOperation<UserConsentVerificationResult> =
-    unsafe { interop.RequestVerificationForWindowAsync(HWND(window as _), &HSTRING::from(message)) }.map_err(|error| error.to_string())?;
+    unsafe { interop.RequestVerificationForWindowAsync(HWND(window as _), &HSTRING::from(message)) }
+      .map_err(|error| error.to_string())?;
   Ok(operation.join().map_err(|error| error.to_string())? == UserConsentVerificationResult::Verified)
 }

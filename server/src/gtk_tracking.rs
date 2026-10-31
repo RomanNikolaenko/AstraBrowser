@@ -23,7 +23,8 @@ use webkit2gtk::{
 use webkit2gtk_sys::{
   webkit_user_content_filter_store_load, webkit_user_content_filter_store_load_finish, webkit_user_content_filter_store_save,
   webkit_user_content_filter_store_save_finish, webkit_user_content_filter_unref, webkit_user_content_manager_add_filter,
-  webkit_user_content_manager_remove_filter, webkit_user_content_manager_remove_script, WebKitUserContentFilter, WebKitUserContentManager,
+  webkit_user_content_manager_remove_filter, webkit_user_content_manager_remove_script, WebKitUserContentFilter,
+  WebKitUserContentManager,
 };
 
 use crate::tracking::{page_script, Category, Level, Tracking};
@@ -170,7 +171,8 @@ fn update(view: &webkit2gtk::WebView, label: &str, ui: &str) {
     let mut pages = pages.borrow_mut();
     let page = pages.entry(label.to_string()).or_default();
     for category in Category::ALL {
-      let wanted = FILTERS.with(|filters| filters.borrow().get(&category).copied()).filter(|_| protects && rules.blocks(category));
+      let wanted =
+        FILTERS.with(|filters| filters.borrow().get(&category).copied()).filter(|_| protects && rules.blocks(category));
       let current = page.filters.get(&category).copied();
       if current == wanted {
         continue;
@@ -189,7 +191,8 @@ fn update(view: &webkit2gtk::WebView, label: &str, ui: &str) {
       if let Some((_, previous)) = page.gpc.take() {
         unsafe { webkit_user_content_manager_remove_script(manager_ptr, previous.to_glib_none().0) };
       }
-      let script = UserScript::new(&page_script(rules.gpc), UserContentInjectedFrames::AllFrames, UserScriptInjectionTime::Start, &[], &[]);
+      let script =
+        UserScript::new(&page_script(rules.gpc), UserContentInjectedFrames::AllFrames, UserScriptInjectionTime::Start, &[], &[]);
       manager.add_script(&script);
       page.gpc = Some((rules.gpc, script));
     }

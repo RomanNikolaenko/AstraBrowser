@@ -46,7 +46,7 @@
 ## Вручну (без Actions)
 
 1. Підняти версію, як вище.
-2. У теці `client`: `npm run release -- "Що нового"` — підписані пакети системи, на якій запущено (у Windows —
+2. У теці `client`: `pnpm run release "Що нового"` — підписані пакети системи, на якій запущено (у Windows —
    інсталятор, у Linux — .deb, .rpm і AppImage), і `latest.json` у `server/target/release/bundle/release`. Щоб
    оновлювалися обидві системи, зберіть на кожній і складіть latest.json в один:
    `node scripts/release.mjs --merge <куди> <тека Windows> <тека Linux>`.

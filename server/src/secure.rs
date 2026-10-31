@@ -6,14 +6,14 @@
 //! Тут же — наскрізне шифрування для синхронізації: ключ виводиться з пароля облікового запису (PBKDF2), тож сервер
 //! бачить лише зашифроване, а розшифрувати може тільки той, хто знає пароль.
 
-use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
-pub use system::{protect, unprotect};
 #[cfg(not(windows))]
 pub use system::init;
 use system::{pbkdf2_sha256, random_bytes};
+pub use system::{protect, unprotect};
 
 /// Ключ синхронізації (AES-256).
 pub type SyncKey = [u8; 32];
@@ -51,8 +51,10 @@ mod system {
 
   pub fn protect(data: &[u8], entropy: &[u8]) -> Result<Vec<u8>, String> {
     let mut output = CRYPT_INTEGER_BLOB::default();
-    unsafe { CryptProtectData(&blob(data), PCWSTR::null(), Some(&blob(entropy)), None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut output) }
-      .map_err(|error| error.to_string())?;
+    unsafe {
+      CryptProtectData(&blob(data), PCWSTR::null(), Some(&blob(entropy)), None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut output)
+    }
+    .map_err(|error| error.to_string())?;
     Ok(take_blob(output))
   }
 
@@ -95,11 +97,11 @@ mod system {
 
   use aes_gcm::{
     aead::{Aead, Payload},
-    Aes256Gcm, KeyInit, Nonce,
+    Aes256Gcm, KeyInit,
   };
   use sha2::Sha256;
 
-  use super::{from_hex, hex, SyncKey};
+  use super::{from_hex, hex, nonce_of, SyncKey};
 
   /// Версія формату зашифрованого: перший байт.
   const VERSION: u8 = 1;
@@ -173,7 +175,8 @@ mod system {
     }
     let key = fresh();
     fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    let mut output = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&file).map_err(|error| error.to_string())?;
+    let mut output =
+      fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&file).map_err(|error| error.to_string())?;
     output.write_all(hex(&key).as_bytes()).map_err(|error| error.to_string())?;
     Ok(key)
   }
@@ -183,7 +186,7 @@ mod system {
     let key = master()?;
     let nonce = random_bytes(12);
     let sealed = Aes256Gcm::new((&key).into())
-      .encrypt(Nonce::from_slice(&nonce), Payload { msg: data, aad: entropy })
+      .encrypt(&nonce_of(&nonce)?, Payload { msg: data, aad: entropy })
       .map_err(|error| error.to_string())?;
     Ok([&[VERSION][..], &nonce, &sealed].concat())
   }
@@ -194,7 +197,7 @@ mod system {
     };
     let key = master()?;
     Aes256Gcm::new((&key).into())
-      .decrypt(Nonce::from_slice(nonce), Payload { msg: sealed, aad: entropy })
+      .decrypt(&nonce_of(nonce)?, Payload { msg: sealed, aad: entropy })
       .map_err(|error| error.to_string())
   }
 
@@ -237,7 +240,7 @@ pub fn key_id(key: &SyncKey) -> String {
 
 /// HMAC-SHA256 від даних — шістнадцятковим рядком. Без ключа з нього не дізнатися, що зашифровано.
 pub fn mac(key: &SyncKey, data: &[u8]) -> String {
-  let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC приймає ключ будь-якої довжини");
+  let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC приймає ключ будь-якої довжини");
   mac.update(data);
   hex(&mac.finalize().into_bytes())
 }
@@ -245,16 +248,18 @@ pub fn mac(key: &SyncKey, data: &[u8]) -> String {
 /// AES-256-GCM з випадковим nonce: (nonce, шифр із тегом автентичності).
 pub fn seal(key: &SyncKey, plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>), String> {
   let nonce = random_bytes(12);
-  let sealed = Aes256Gcm::new(key.into()).encrypt(Nonce::from_slice(&nonce), plaintext).map_err(|error| error.to_string())?;
+  let sealed = Aes256Gcm::new(key.into()).encrypt(&nonce_of(&nonce)?, plaintext).map_err(|error| error.to_string())?;
   Ok((nonce, sealed))
 }
 
 /// Розшифровує [`seal`]; чужий ключ чи змінені дані — помилка.
 pub fn open(key: &SyncKey, nonce: &[u8], sealed: &[u8]) -> Result<Vec<u8>, String> {
-  if nonce.len() != 12 {
-    return Err("Bad nonce".into());
-  }
-  Aes256Gcm::new(key.into()).decrypt(Nonce::from_slice(nonce), sealed).map_err(|error| error.to_string())
+  Aes256Gcm::new(key.into()).decrypt(&nonce_of(nonce)?, sealed).map_err(|error| error.to_string())
+}
+
+/// Nonce AES-GCM — рівно 12 байтів; інша довжина — помилка.
+fn nonce_of(bytes: &[u8]) -> Result<aes_gcm::aead::Nonce<Aes256Gcm>, String> {
+  bytes.try_into().map_err(|_| "Bad nonce".to_string())
 }
 
 #[cfg(test)]

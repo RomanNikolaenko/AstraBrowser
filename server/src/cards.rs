@@ -159,7 +159,10 @@ impl Vault {
 
   /// Картка з цим номером (цифри), якщо її збережено.
   fn find(&self, number: &str) -> Option<usize> {
-    self.entries.iter().position(|entry| entry.last4 == last4(number) && decrypt(&entry.number).is_ok_and(|saved| saved == number))
+    self
+      .entries
+      .iter()
+      .position(|entry| entry.last4 == last4(number) && decrypt(&entry.number).is_ok_and(|saved| saved == number))
   }
 
   fn add(&mut self, card: Card) -> Result<String, String> {
@@ -264,7 +267,17 @@ fn card_number(raw: &str) -> Option<String> {
     .rev()
     .filter_map(|char| char.to_digit(10))
     .enumerate()
-    .map(|(index, digit)| if index % 2 == 1 { if digit * 2 > 9 { digit * 2 - 9 } else { digit * 2 } } else { digit })
+    .map(|(index, digit)| {
+      if index % 2 == 1 {
+        if digit * 2 > 9 {
+          digit * 2 - 9
+        } else {
+          digit * 2
+        }
+      } else {
+        digit
+      }
+    })
     .sum();
   sum.is_multiple_of(10).then_some(digits)
 }
@@ -288,7 +301,11 @@ fn brand_of(number: &str) -> &'static str {
 
 /// Рік терміну дії: 28 — це 2028.
 fn full_year(year: u16) -> u16 {
-  if year < 100 { 2000 + year } else { year }
+  if year < 100 {
+    2000 + year
+  } else {
+    year
+  }
 }
 
 fn clean_text(text: &str) -> String {
@@ -349,7 +366,8 @@ impl Cards {
       fs::create_dir_all(dir).map_err(|error| error.to_string())?;
     }
     let temporary = file.with_extension("json.tmp");
-    fs::write(&temporary, serde_json::to_vec_pretty(vault).map_err(|error| error.to_string())?).map_err(|error| error.to_string())?;
+    fs::write(&temporary, serde_json::to_vec_pretty(vault).map_err(|error| error.to_string())?)
+      .map_err(|error| error.to_string())?;
     fs::rename(&temporary, &file).map_err(|error| error.to_string())
   }
 }
@@ -410,7 +428,13 @@ pub fn on_page_message(app: &AppHandle, ui: &str, label: &str, token: &str, sour
         // Як у Chrome: на незахищеній сторінці (http) картки не пропонуються — дані пішли б мережею відкрито.
         if vault.settings.autofill && (source.starts_with("https:") || is_local(source)) {
           // Ім'я власника — лише з карток, де воно є.
-          vault.state().entries.into_iter().filter(|entry| kind != "cc-name" || !entry.holder.is_empty()).map(|entry| entry.id).collect()
+          vault
+            .state()
+            .entries
+            .into_iter()
+            .filter(|entry| kind != "cc-name" || !entry.holder.is_empty())
+            .map(|entry| entry.id)
+            .collect()
         } else {
           Vec::new()
         }
@@ -503,7 +527,13 @@ pub fn cards_state(window: Window, cards: State<'_, Cards>) -> Result<CardsState
 /// Нова картка (`id` — None) чи нові дані збереженої.
 #[tauri::command]
 #[specta::specta]
-pub fn card_save(app: AppHandle, window: Window, cards: State<'_, Cards>, id: Option<String>, card: CardInput) -> Result<(), String> {
+pub fn card_save(
+  app: AppHandle,
+  window: Window,
+  cards: State<'_, Cards>,
+  id: Option<String>,
+  card: CardInput,
+) -> Result<(), String> {
   deny_guest(&window)?;
   let number = if card.number.trim().is_empty() && id.is_some() {
     None
@@ -521,11 +551,8 @@ pub fn card_save(app: AppHandle, window: Window, cards: State<'_, Cards>, id: Op
     }
     match id {
       Some(id) => {
-        let entry = vault
-          .entries
-          .iter_mut()
-          .find(|entry| entry.id == id)
-          .ok_or(crate::i18n::text("Такої картки немає", "No such card"))?;
+        let entry =
+          vault.entries.iter_mut().find(|entry| entry.id == id).ok_or(crate::i18n::text("Такої картки немає", "No such card"))?;
         if let Some(number) = number {
           entry.number = encrypt(&number)?;
           entry.last4 = last4(&number);
@@ -651,7 +678,8 @@ pub async fn card_autofill(app: AppHandle, window: Window, label: String, id: St
     if !vault.settings.autofill {
       return Ok(false);
     }
-    let entry = vault.entries.iter_mut().find(|entry| entry.id == id).ok_or(crate::i18n::text("Такої картки немає", "No such card"))?;
+    let entry =
+      vault.entries.iter_mut().find(|entry| entry.id == id).ok_or(crate::i18n::text("Такої картки немає", "No such card"))?;
     entry.used = Some(now());
     let number = decrypt(&entry.number)?;
     let values = fill_values(&kinds, &number, entry);
@@ -702,7 +730,8 @@ pub fn cards_sync_items(app: AppHandle, window: Window, cards: State<'_, Cards>)
     let Ok(number) = decrypt(&entry.number) else {
       continue;
     };
-    let card = Card { number, holder: entry.holder.clone(), month: entry.month, year: entry.year, nickname: entry.nickname.clone() };
+    let card =
+      Card { number, holder: entry.holder.clone(), month: entry.month, year: entry.year, nickname: entry.nickname.clone() };
     let synced = SyncedCard { card, created: entry.created, updated: entry.updated, used: entry.used };
     let plain = serde_json::to_vec(&synced).map_err(|error| error.to_string())?;
     items.insert(entry.id.clone(), seal_item(&key, &key_id, &mut cache, &entry.id, &plain)?);
@@ -713,7 +742,12 @@ pub fn cards_sync_items(app: AppHandle, window: Window, cards: State<'_, Cards>)
 /// Записи з сервера: нові й змінені картки — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є.
 #[tauri::command]
 #[specta::specta]
-pub fn cards_sync_apply(app: AppHandle, window: Window, cards: State<'_, Cards>, changes: Vec<SyncChange>) -> Result<SyncApplied, String> {
+pub fn cards_sync_apply(
+  app: AppHandle,
+  window: Window,
+  cards: State<'_, Cards>,
+  changes: Vec<SyncChange>,
+) -> Result<SyncApplied, String> {
   deny_guest(&window)?;
   let (key, _) = crate::auth::sync_key(&app).ok_or(crate::i18n::text("Немає ключа синхронізації", "No sync key"))?;
   let key_id = secure::key_id(&key);
@@ -791,7 +825,8 @@ mod tests {
     assert_eq!((card.holder.as_str(), card.month, card.year), ("IVAN PETRENKO", 7, 2028));
     assert!(Card::from_form(json!({ "number": "1111 2222" }).as_object().expect("object")).is_none());
     // Сам місяць без року — термін невідомий.
-    let partial = Card::from_form(json!({ "number": "4242424242424242", "month": "7" }).as_object().expect("object")).expect("card");
+    let partial =
+      Card::from_form(json!({ "number": "4242424242424242", "month": "7" }).as_object().expect("object")).expect("card");
     assert_eq!((partial.month, partial.year), (0, 0));
   }
 

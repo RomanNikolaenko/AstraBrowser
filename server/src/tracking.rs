@@ -74,7 +74,10 @@ const LISTS: &[TrackerList] = &[
   TrackerList { category: Category::Tracking, url: "https://easylist.to/easylist/easyprivacy.txt" },
   TrackerList { category: Category::Social, url: "https://easylist.to/easylist/fanboy-social.txt" },
   TrackerList { category: Category::Social, url: "https://filters.adtidy.org/extension/ublock/filters/4.txt" },
-  TrackerList { category: Category::Cryptomining, url: "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/nocoin.txt" },
+  TrackerList {
+    category: Category::Cryptomining,
+    url: "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/nocoin.txt",
+  },
 ];
 
 /// Як часто оновлювати списки й як часто перевіряти, чи не час, — як у блокувальника реклами.
@@ -85,10 +88,43 @@ const CACHE_VERSION: &str = "v1";
 
 /// Мітки в адресах, за якими сайти й реклама впізнають, звідки ви прийшли (як privacy.query_stripping у Firefox).
 const TRACKING_PARAMS: &[&str] = &[
-  "__hsfp", "__hssc", "__hstc", "__s", "_hsenc", "_openstat", "dclid", "fbclid", "gbraid", "gclid", "hsCtaTracking", "igshid",
-  "li_fat_id", "mc_eid", "mkt_tok", "ml_subscriber", "ml_subscriber_hash", "msclkid", "oft_c", "oft_ck", "oft_d", "oft_id",
-  "oft_ids", "oft_k", "oft_lk", "oft_sk", "oly_anon_id", "oly_enc_id", "rb_clickid", "s_cid", "ttclid", "twclid", "vero_conv",
-  "vero_id", "wbraid", "wickedid", "yclid",
+  "__hsfp",
+  "__hssc",
+  "__hstc",
+  "__s",
+  "_hsenc",
+  "_openstat",
+  "dclid",
+  "fbclid",
+  "gbraid",
+  "gclid",
+  "hsCtaTracking",
+  "igshid",
+  "li_fat_id",
+  "mc_eid",
+  "mkt_tok",
+  "ml_subscriber",
+  "ml_subscriber_hash",
+  "msclkid",
+  "oft_c",
+  "oft_ck",
+  "oft_d",
+  "oft_id",
+  "oft_ids",
+  "oft_k",
+  "oft_lk",
+  "oft_sk",
+  "oly_anon_id",
+  "oly_enc_id",
+  "rb_clickid",
+  "s_cid",
+  "ttclid",
+  "twclid",
+  "vero_conv",
+  "vero_id",
+  "wbraid",
+  "wickedid",
+  "yclid",
 ];
 
 /// Рівень захисту.
@@ -174,9 +210,10 @@ impl Tracking {
   pub fn check(&self, rules: &Rules, url: &str, source: &str, kind: &str, method: &str) -> Option<Category> {
     let engines = self.engines.read().ok()?;
     let request = Request::new(url, source, kind, method).ok()?;
-    Category::ALL.into_iter().filter(|category| rules.blocks(*category)).find(|category| {
-      engines.get(category).is_some_and(|engine| engine.check_network_request(&request).should_block())
-    })
+    Category::ALL
+      .into_iter()
+      .filter(|category| rules.blocks(*category))
+      .find(|category| engines.get(category).is_some_and(|engine| engine.check_network_request(&request).should_block()))
   }
 
   fn engine_file(dir: &Path, category: Category) -> PathBuf {
@@ -224,7 +261,8 @@ impl Tracking {
     let complete = self.engines.read().is_ok_and(|engines| engines.len() == Category::ALL.len());
     // Без правил для WebKit фільтрів не буде.
     #[cfg(not(windows))]
-    let complete = self.dir.get().is_some_and(|dir| Category::ALL.iter().all(|category| Self::content_file(dir, *category).exists()));
+    let complete =
+      self.dir.get().is_some_and(|dir| Category::ALL.iter().all(|category| Self::content_file(dir, *category).exists()));
     let updated_at = self.updated_at.lock().ok().and_then(|time| *time);
     !complete || updated_at.is_none_or(|time| now_ms().saturating_sub(time) > MAX_AGE.as_millis() as u64)
   }
@@ -474,10 +512,14 @@ mod tests {
   fn strips_only_tracking_params_from_addresses() {
     let url = |text: &str| Url::parse(text).expect("url");
     assert_eq!(
-      without_tracking_params(&url("https://shop.example/item?id=7&fbclid=abc&utm_source=mail&gclid=x#reviews")).map(String::from),
+      without_tracking_params(&url("https://shop.example/item?id=7&fbclid=abc&utm_source=mail&gclid=x#reviews"))
+        .map(String::from),
       Some("https://shop.example/item?id=7&utm_source=mail#reviews".to_string())
     );
-    assert_eq!(without_tracking_params(&url("https://example.com/?fbclid=abc")).map(String::from), Some("https://example.com/".to_string()));
+    assert_eq!(
+      without_tracking_params(&url("https://example.com/?fbclid=abc")).map(String::from),
+      Some("https://example.com/".to_string())
+    );
     assert_eq!(without_tracking_params(&url("https://example.com/search?q=fbclid")), None);
   }
 }

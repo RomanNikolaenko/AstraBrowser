@@ -16,7 +16,7 @@ serde_json = "1"
 # content-blocking — правила у форматі блокувальників Safari для WebKit у Linux (adblock.rs).
 adblock = { version = "0.13.3", default-features = false, features = ["content-blocking", "css-validation", "embedded-domain-resolver", "full-regex-handling"] }
 ureq = "3"
-base64 = "0.22"
+base64 = "0.23"
 regex = "1"
 tauri-plugin-dialog = "2"
 # Розмір, положення й розгорнутість головного вікна між запусками.
@@ -28,16 +28,16 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-log = "2"
 log = "0.4"
 # Наскрізне шифрування паролів для синхронізації: AES-256-GCM і HMAC (сам ключ з пароля — PBKDF2 Windows, secure.rs).
-aes-gcm = "0.10"
-hmac = "0.12"
-sha2 = "0.10"
-specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json"] }
-specta-typescript = "=0.0.12"
-tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+aes-gcm = "0.11"
+hmac = "0.13"
+sha2 = "0.11"
+specta = { version = "=2.0.0-rc.26", features = ["derive", "serde_json"] }
+specta-typescript = "=0.0.13"
+tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 
 [dev-dependencies]
 # Перевірка, що PBKDF2 Windows рахує так само, як незалежна реалізація.
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 
 # Звук, іконки й дозволи сайтів — через WebView2 напряму, повноекранне вікно — через Win32, Windows Hello — через WinRT
 # (ті самі версії, що й у Tauri/wry).
@@ -51,8 +51,8 @@ windows-future = "0.3"
 # Linux: PBKDF2 і випадкові числа — без CNG Windows, а ключ, яким шифруються дані на диску, — у сховищі
 # секретів системи (secure.rs).
 [target.'cfg(not(windows))'.dependencies]
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
-getrandom = "0.3"
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
+getrandom = "0.4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }

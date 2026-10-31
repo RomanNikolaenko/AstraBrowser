@@ -92,7 +92,8 @@ pub fn apply(webview: &Webview) -> tauri::Result<()> {
 }
 
 fn start() -> Option<Proxy> {
-  let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).inspect_err(|error| log::warn!("DoH: проксі не запустився: {error}")).ok()?;
+  let listener =
+    TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).inspect_err(|error| log::warn!("DoH: проксі не запустився: {error}")).ok()?;
   let port = listener.local_addr().ok()?.port();
   let mut secret = [0u8; 16];
   getrandom::fill(&mut secret).ok()?;
@@ -162,7 +163,8 @@ fn serve(mut client: TcpStream, password: &str) -> io::Result<()> {
   let Ok(addresses) = resolve(&host) else {
     return reply(&mut client, 4);
   };
-  let Some(server) = addresses.into_iter().find_map(|ip| TcpStream::connect_timeout(&SocketAddr::new(ip, port), CONNECT_TIMEOUT).ok())
+  let Some(server) =
+    addresses.into_iter().find_map(|ip| TcpStream::connect_timeout(&SocketAddr::new(ip, port), CONNECT_TIMEOUT).ok())
   else {
     return reply(&mut client, 5);
   };
@@ -195,7 +197,11 @@ fn resolve(host: &str) -> io::Result<Vec<IpAddr>> {
   let Some(resolver) = resolver.filter(|_| host != "localhost" && !host.ends_with(".localhost")) else {
     return system(&host);
   };
-  if let Some(addresses) = CACHE.lock().ok().and_then(|cache| cache.get(&host).filter(|(_, until)| *until > Instant::now()).map(|(addresses, _)| addresses.clone())) {
+  if let Some(addresses) = CACHE
+    .lock()
+    .ok()
+    .and_then(|cache| cache.get(&host).filter(|(_, until)| *until > Instant::now()).map(|(addresses, _)| addresses.clone()))
+  {
     return Ok(addresses);
   }
   match lookup(&resolver.template, &host) {
@@ -334,10 +340,7 @@ mod tests {
 
   #[test]
   fn builds_queries_and_reads_answers() {
-    assert_eq!(
-      query("a.bc", 1),
-      Some(vec![0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, b'a', 2, b'b', b'c', 0, 0, 1, 0, 1])
-    );
+    assert_eq!(query("a.bc", 1), Some(vec![0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, b'a', 2, b'b', b'c', 0, 0, 1, 0, 1]));
     assert_eq!(query("bad..host", 1), None);
     // Відповідь: питання a.bc, CNAME (стиснена назва) і дві адреси A з різним TTL.
     let mut packet = vec![0, 0, 0x81, 0x80, 0, 1, 0, 3, 0, 0, 0, 0];

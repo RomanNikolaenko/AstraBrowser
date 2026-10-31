@@ -74,7 +74,8 @@ mod system {
 
   /// Astra — для посилань і сторінок (GIO записує це в mimeapps.list, який читають і GNOME, і KDE).
   pub fn make_default() -> Result<(), String> {
-    let app = gio::DesktopAppInfo::new(DESKTOP).ok_or(crate::i18n::text("Astra Browser не встановлено пакетом", "Astra Browser isn't installed from a package"))?;
+    let app = gio::DesktopAppInfo::new(DESKTOP)
+      .ok_or(crate::i18n::text("Astra Browser не встановлено пакетом", "Astra Browser isn't installed from a package"))?;
     for kind in TYPES {
       app.set_as_default_for_type(kind).map_err(|error| error.to_string())?;
     }
@@ -124,7 +125,10 @@ mod tests {
   #[test]
   fn reads_strings_from_the_current_user_registry() {
     // Цей ключ є в кожного користувача Windows.
-    assert!(read_string(r"Control Panel\Desktop", "WallPaper").is_some() || read_string(r"Control Panel\International", "LocaleName").is_some());
+    assert!(
+      read_string(r"Control Panel\Desktop", "WallPaper").is_some()
+        || read_string(r"Control Panel\International", "LocaleName").is_some()
+    );
     assert_eq!(read_string(r"Software\Немає такого ключа", "X"), None);
   }
 }

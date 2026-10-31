@@ -46,10 +46,26 @@ const LISTS: &[FilterList] = &[
   FilterList { name: "EasyList", url: "https://easylist.to/easylist/easylist.txt", trusted: false },
   FilterList { name: "EasyPrivacy", url: "https://easylist.to/easylist/easyprivacy.txt", trusted: false },
   FilterList { name: "uBlock filters", url: "https://ublockorigin.github.io/uAssets/filters/filters.min.txt", trusted: true },
-  FilterList { name: "uBlock filters – Privacy", url: "https://ublockorigin.github.io/uAssets/filters/privacy.min.txt", trusted: true },
-  FilterList { name: "uBlock filters – Unbreak", url: "https://ublockorigin.github.io/uAssets/filters/unbreak.min.txt", trusted: true },
-  FilterList { name: "uBlock filters – Quick fixes", url: "https://ublockorigin.github.io/uAssets/filters/quick-fixes.min.txt", trusted: true },
-  FilterList { name: "AdGuard Ukrainian filter", url: "https://filters.adtidy.org/extension/ublock/filters/23.txt", trusted: false },
+  FilterList {
+    name: "uBlock filters – Privacy",
+    url: "https://ublockorigin.github.io/uAssets/filters/privacy.min.txt",
+    trusted: true,
+  },
+  FilterList {
+    name: "uBlock filters – Unbreak",
+    url: "https://ublockorigin.github.io/uAssets/filters/unbreak.min.txt",
+    trusted: true,
+  },
+  FilterList {
+    name: "uBlock filters – Quick fixes",
+    url: "https://ublockorigin.github.io/uAssets/filters/quick-fixes.min.txt",
+    trusted: true,
+  },
+  FilterList {
+    name: "AdGuard Ukrainian filter",
+    url: "https://filters.adtidy.org/extension/ublock/filters/23.txt",
+    trusted: false,
+  },
 ];
 
 /// Скриптлети, що можуть більше за інші (ставити cookies, переписувати відповіді сервера), — лише для
@@ -116,7 +132,10 @@ pub enum Verdict {
   Allow,
   Block,
   /// Віддати замість відповіді сервера нешкідливий ресурс (порожній скрипт, прозору картинку тощо).
-  Replace { mime: String, body: Vec<u8> },
+  Replace {
+    mime: String,
+    body: Vec<u8>,
+  },
 }
 
 #[derive(Default)]
@@ -451,18 +470,15 @@ pub(crate) fn content_rules(lists: impl IntoIterator<Item = (String, ParseOption
 #[cfg(not(windows))]
 fn cosmetic_rules(list: &str) -> String {
   const HIDING: [&str; 6] = ["generichide", "ghide", "elemhide", "ehide", "specifichide", "shide"];
-  let lines: Vec<&str> = list.lines().filter(|line| line.contains('#') || HIDING.iter().any(|option| line.contains(option))).collect();
+  let lines: Vec<&str> =
+    list.lines().filter(|line| line.contains('#') || HIDING.iter().any(|option| line.contains(option))).collect();
   lines.join("\n")
 }
 
 fn agent() -> &'static ureq::Agent {
   static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
   AGENT.get_or_init(|| {
-    ureq::Agent::config_builder()
-      .timeout_global(Some(Duration::from_secs(60)))
-      .user_agent("AstraBrowser")
-      .build()
-      .into()
+    ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(60))).user_agent("AstraBrowser").build().into()
   })
 }
 
@@ -617,7 +633,10 @@ fn scriptlets(files: &[String]) -> Vec<Resource> {
     Some(Registration {
       ident: ident?.to_string(),
       name: name.captures(details)?[1].to_string(),
-      aliases: list(details, "aliases").iter().filter_map(|alias| quoted.captures(alias).map(|found| found[1].to_string())).collect(),
+      aliases: list(details, "aliases")
+        .iter()
+        .filter_map(|alias| quoted.captures(alias).map(|found| found[1].to_string()))
+        .collect(),
       dependencies: list(details, "dependencies"),
       trusted: details.contains("requiresTrust: true"),
     })
@@ -629,11 +648,13 @@ fn scriptlets(files: &[String]) -> Vec<Resource> {
       registrations.extend(parse(Some(&found[1]), &found[2]));
     }
     for found in push.captures_iter(file) {
-      registrations.extend(parse(function.captures(&found[1]).map(|ident| ident.get(1).map_or("", |ident| ident.as_str())), &found[1]));
+      registrations
+        .extend(parse(function.captures(&found[1]).map(|ident| ident.get(1).map_or("", |ident| ident.as_str())), &found[1]));
     }
   }
 
-  let names: HashMap<&str, &str> = registrations.iter().map(|registration| (registration.ident.as_str(), registration.name.as_str())).collect();
+  let names: HashMap<&str, &str> =
+    registrations.iter().map(|registration| (registration.ident.as_str(), registration.name.as_str())).collect();
   registrations
     .iter()
     .filter_map(|registration| {
@@ -669,7 +690,10 @@ fn resolve(ident: &str, definitions: &HashMap<String, String>, files: &[String])
   let alias = Regex::new(&format!(r"const\s+{}\s*=\s*([\w$]+);", regex::escape(ident))).ok()?;
   let target = files.iter().find_map(|file| alias.captures(file).map(|found| found[1].to_string()))?;
   let import = Regex::new(&format!(r"import\s*\{{\s*([\w$]+)\s+as\s+{}\s*\}}", regex::escape(&target))).ok()?;
-  files.iter().find_map(|file| import.captures(file).map(|found| found[1].to_string())).filter(|name| definitions.contains_key(name))
+  files
+    .iter()
+    .find_map(|file| import.captures(file).map(|found| found[1].to_string()))
+    .filter(|name| definitions.contains_key(name))
 }
 
 /// Підмінні ресурси для правил `$redirect=` (src/js/redirect-resources.js): назва, псевдоніми, сам файл.
@@ -684,9 +708,9 @@ fn redirect_resources(src: &str) -> Result<Vec<Resource>, String> {
     .captures_iter(&manifest)
     .filter(|found| !found[2].contains("params") && !found[2].contains("requiresTrust"))
     .map(|found| {
-      let aliases = alias.captures(&found[2]).map_or_else(Vec::new, |aliases| {
-        quoted.captures_iter(&aliases[1]).map(|alias| alias[1].to_string()).collect()
-      });
+      let aliases = alias
+        .captures(&found[2])
+        .map_or_else(Vec::new, |aliases| quoted.captures_iter(&aliases[1]).map(|alias| alias[1].to_string()).collect());
       (found[1].to_string(), aliases)
     })
     .collect();
@@ -876,9 +900,13 @@ async function trustedSetCookie(name = '') {
     // Запити перевіряє лише рушій Windows: у Linux він косметичний.
     #[cfg(windows)]
     {
-      let ads = adblock.check("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "https://example.com/", "script", "GET");
+      let ads =
+        adblock.check("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "https://example.com/", "script", "GET");
       assert!(matches!(ads, Verdict::Block | Verdict::Replace { .. }));
-      assert!(matches!(adblock.check("https://www.google-analytics.com/analytics.js", "https://example.com/", "script", "GET"), Verdict::Block | Verdict::Replace { .. }));
+      assert!(matches!(
+        adblock.check("https://www.google-analytics.com/analytics.js", "https://example.com/", "script", "GET"),
+        Verdict::Block | Verdict::Replace { .. }
+      ));
       assert!(matches!(adblock.check("https://example.com/app.js", "https://example.com/", "script", "GET"), Verdict::Allow));
     }
 
@@ -925,7 +953,13 @@ async function trustedSetCookie(name = '') {
     let cosmetic_list = cosmetic_rules(&list);
     assert!(!cosmetic_list.contains("||ads.example^") && cosmetic_list.contains("$generichide"));
     let (full, cosmetic) = (engine(list), engine(cosmetic_list));
-    for url in ["https://example.org/", "https://quiet.example/", "https://plain.example/", "https://news.example/", "https://hidden.example/"] {
+    for url in [
+      "https://example.org/",
+      "https://quiet.example/",
+      "https://plain.example/",
+      "https://news.example/",
+      "https://hidden.example/",
+    ] {
       assert_eq!(cosmetics(&full, url), cosmetics(&cosmetic, url), "{url}");
     }
   }
@@ -1001,7 +1035,9 @@ async function trustedSetCookie(name = '') {
     assert!(matches!(adblock.check("https://ads.example/banner.png", "https://example.org/", "image", "GET"), Verdict::Block));
     assert!(matches!(adblock.check("https://example.org/logo.png", "https://example.org/", "image", "GET"), Verdict::Allow));
     match adblock.check("https://cdn.example/tracker.js", "https://example.org/", "script", "GET") {
-      Verdict::Replace { mime, body } => assert_eq!((mime.as_str(), body.as_slice()), ("application/javascript", b"(function(){})();".as_slice())),
+      Verdict::Replace { mime, body } => {
+        assert_eq!((mime.as_str(), body.as_slice()), ("application/javascript", b"(function(){})();".as_slice()))
+      }
       _ => panic!("tracker.js should be replaced"),
     }
 

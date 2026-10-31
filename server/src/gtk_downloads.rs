@@ -84,7 +84,8 @@ pub fn watch_downloads(
     // Файл, якого WebKit не покаже (архів, програма), — завантаження, як у Chromium: сам WebKit завантажує лише те, що
     // сервер позначив як вкладення, а решту мовчки відкидає.
     view.connect_decide_policy(|_, decision, kind| {
-      let Some(response) = decision.downcast_ref::<ResponsePolicyDecision>().filter(|_| kind == PolicyDecisionType::Response) else {
+      let Some(response) = decision.downcast_ref::<ResponsePolicyDecision>().filter(|_| kind == PolicyDecisionType::Response)
+      else {
         return false;
       };
       let empty = response.response().is_some_and(|response| response.status_code() == 204);
@@ -180,7 +181,9 @@ fn begin(id: u64, download: &Download, report: &Rc<dyn Fn(DownloadUpdate)>, url:
   RUNNING.with(|downloads| downloads.borrow_mut().insert(id, running));
   download.connect_received_data(move |_, _| progress(id, false));
   // Після failed WebKit шле ще й finished — тож кінець каже той, хто перший (finish).
-  download.connect_failed(move |_, error| finish(id, if error.matches(DownloadError::CancelledByUser) { "canceled" } else { "failed" }));
+  download.connect_failed(move |_, error| {
+    finish(id, if error.matches(DownloadError::CancelledByUser) { "canceled" } else { "failed" })
+  });
   download.connect_finished(move |_| finish(id, "completed"));
   progress(id, true);
   download.set_allow_overwrite(replace);

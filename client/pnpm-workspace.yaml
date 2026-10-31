@@ -1,0 +1,12 @@
+packages:
+  - .
+
+# Скрипти встановлення — лише в цих пакетів (рідні модулі й бінарники збірки Angular); новий пакет зі скриптом
+# зупиняє встановлення, доки його не додадуть сюди (pnpm approve-builds).
+allowBuilds:
+  '@parcel/watcher@2.6.0': true
+  'esbuild@0.28.2': true
+  'fsevents@2.3.3': true
+  'lmdb@3.5.6': true
+  'msgpackr-extract@3.0.4': true
+strictDepBuilds: true

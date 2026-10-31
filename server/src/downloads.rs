@@ -103,9 +103,7 @@ impl Downloads {
   /// (Linux без тек XDG), ~/Downloads, як у Chrome.
   pub fn folder(&self, app: &AppHandle) -> Option<PathBuf> {
     let chosen = self.settings.read().ok().and_then(|settings| settings.folder.clone()).filter(|folder| folder.is_dir());
-    chosen
-      .or_else(|| app.path().download_dir().ok())
-      .or_else(|| app.path().home_dir().ok().map(|home| home.join("Downloads")))
+    chosen.or_else(|| app.path().download_dir().ok()).or_else(|| app.path().home_dir().ok().map(|home| home.join("Downloads")))
   }
 
   fn ask(&self) -> bool {
@@ -210,17 +208,20 @@ fn free_path(folder: &Path, file_name: &str) -> PathBuf {
   let name = Path::new(file_name);
   let stem = name.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
   let extension = name.extension().map(|extension| format!(".{}", extension.to_string_lossy())).unwrap_or_default();
-  (1..)
-    .map(|number| folder.join(format!("{stem} ({number}){extension}")))
-    .find(|path| !path.exists())
-    .unwrap_or(candidate)
+  (1..).map(|number| folder.join(format!("{stem} ({number}){extension}"))).find(|path| !path.exists()).unwrap_or(candidate)
 }
 
 /// Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None). `replace` — файл із такою
 /// назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf».
 #[tauri::command]
 #[specta::specta]
-pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64, folder: Option<String>, replace: bool) -> Result<(), String> {
+pub fn download_resolve(
+  app: AppHandle,
+  downloads: State<'_, Downloads>,
+  id: u64,
+  folder: Option<String>,
+  replace: bool,
+) -> Result<(), String> {
   let file_name = downloads.prompts.lock().map_err(|error| error.to_string())?.remove(&id);
   let path = match (folder, file_name) {
     (Some(folder), Some(file_name)) => {
@@ -236,7 +237,9 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
   #[cfg(windows)]
   return app.run_on_main_thread(move || webview2::resolve_download(id, path)).map_err(|error| error.to_string());
   #[cfg(target_os = "linux")]
-  return app.run_on_main_thread(move || crate::gtk_downloads::resolve_download(id, path, replace)).map_err(|error| error.to_string());
+  return app
+    .run_on_main_thread(move || crate::gtk_downloads::resolve_download(id, path, replace))
+    .map_err(|error| error.to_string());
 }
 
 /// Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли для файла вибрали іншу теку.
@@ -244,14 +247,16 @@ pub fn download_resolve(app: AppHandle, downloads: State<'_, Downloads>, id: u64
 #[specta::specta]
 pub fn downloads_file_exists(folder: String, file_name: String) -> bool {
   // Лише назва файла, без шляхів: питають саме про цю теку.
-  Path::new(&file_name).file_name().is_some_and(|name| name == file_name.as_str()) && Path::new(&folder).join(&file_name).is_file()
+  Path::new(&file_name).file_name().is_some_and(|name| name == file_name.as_str())
+    && Path::new(&folder).join(&file_name).is_file()
 }
 
 /// Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються.
 #[tauri::command]
 #[specta::specta]
 pub async fn downloads_pick_folder(app: AppHandle, window: Window, current: Option<String>) -> Result<Option<String>, String> {
-  let mut dialog = app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Куди зберегти файл", "Where to save the file"));
+  let mut dialog =
+    app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Куди зберегти файл", "Where to save the file"));
   if let Some(current) = current.map(PathBuf::from).filter(|folder| folder.is_dir()) {
     dialog = dialog.set_directory(current);
   }
@@ -259,9 +264,8 @@ pub async fn downloads_pick_folder(app: AppHandle, window: Window, current: Opti
   dialog.pick_folder(move |picked| {
     let _ = sender.send(picked.and_then(|path| path.into_path().ok()));
   });
-  let picked = tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten())
-    .await
-    .map_err(|error| error.to_string())?;
+  let picked =
+    tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten()).await.map_err(|error| error.to_string())?;
   Ok(picked.map(|folder| folder.display().to_string()))
 }
 
@@ -276,7 +280,8 @@ pub fn downloads_settings(app: AppHandle, downloads: State<'_, Downloads>) -> Do
 #[specta::specta]
 pub async fn downloads_choose_folder(app: AppHandle, window: Window) -> Result<DownloadSettings, String> {
   let downloads = app.state::<Downloads>();
-  let mut dialog = app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Тека для завантажень", "Downloads folder"));
+  let mut dialog =
+    app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Тека для завантажень", "Downloads folder"));
   if let Some(folder) = downloads.folder(&app) {
     dialog = dialog.set_directory(folder);
   }
@@ -284,9 +289,8 @@ pub async fn downloads_choose_folder(app: AppHandle, window: Window) -> Result<D
   dialog.pick_folder(move |picked| {
     let _ = sender.send(picked.and_then(|path| path.into_path().ok()));
   });
-  let picked = tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten())
-    .await
-    .map_err(|error| error.to_string())?;
+  let picked =
+    tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten()).await.map_err(|error| error.to_string())?;
   if let Some(folder) = picked {
     downloads.change(|settings| settings.folder = Some(folder))?;
   }
@@ -360,7 +364,11 @@ pub fn download_show(path: String) -> Result<(), String> {
   {
     match path.parent().filter(|folder| folder.is_dir()) {
       Some(folder) => open_with_system(folder),
-      None => Err(format!("{} {}", crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"), path.display())),
+      None => Err(format!(
+        "{} {}",
+        crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"),
+        path.display()
+      )),
     }
   }
   #[cfg(windows)]
@@ -372,7 +380,11 @@ pub fn download_show(path: String) -> Result<(), String> {
   } else if let Some(folder) = path.parent().filter(|folder| folder.is_dir()) {
     explorer.arg(folder);
   } else {
-    return Err(format!("{} {}", crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"), path.display()));
+    return Err(format!(
+      "{} {}",
+      crate::i18n::text("Немає ні файла, ні теки:", "Neither the file nor the folder exists:"),
+      path.display()
+    ));
   }
   #[cfg(windows)]
   explorer.spawn().map(|_| ()).map_err(|error| error.to_string())

@@ -121,12 +121,15 @@
     color: var(--color-error);
   }
 
+  // Плитки — у рядок, скільки вміститься, а та, що не влазить, — на наступний; підпис завжди в один рядок.
   &__stats {
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    display: flex;
+    flex-wrap: wrap;
   }
 
   &__stat {
     display: flex;
+    flex: 0 1 auto;
     gap: 0.75rem;
     align-items: center;
     padding: 0.875rem 1rem;
@@ -141,6 +144,7 @@
   &__stat-label {
     flex: 1 1 auto;
     color: var(--browser-muted);
+    white-space: nowrap;
   }
 
   &__stat-value {

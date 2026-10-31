@@ -21,12 +21,13 @@ use std::{
 
 use tauri::{webview::PlatformWebview, AppHandle, Manager, Url, Webview};
 use webview2_com::{
-  take_pwstr, AcceleratorKeyPressedEventHandler, AddScriptToExecuteOnDocumentCreatedCompletedHandler, BytesReceivedChangedEventHandler, CallDevToolsProtocolMethodCompletedHandler,
-  ClearBrowsingDataCompletedHandler, DownloadStartingEventHandler, ContainsFullScreenElementChangedEventHandler, FaviconChangedEventHandler,
+  take_pwstr, AcceleratorKeyPressedEventHandler, AddScriptToExecuteOnDocumentCreatedCompletedHandler,
+  BytesReceivedChangedEventHandler, CallDevToolsProtocolMethodCompletedHandler, ClearBrowsingDataCompletedHandler,
+  ContainsFullScreenElementChangedEventHandler, DownloadStartingEventHandler, FaviconChangedEventHandler,
   GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
   IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
-  MoveFocusRequestedEventHandler, NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler,
-  WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
+  MoveFocusRequestedEventHandler, NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler,
+  StateChangedEventHandler, WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
 };
 use windows::Win32::{
   Foundation::{E_OUTOFMEMORY, HWND},
@@ -519,7 +520,9 @@ pub fn clear_browsing_data(
         Ok(())
       }));
       let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |time| time.as_secs_f64());
-      unsafe { profile(&platform)?.ClearBrowsingDataInTimeRange(COREWEBVIEW2_BROWSING_DATA_KINDS(mask), since, now + 60.0, &handler) }
+      unsafe {
+        profile(&platform)?.ClearBrowsingDataInTimeRange(COREWEBVIEW2_BROWSING_DATA_KINDS(mask), since, now + 60.0, &handler)
+      }
     };
     if let Err(error) = run() {
       finish(&failed, Err(error));
@@ -608,11 +611,17 @@ fn decode_screenshot(result: windows_core::Result<String>) -> Result<Vec<u8>, St
     data: std::borrow::Cow<'a, str>,
   }
   let json = result.map_err(|error| error.to_string())?;
-  let shot: Shot = serde_json::from_str(&json).map_err(|_| crate::i18n::text("Порожній знімок", "Empty screenshot").to_string())?;
+  let shot: Shot =
+    serde_json::from_str(&json).map_err(|_| crate::i18n::text("Порожній знімок", "Empty screenshot").to_string())?;
   base64::Engine::decode(&base64::engine::general_purpose::STANDARD, shot.data.as_bytes()).map_err(|error| error.to_string())
 }
 
-fn devtools(core: &ICoreWebView2, method: &str, params: &str, then: impl FnOnce(windows_core::Result<String>) + 'static) -> windows_core::Result<()> {
+fn devtools(
+  core: &ICoreWebView2,
+  method: &str,
+  params: &str,
+  then: impl FnOnce(windows_core::Result<String>) + 'static,
+) -> windows_core::Result<()> {
   let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, json| {
     then(result.map(|()| json));
     Ok(())
@@ -725,7 +734,13 @@ pub fn picture_in_picture(webview: &Webview, reply: Reply<PictureInPicture>) -> 
 /// «Назад» (step < 0) чи «Вперед» історією вкладки.
 pub fn go(webview: &Webview, step: i32) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
-    let _ = core(&platform).and_then(|core| unsafe { if step < 0 { core.GoBack() } else { core.GoForward() } });
+    let _ = core(&platform).and_then(|core| unsafe {
+      if step < 0 {
+        core.GoBack()
+      } else {
+        core.GoForward()
+      }
+    });
   })
 }
 
@@ -745,7 +760,10 @@ pub fn watch_audio(webview: &Webview, report: impl Fn(bool, bool) + Clone + Send
       let core = core(&platform)?.cast::<ICoreWebView2_8>()?;
       let mut token = 0;
       unsafe {
-        core.add_IsDocumentPlayingAudioChanged(&IsDocumentPlayingAudioChangedEventHandler::create(on_audio(report.clone())), &mut token)?;
+        core.add_IsDocumentPlayingAudioChanged(
+          &IsDocumentPlayingAudioChangedEventHandler::create(on_audio(report.clone())),
+          &mut token,
+        )?;
         core.add_IsMutedChanged(&IsMutedChangedEventHandler::create(on_audio(report)), &mut token)?;
       }
       Ok(())
@@ -840,7 +858,8 @@ pub fn block_autoplay_by_default(webview: &Webview, first_url: String) -> tauri:
 }
 
 fn deny_autoplay_unless_set(profile: &ICoreWebView2Profile4, url: &str) -> windows_core::Result<()> {
-  let Some(origin) = Url::parse(url).ok().filter(|url| matches!(url.scheme(), "http" | "https")).map(|url| url.origin().ascii_serialization())
+  let Some(origin) =
+    Url::parse(url).ok().filter(|url| matches!(url.scheme(), "http" | "https")).map(|url| url.origin().ascii_serialization())
   else {
     return Ok(());
   };
@@ -872,7 +891,12 @@ pub fn set_autoplay(webview: &Webview, origin: String, autoplay: Autoplay, reply
         Ok(())
       }));
       unsafe {
-        profile(&platform)?.SetPermissionState(COREWEBVIEW2_PERMISSION_KIND_AUTOPLAY, &HSTRING::from(origin.as_str()), autoplay.state(), &handler)
+        profile(&platform)?.SetPermissionState(
+          COREWEBVIEW2_PERMISSION_KIND_AUTOPLAY,
+          &HSTRING::from(origin.as_str()),
+          autoplay.state(),
+          &handler,
+        )
       }
     };
     if let Err(error) = request() {
@@ -896,7 +920,13 @@ pub enum Blocked {
 }
 
 /// Блокувальник реклами й захист від стеження для сторінки вікна `ui`: обидва перевіряють запити в одному обробнику.
-pub fn block_ads(webview: &Webview, app: AppHandle, ui: String, url: String, report: impl Fn(Blocked) + Send + 'static) -> tauri::Result<()> {
+pub fn block_ads(
+  webview: &Webview,
+  app: AppHandle,
+  ui: String,
+  url: String,
+  report: impl Fn(Blocked) + Send + 'static,
+) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let watch = core(&platform).and_then(|core| watch_requests(&core, platform.environment(), app, ui, &url, report));
     if let Err(error) = watch {
@@ -942,7 +972,8 @@ fn watch_requests(
   let page = Rc::new(RefCell::new(AdPage::default()));
   let report = Rc::new(report);
   start_page(core, &page, &app, first_url, false, &*report)?;
-  let (on_request_page, on_request_report, on_request_app, on_request_ui) = (page.clone(), report.clone(), app.clone(), ui.clone());
+  let (on_request_page, on_request_report, on_request_app, on_request_ui) =
+    (page.clone(), report.clone(), app.clone(), ui.clone());
   let mut token = 0;
   unsafe {
     core.add_WebResourceRequested(
@@ -1061,7 +1092,9 @@ fn respond(
 /// з помилкою CORS — як запити відео YouTube, які блокувальник підміняє порожнім відео.
 fn replacement_headers(args: &ICoreWebView2WebResourceRequestedEventArgs, mime: &str, page_origin: &str) -> String {
   let origin = request_origin(args).ok().flatten().unwrap_or_else(|| page_origin.to_string());
-  format!("Content-Type: {mime}\r\nAccess-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Credentials: true\r\nVary: Origin")
+  format!(
+    "Content-Type: {mime}\r\nAccess-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Credentials: true\r\nVary: Origin"
+  )
 }
 
 /// Заголовок Origin запиту, якщо він є.
@@ -1343,7 +1376,9 @@ fn on_download_starting(
 /// браузерові треба знати про збіг — щоб спитати, замінити наявний чи зберегти обидва. Тож «звіт (1).pdf», поряд з яким
 /// лежить «звіт.pdf», — це «звіт.pdf», якщо тільки сайт сам не назвав файл «звіт (1).pdf».
 fn original_path(operation: &ICoreWebView2DownloadOperation, path: PathBuf) -> PathBuf {
-  let Some(original) = path.file_name().and_then(|name| name.to_str()).and_then(renamed_from).map(|name| path.with_file_name(name)) else {
+  let Some(original) =
+    path.file_name().and_then(|name| name.to_str()).and_then(renamed_from).map(|name| path.with_file_name(name))
+  else {
     return path;
   };
   let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1366,7 +1401,8 @@ fn renamed_from(name: &str) -> Option<String> {
     _ => (name, ""),
   };
   let (base, number) = stem.strip_suffix(')')?.rsplit_once(" (")?;
-  (!base.is_empty() && !number.is_empty() && number.chars().all(|char| char.is_ascii_digit())).then(|| format!("{base}{extension}"))
+  (!base.is_empty() && !number.is_empty() && number.chars().all(|char| char.is_ascii_digit()))
+    .then(|| format!("{base}{extension}"))
 }
 
 /// Користувач вибрав, куди зберегти файл, чи передумав (None — завантаження скасовується).
@@ -1494,9 +1530,10 @@ fn file_size(path: &Path) -> i64 {
 fn check_download(id: u64) {
   settle_download(id);
   let Some((operation, path, report, keeping)) = DOWNLOADS.with(|downloads| {
-    downloads.borrow().get(&id).map(|running| {
-      (running.operation.clone(), running.path.clone(), running.report.clone(), running.keeping.is_some())
-    })
+    downloads
+      .borrow()
+      .get(&id)
+      .map(|running| (running.operation.clone(), running.path.clone(), running.report.clone(), running.keeping.is_some()))
   }) else {
     return;
   };
@@ -1581,7 +1618,12 @@ fn restore_kept(id: u64) {
     copy
   };
   mark_from_internet(&kept, &update.url);
-  finish_download(DownloadUpdate { path: kept.to_string_lossy().into_owned(), received: file_size(&kept), state: "completed", ..update });
+  finish_download(DownloadUpdate {
+    path: kept.to_string_lossy().into_owned(),
+    received: file_size(&kept),
+    state: "completed",
+    ..update
+  });
 }
 
 /// Позначка «з інтернету» (Zone.Identifier), яку WebView2 ставить завантаженим файлам, а неперевіреному ще не поставив:
@@ -1625,11 +1667,16 @@ fn check_downloads(app: &AppHandle) {
 /// Куди за замовчуванням зберігати файли сторінки (у WebView2 це властивість профілю).
 pub fn set_download_folder(webview: &Webview, folder: PathBuf) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
-    let _ = profile(&platform).and_then(|profile| unsafe { profile.SetDefaultDownloadFolderPath(&HSTRING::from(folder.as_os_str())) });
+    let _ =
+      profile(&platform).and_then(|profile| unsafe { profile.SetDefaultDownloadFolderPath(&HSTRING::from(folder.as_os_str())) });
   })
 }
 
-fn download_update(id: u64, operation: &ICoreWebView2DownloadOperation, fallback_path: &str) -> windows_core::Result<DownloadUpdate> {
+fn download_update(
+  id: u64,
+  operation: &ICoreWebView2DownloadOperation,
+  fallback_path: &str,
+) -> windows_core::Result<DownloadUpdate> {
   let (mut uri, mut path, mut received, mut total) = (PWSTR::null(), PWSTR::null(), 0i64, 0i64);
   let mut state = COREWEBVIEW2_DOWNLOAD_STATE::default();
   unsafe {
@@ -1668,7 +1715,8 @@ fn download_update(id: u64, operation: &ICoreWebView2DownloadOperation, fallback
 pub fn cancel_download(id: u64) {
   DOWNLOADS.with(|downloads| {
     // Об'єкт — поза позикою: Cancel може одразу викликати StateChanged, а той прибирає завантаження зі списку.
-    let operation = downloads.borrow().get(&id).filter(|running| running.keeping.is_none()).map(|running| running.operation.clone());
+    let operation =
+      downloads.borrow().get(&id).filter(|running| running.keeping.is_none()).map(|running| running.operation.clone());
     if let Some(operation) = operation {
       let _ = unsafe { operation.Cancel() };
     }

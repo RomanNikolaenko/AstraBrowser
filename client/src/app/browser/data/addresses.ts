@@ -8,7 +8,12 @@ export type { Address, AddressFields, AddressSettings, AddressesState };
 type Commands = typeof commands;
 /** Команди server/src/addresses.rs, якими користується сховище (bindings.ts). */
 export type AddressCommand =
-  'addressesState' | 'addressSave' | 'addressRemove' | 'addressesSetSettings' | 'addressPromptAnswer' | 'addressAutofill';
+  | 'addressesState'
+  | 'addressSave'
+  | 'addressRemove'
+  | 'addressesSetSettings'
+  | 'addressPromptAnswer'
+  | 'addressAutofill';
 export type AddressCommandArgs<K extends AddressCommand> = Parameters<Commands[K]>;
 export type AddressCommandResult<K extends AddressCommand> = ReturnType<Commands[K]>;
 

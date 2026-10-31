@@ -1,4 +1,4 @@
-// Згенеровано client/scripts/icons.mjs (npm run icons) — правте файли в src/assets/icons, а не цей файл.
+// Згенеровано client/scripts/icons.mjs (pnpm run icons) — правте файли в src/assets/icons, а не цей файл.
 import alertSvg from '../../../assets/icons/alert.svg';
 import appsSvg from '../../../assets/icons/apps.svg';
 import arrowLeftSvg from '../../../assets/icons/arrow-left.svg';

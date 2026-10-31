@@ -84,7 +84,8 @@ pub fn disable_general_autofill(webview: &Webview) -> tauri::Result<()> {
 /// Фонова вкладка — менше пам'яті (WebView2 звільняє кеші); активна — як зазвичай.
 pub fn set_background(webview: &Webview, background: bool) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
-    let level = if background { COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW } else { COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL };
+    let level =
+      if background { COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW } else { COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL };
     let _ = core(&platform).and_then(|core| unsafe { core.cast::<ICoreWebView2_19>()?.SetMemoryUsageTargetLevel(level) });
   })
 }
@@ -248,7 +249,13 @@ pub fn site_permissions(webview: &Webview, origin: String, reply: Reply<HashMap<
 }
 
 /// Зберігає дозвіл `kind` для сайту `origin` у профілі WebView2.
-pub fn set_site_permission(webview: &Webview, origin: String, kind: String, state: PermissionState, reply: Reply<()>) -> tauri::Result<()> {
+pub fn set_site_permission(
+  webview: &Webview,
+  origin: String,
+  kind: String,
+  state: PermissionState,
+  reply: Reply<()>,
+) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
     let failed = reply.clone();
     let request = || -> windows_core::Result<()> {
@@ -341,7 +348,8 @@ pub fn customize_context_menu(webview: &Webview, report: impl Fn(ContextAction) 
 }
 
 fn read_target(target: &ICoreWebView2ContextMenuTarget) -> windows_core::Result<MenuTarget> {
-  let (mut has_link, mut has_source, mut has_selection, mut editable) = (BOOL::default(), BOOL::default(), BOOL::default(), BOOL::default());
+  let (mut has_link, mut has_source, mut has_selection, mut editable) =
+    (BOOL::default(), BOOL::default(), BOOL::default(), BOOL::default());
   let mut kind = COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND::default();
   unsafe {
     target.HasLinkUri(&mut has_link)?;
@@ -350,11 +358,12 @@ fn read_target(target: &ICoreWebView2ContextMenuTarget) -> windows_core::Result<
     target.IsEditable(&mut editable)?;
     target.Kind(&mut kind)?;
   }
-  let text = |read: unsafe fn(&ICoreWebView2ContextMenuTarget, *mut PWSTR) -> windows_core::Result<()>| -> windows_core::Result<String> {
-    let mut value = PWSTR::null();
-    unsafe { read(target, &mut value)? };
-    Ok(take_pwstr(value))
-  };
+  let text =
+    |read: unsafe fn(&ICoreWebView2ContextMenuTarget, *mut PWSTR) -> windows_core::Result<()>| -> windows_core::Result<String> {
+      let mut value = PWSTR::null();
+      unsafe { read(target, &mut value)? };
+      Ok(take_pwstr(value))
+    };
   let web = |url: String| Some(url).filter(|url| url.starts_with("http://") || url.starts_with("https://"));
   Ok(MenuTarget {
     page: web(text(ICoreWebView2ContextMenuTarget::PageUri)?),
@@ -419,7 +428,8 @@ fn menu_item(
   if action.is_empty() {
     return unsafe { environment.CreateContextMenuItem(&HSTRING::new(), None, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR) };
   }
-  let item = unsafe { environment.CreateContextMenuItem(&HSTRING::from(label), None, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND)? };
+  let item =
+    unsafe { environment.CreateContextMenuItem(&HSTRING::from(label), None, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND)? };
   let is_text = matches!(action, "search" | "translate-text");
   let handler = CustomItemSelectedEventHandler::create(Box::new(move |_, _| {
     let (url, text) = if is_text { (None, value.clone()) } else { (value.clone(), None) };

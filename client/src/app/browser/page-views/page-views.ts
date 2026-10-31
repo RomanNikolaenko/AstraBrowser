@@ -156,7 +156,14 @@ export interface PageExternalEvent {
 export interface PageShortcutEvent {
   readonly label: string;
   readonly shortcut:
-    'next-tab' | 'previous-tab' | 'reopen-tab' | 'screenshot' | 'view-source' | 'zoom-in' | 'zoom-out' | 'zoom-reset';
+    | 'next-tab'
+    | 'previous-tab'
+    | 'reopen-tab'
+    | 'screenshot'
+    | 'view-source'
+    | 'zoom-in'
+    | 'zoom-out'
+    | 'zoom-reset';
 }
 
 /** Користувач увійшов на сайт — «Зберегти пароль?» (server/src/passwords.rs). */

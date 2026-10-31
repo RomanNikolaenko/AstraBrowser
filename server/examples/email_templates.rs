@@ -117,7 +117,10 @@ fn theme_rules(palette: &Palette) -> Vec<(&'static str, String)> {
     ("t-box", format!("background-color:{};color:{}", palette.box_bg, palette.box_text)),
     ("t-strong", format!("color:{}", palette.box_text)),
     ("t-code", format!("background-color:{};border-color:{};color:{}", palette.code_bg, palette.code_border, palette.code_text)),
-    ("t-danger", format!("background-color:{};border-color:{};color:{}", palette.danger_bg, palette.danger_border, palette.danger_text)),
+    (
+      "t-danger",
+      format!("background-color:{};border-color:{};color:{}", palette.danger_bg, palette.danger_border, palette.danger_text),
+    ),
     ("t-check", format!("color:{}", palette.check)),
   ]
 }
@@ -935,7 +938,9 @@ fn readme(emails: &[Email]) -> String {
   let subjects: String = emails
     .iter()
     .filter_map(|email| match email.sender {
-      Sender::Supabase(template) => Some(format!("**{template}** ([{0}]({0})):\n\n```\n{1}\n```\n\n", email.file, bilingual_subject(email))),
+      Sender::Supabase(template) => {
+        Some(format!("**{template}** ([{0}]({0})):\n\n```\n{1}\n```\n\n", email.file, bilingual_subject(email)))
+      }
       _ => None,
     })
     .collect();
@@ -997,7 +1002,8 @@ mod tests {
   /// Змінні, які Supabase підставляє в шаблони, що нам потрібні.
   const SUPABASE_VARIABLES: [&str; 3] = ["{{ .Token }}", "{{ .Email }}", "{{ .NewEmail }}"];
   /// Змінні, які підставляє функція notify (supabase/functions/notify/index.ts).
-  const SERVER_VARIABLES: [&str; 6] = ["{{ .Email }}", "{{ .Name }}", "{{ .Date }}", "{{ .Device }}", "{{ .Location }}", "{{ .Ip }}"];
+  const SERVER_VARIABLES: [&str; 6] =
+    ["{{ .Email }}", "{{ .Name }}", "{{ .Date }}", "{{ .Device }}", "{{ .Location }}", "{{ .Ip }}"];
 
   /// Усі `{{ … }}` у тексті.
   fn variables_in(html: &str) -> Vec<&str> {
@@ -1095,7 +1101,11 @@ mod tests {
   fn emails_show_the_app_logo_from_its_public_address() {
     for email in emails() {
       for language in Language::ALL {
-        assert!(render(&email, language, Theme::Auto).contains(&format!(r#"<img src="{LOGO_URL}""#)), "{}: немає логотипа", email.file);
+        assert!(
+          render(&email, language, Theme::Auto).contains(&format!(r#"<img src="{LOGO_URL}""#)),
+          "{}: немає логотипа",
+          email.file
+        );
       }
     }
     assert!(Path::new(env!("CARGO_MANIFEST_DIR")).join(LOGO_SOURCE).exists());

@@ -119,7 +119,9 @@ impl AddressFields {
     match kind {
       "name" => join([&self.given, &self.family], " "),
       "street" => join([&self.line1, &self.line2], "\n"),
-      _ => self.named().into_iter().find(|(name, _)| *name == kind).map(|(_, field)| field.trim().to_string()).unwrap_or_default(),
+      _ => {
+        self.named().into_iter().find(|(name, _)| *name == kind).map(|(_, field)| field.trim().to_string()).unwrap_or_default()
+      }
     }
   }
 
@@ -509,7 +511,11 @@ pub fn on_page_message(app: &AppHandle, ui: &str, label: &str, token: &str, sour
       let (kind, kinds, rect) = focused_field(message)?;
       let ids = {
         let book = addresses.book.lock().ok()?;
-        if book.settings.autofill { book.suggestions(&kind) } else { Vec::new() }
+        if book.settings.autofill {
+          book.suggestions(&kind)
+        } else {
+          Vec::new()
+        }
       };
       let shown = !ids.is_empty();
       if let Ok(mut forms) = addresses.forms.lock() {
@@ -649,7 +655,13 @@ pub fn address_remove(app: AppHandle, window: Window, addresses: State<'_, Addre
 
 #[tauri::command]
 #[specta::specta]
-pub fn addresses_set_settings(app: AppHandle, window: Window, addresses: State<'_, Addresses>, offer: bool, autofill: bool) -> Result<(), String> {
+pub fn addresses_set_settings(
+  app: AppHandle,
+  window: Window,
+  addresses: State<'_, Addresses>,
+  offer: bool,
+  autofill: bool,
+) -> Result<(), String> {
   deny_guest(&window)?;
   addresses.change(&app, |book| {
     book.settings = Settings { offer, autofill };
@@ -660,7 +672,13 @@ pub fn addresses_set_settings(app: AppHandle, window: Window, addresses: State<'
 /// Відповідь на «Зберегти адресу?»: `save` — зберегти (чи оновити збережену), інакше — не зараз.
 #[tauri::command]
 #[specta::specta]
-pub fn address_prompt_answer(app: AppHandle, window: Window, addresses: State<'_, Addresses>, id: u64, save: bool) -> Result<(), String> {
+pub fn address_prompt_answer(
+  app: AppHandle,
+  window: Window,
+  addresses: State<'_, Addresses>,
+  id: u64,
+  save: bool,
+) -> Result<(), String> {
   deny_guest(&window)?;
   let Some(pending) = addresses.prompts.lock().map_err(|error| error.to_string())?.remove(&id) else {
     return Ok(());
@@ -691,7 +709,13 @@ pub fn address_prompt_answer(app: AppHandle, window: Window, addresses: State<'_
 /// й заповнює їх, а фокус повертається в поле.
 #[tauri::command]
 #[specta::specta]
-pub fn address_autofill(app: AppHandle, window: Window, addresses: State<'_, Addresses>, label: String, id: String) -> Result<(), String> {
+pub fn address_autofill(
+  app: AppHandle,
+  window: Window,
+  addresses: State<'_, Addresses>,
+  label: String,
+  id: String,
+) -> Result<(), String> {
   deny_guest(&window)?;
   let page = app
     .get_webview(&label)
@@ -703,7 +727,8 @@ pub fn address_autofill(app: AppHandle, window: Window, addresses: State<'_, Add
     if !book.settings.autofill {
       return Ok(());
     }
-    let entry = book.entries.iter_mut().find(|entry| entry.id == id).ok_or(crate::i18n::text("Такої адреси немає", "No such address"))?;
+    let entry =
+      book.entries.iter_mut().find(|entry| entry.id == id).ok_or(crate::i18n::text("Такої адреси немає", "No such address"))?;
     entry.used = Some(now());
     let values = kinds
       .iter()
@@ -773,7 +798,13 @@ pub fn addresses_sync_apply(
       let synced: SyncedAddress = serde_json::from_slice(&plain).map_err(|error| error.to_string())?;
       // Та сама адреса, збережена на двох комп'ютерах окремо, — один запис, з сервера.
       book.entries.retain(|entry| entry.id == change.id || entry.fields != synced.fields);
-      let entry = Address { id: change.id.clone(), fields: synced.fields, created: synced.created, updated: synced.updated, used: synced.used };
+      let entry = Address {
+        id: change.id.clone(),
+        fields: synced.fields,
+        created: synced.created,
+        updated: synced.updated,
+        used: synced.used,
+      };
       match book.entries.iter_mut().find(|current| current.id == change.id) {
         Some(current) => *current = entry,
         None => book.entries.push(entry),
@@ -842,7 +873,8 @@ mod tests {
     let saved = home();
     // Те саме, по-іншому записане, — нічого нового.
     assert!(saved.covers(&form(json!({ "name": "іван петренко", "phone": "067 123 45 67", "city": "КИЇВ" }))));
-    let moved = form(json!({ "name": "Іван Петренко", "phone": "0671234567", "line1": "вул. Січових Стрільців, 10", "city": "Київ" }));
+    let moved =
+      form(json!({ "name": "Іван Петренко", "phone": "0671234567", "line1": "вул. Січових Стрільців, 10", "city": "Київ" }));
     assert!(!saved.covers(&moved));
     // Та сама людина й телефон — оновлення: нова вулиця, а решта лишається.
     assert!(saved.same_owner(&moved));

@@ -344,8 +344,8 @@ function delay(ms: number): Promise<void> {
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(translate('Не вдалося прочитати знімок')));
+    image.addEventListener('load', () => resolve(image), { once: true });
+    image.addEventListener('error', () => reject(new Error(translate('Не вдалося прочитати знімок'))), { once: true });
     image.src = url;
   });
 }

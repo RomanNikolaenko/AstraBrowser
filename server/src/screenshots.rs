@@ -41,9 +41,13 @@ pub async fn file_save(app: AppHandle, window: Window, request: Request<'_>) -> 
   let content = content.clone();
   let header = |name: &str| request.headers().get(name).and_then(|value| value.to_str().ok()).map(decode_component);
   let html = header("x-file-kind").as_deref() == Some("html");
-  let name = header("x-file-name")
-    .filter(|name| !name.trim().is_empty())
-    .unwrap_or_else(|| if html { crate::i18n::text("Закладки.html", "Bookmarks.html").into() } else { crate::i18n::text("Скріншот.png", "Screenshot.png").into() });
+  let name = header("x-file-name").filter(|name| !name.trim().is_empty()).unwrap_or_else(|| {
+    if html {
+      crate::i18n::text("Закладки.html", "Bookmarks.html").into()
+    } else {
+      crate::i18n::text("Скріншот.png", "Screenshot.png").into()
+    }
+  });
   let (title, filter, extension) = if html {
     (crate::i18n::text("Зберегти закладки", "Save bookmarks"), crate::i18n::text("Закладки HTML", "HTML bookmarks"), "html")
   } else {
@@ -58,9 +62,8 @@ pub async fn file_save(app: AppHandle, window: Window, request: Request<'_>) -> 
   dialog.save_file(move |picked| {
     let _ = sender.send(picked.and_then(|path| path.into_path().ok()));
   });
-  let picked = tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten())
-    .await
-    .map_err(|error| error.to_string())?;
+  let picked =
+    tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten()).await.map_err(|error| error.to_string())?;
   let Some(path) = picked else {
     return Ok(None);
   };

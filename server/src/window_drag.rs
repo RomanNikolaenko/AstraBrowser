@@ -37,12 +37,7 @@ pub fn window_start_drag(window: Window) -> Result<(), String> {
         return;
       }
       let _ = ReleaseCapture();
-      let _ = PostMessageW(
-        Some(HWND(hwnd as _)),
-        WM_NCLBUTTONDOWN,
-        WPARAM(HTCAPTION as usize),
-        screen_point(cursor.x, cursor.y),
-      );
+      let _ = PostMessageW(Some(HWND(hwnd as _)), WM_NCLBUTTONDOWN, WPARAM(HTCAPTION as usize), screen_point(cursor.x, cursor.y));
     })
     .map_err(|error| error.to_string())
 }

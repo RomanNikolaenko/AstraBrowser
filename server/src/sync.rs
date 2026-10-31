@@ -33,7 +33,13 @@ pub struct SyncRow {
 
 fn deny_guest(window: &Window) -> Result<(), AuthError> {
   if window.label().starts_with(crate::pages::GUEST_PREFIX) || window.label().starts_with("private-") {
-    Err(AuthError::new("guest", crate::i18n::text("У гостьовому й приватному вікні синхронізації немає.", "Sync isn't available in guest and private windows.")))
+    Err(AuthError::new(
+      "guest",
+      crate::i18n::text(
+        "У гостьовому й приватному вікні синхронізації немає.",
+        "Sync isn't available in guest and private windows.",
+      ),
+    ))
   } else {
     Ok(())
   }
@@ -43,7 +49,12 @@ fn deny_guest(window: &Window) -> Result<(), AuthError> {
 /// записи цієї колекції (наприклад, паролі наново після зміни пароля облікового запису).
 #[tauri::command]
 #[specta::specta]
-pub async fn sync_pull(app: AppHandle, window: Window, after: i64, collection: Option<String>) -> Result<Vec<SyncRow>, AuthError> {
+pub async fn sync_pull(
+  app: AppHandle,
+  window: Window,
+  after: i64,
+  collection: Option<String>,
+) -> Result<Vec<SyncRow>, AuthError> {
   deny_guest(&window)?;
   auth::blocking(move || {
     let only = collection
@@ -54,7 +65,12 @@ pub async fn sync_pull(app: AppHandle, window: Window, after: i64, collection: O
       "sync_items?select=collection,id,data,deleted,updated_at,revision&revision=gt.{after}{only}&order=revision.asc&limit={PAGE}"
     );
     let rows = auth::rest(&app, || Method::Get, &path, &Value::Null)?;
-    serde_json::from_value(rows).map_err(|_| AuthError::new("server", crate::i18n::text("Сервер синхронізації відповів неочікувано.", "The sync server sent an unexpected response.")))
+    serde_json::from_value(rows).map_err(|_| {
+      AuthError::new(
+        "server",
+        crate::i18n::text("Сервер синхронізації відповів неочікувано.", "The sync server sent an unexpected response."),
+      )
+    })
   })
   .await
   .inspect_err(|error| log::warn!("Синхронізація (отримати): {error}"))
@@ -67,7 +83,12 @@ pub async fn sync_push(app: AppHandle, window: Window, items: Vec<SyncRow>) -> R
   deny_guest(&window)?;
   auth::blocking(move || {
     let rejected = auth::rest(&app, || Method::Post, "rpc/sync_push", &json!({ "items": items }))?;
-    serde_json::from_value(rejected).map_err(|_| AuthError::new("server", crate::i18n::text("Сервер синхронізації відповів неочікувано.", "The sync server sent an unexpected response.")))
+    serde_json::from_value(rejected).map_err(|_| {
+      AuthError::new(
+        "server",
+        crate::i18n::text("Сервер синхронізації відповів неочікувано.", "The sync server sent an unexpected response."),
+      )
+    })
   })
   .await
   .inspect_err(|error| log::warn!("Синхронізація (надіслати): {error}"))

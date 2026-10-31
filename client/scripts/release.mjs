@@ -1,4 +1,4 @@
-// Випуск оновлення: npm run release -- "Що нового" (чи RELEASE_NOTES у середовищі)
+// Випуск оновлення: pnpm run release "Що нового" (чи RELEASE_NOTES у середовищі)
 //
 // Збирає для системи, на якій запущено, пакети, підписані ключем оновлень (%USERPROFILE%\.tauri\astra-browser.key або
 // TAURI_SIGNING_PRIVATE_KEY — шлях чи сам ключ): у Windows — інсталятор NSIS, у Linux — .deb, .rpm і AppImage. Поруч
@@ -49,7 +49,7 @@ if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(key)) {
 
 const linux = process.platform === 'linux';
 const build = spawnSync(
-  `npm run tauri:build -- --bundles ${linux ? 'deb,rpm,appimage' : 'nsis'} --config tauri.updater.conf.json`,
+  `pnpm run tauri:build --bundles ${linux ? 'deb,rpm,appimage' : 'nsis'} --config tauri.updater.conf.json`,
   {
     cwd: join(root, 'client'),
     stdio: 'inherit',

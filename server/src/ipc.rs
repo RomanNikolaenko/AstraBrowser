@@ -8,7 +8,10 @@
 
 use tauri::{ipc::Invoke, Wry};
 
-use crate::{addresses, adblock, auth, cards, browsing_data, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch, logging, pages, passwords, screenshots, suggest, sync, tracking, updates, window_drag, window_size};
+use crate::{
+  adblock, addresses, auth, browsing_data, cards, default_browser, dns, downloads, external, favicons, fullscreen, i18n, launch,
+  logging, pages, passwords, screenshots, suggest, sync, tracking, updates, window_drag, window_size,
+};
 
 /// Прив'язки для інтерфейсу (оновлюються під час розробки й перевіряються тестом).
 #[cfg(any(debug_assertions, test))]
@@ -32,6 +35,8 @@ fn specta() -> tauri_specta::Builder<Wry> {
     // u64/i64 — розміри файлів, час (мс) і номери ревізій синхронізації: усі значно менші за 2^53, і JavaScript
     // і так отримує їх звичайними числами.
     .dangerously_cast_bigints_to_number()
+    // Один тип TypeScript на тип Rust, а не окремі *_Serialize і *_Deserialize: форма в JSON в обидва боки однакова.
+    .disable_serde_phases()
     .commands(tauri_specta::collect_commands![
       pages::page_open,
       pages::page_navigate,
@@ -156,9 +161,12 @@ pub fn handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
   let typed = builder.invoke_handler();
   let binary: Box<dyn Fn(Invoke<Wry>) -> bool + Send + Sync> =
     Box::new(tauri::generate_handler![pages::page_screenshot, screenshots::file_save]);
-  move |invoke| match invoke.message.command() {
-    "page_screenshot" | "file_save" => binary(invoke),
-    _ => typed(invoke),
+  move |invoke| {
+    let command = invoke.message.command().to_string();
+    logging::timed_command(&command, || match command.as_str() {
+      "page_screenshot" | "file_save" => binary(invoke),
+      _ => typed(invoke),
+    })
   }
 }
 

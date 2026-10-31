@@ -1,4 +1,4 @@
-// Іконки інтерфейсу — у збірку: npm run icons (і npm run icons -- --check у CI)
+// Іконки інтерфейсу — у збірку: pnpm run icons (і pnpm run icons --check у CI)
 //
 // Пише src/app/shared/ui-icon/icons.ts: кожен файл src/assets/icons/*.svg імпортується як текст (angular.json →
 // "loader": { ".svg": "text" }) і потрапляє в JS разом з інтерфейсом. Так іконки малюються одразу, без окремого
@@ -18,7 +18,7 @@ const names = readdirSync(folder)
 const variable = (name) => `${name.replace(/-(\w)/g, (_, letter) => letter.toUpperCase())}Svg`;
 
 const source = [
-  '// Згенеровано client/scripts/icons.mjs (npm run icons) — правте файли в src/assets/icons, а не цей файл.',
+  '// Згенеровано client/scripts/icons.mjs (pnpm run icons) — правте файли в src/assets/icons, а не цей файл.',
   ...names.map((name) => `import ${variable(name)} from '../../../assets/icons/${name}.svg';`),
   '',
   '/** Розмітка іконок за назвою файлу без .svg. */',
@@ -36,7 +36,7 @@ if (process.argv.includes('--check')) {
     // Немає файла — теж застарів.
   }
   if (current !== source) {
-    console.error('src/app/shared/ui-icon/icons.ts не відповідає src/assets/icons — запустіть npm run icons.');
+    console.error('src/app/shared/ui-icon/icons.ts не відповідає src/assets/icons — запустіть pnpm run icons.');
     process.exit(1);
   }
   console.log(`Іконки на місці: ${names.length}.`);

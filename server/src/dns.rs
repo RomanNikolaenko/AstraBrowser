@@ -270,7 +270,9 @@ pub fn dns_settings(dns: State<'_, Dns>) -> DnsState {
 pub fn dns_set(app: AppHandle, dns: State<'_, Dns>, settings: Settings) -> Result<DnsState, String> {
   let needs_provider = matches!(settings.mode, Mode::Increased | Mode::Max);
   if needs_provider && settings.template().is_none() {
-    return Err(crate::i18n::text("Адреса постачальника має починатися з https://", "The provider address must start with https://").into());
+    return Err(
+      crate::i18n::text("Адреса постачальника має починатися з https://", "The provider address must start with https://").into(),
+    );
   }
   fs::create_dir_all(&dns.root).map_err(|error| error.to_string())?;
   let text = serde_json::to_vec_pretty(&settings).map_err(|error| error.to_string())?;
@@ -310,14 +312,11 @@ pub async fn dns_restart(app: AppHandle) -> Result<(), String> {
   if let Ok(mut applied) = dns.applied.lock() {
     *applied = settings;
   }
-  let reopened = app
-    .config()
-    .app
-    .windows
-    .first()
-    .ok_or_else(|| "No main window in tauri.conf.json".to_string())
-    .and_then(|config| {
-      tauri::WebviewWindowBuilder::from_config(&app, config).and_then(|builder| builder.build()).map_err(|error| error.to_string())
+  let reopened =
+    app.config().app.windows.first().ok_or_else(|| "No main window in tauri.conf.json".to_string()).and_then(|config| {
+      tauri::WebviewWindowBuilder::from_config(&app, config)
+        .and_then(|builder| builder.build())
+        .map_err(|error| error.to_string())
     });
   dns.restarting.store(false, Ordering::SeqCst);
   reopened.map(drop).inspect_err(|error| log::error!("Після перезапуску для DNS вікно не відкрилося: {error}"))
@@ -355,7 +354,8 @@ mod tests {
 
     // Як Chromium: lockfile відкритий без дозволу писати іншим.
     let lockfile = dir.join("EBWebView").join("lockfile");
-    let held = fs::OpenOptions::new().write(true).create(true).truncate(true).share_mode(FILE_SHARE_READ).open(&lockfile).expect("lock");
+    let held =
+      fs::OpenOptions::new().write(true).create(true).truncate(true).share_mode(FILE_SHARE_READ).open(&lockfile).expect("lock");
     assert!(in_use(&dir));
     drop(held);
     assert!(!in_use(&dir));
@@ -368,7 +368,8 @@ mod tests {
     let dir = std::env::temp_dir().join(format!("astra-dns-{}", std::process::id()));
     let path = dir.join("EBWebView").join("Local State");
     fs::create_dir_all(path.parent().expect("parent")).expect("dirs");
-    fs::write(&path, r#"{"browser":{"enabled_labs_experiments":[]},"dns_over_https":{"mode":"off","templates":""}}"#).expect("write");
+    fs::write(&path, r#"{"browser":{"enabled_labs_experiments":[]},"dns_over_https":{"mode":"off","templates":""}}"#)
+      .expect("write");
 
     let max = Settings { mode: Mode::Max, provider: Provider::Quad9, custom: String::new() };
     write_local_state(&path, &max);
