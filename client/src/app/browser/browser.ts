@@ -2316,9 +2316,9 @@ export class Browser {
     });
   }
 
-  private onPageFavicon({ label, url, icon }: PageFaviconEvent): void {
+  private onPageFavicon({ label, url, icon, image }: PageFaviconEvent): void {
     if (this.tabByLabel(label)) {
-      this.favicons.remember(url, icon);
+      this.favicons.remember(url, icon, image);
     }
   }
 

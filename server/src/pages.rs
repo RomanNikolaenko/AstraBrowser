@@ -102,6 +102,8 @@ struct FaviconEvent {
   label: String,
   url: String,
   icon: String,
+  /// Той самий значок картинкою (data:), як його завантажила сторінка, — коли `icon` лише адреса (webview2::watch_favicon).
+  image: Option<String>,
 }
 
 /// Гаряча клавіша браузера, натиснута, поки фокус у сайті (webview2::watch_shortcuts), чи Ctrl + коліщатко
@@ -611,9 +613,10 @@ pub async fn page_open(
   // Іконка сторінки — та, яку обрав сам рушій (без скриптів на сторінці).
   engine::watch_favicon(&webview, {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-    move |url, icon| {
+    move |url, icon, image: Option<String>| {
       if is_icon_url(&icon) {
-        let _ = app.emit_to(&ui, "page://favicon", FaviconEvent { label: label.clone(), url, icon });
+        let image = image.filter(|image| image.starts_with("data:") && is_icon_url(image));
+        let _ = app.emit_to(&ui, "page://favicon", FaviconEvent { label: label.clone(), url, icon, image });
       }
     }
   })

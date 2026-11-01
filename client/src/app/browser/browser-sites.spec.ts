@@ -1406,6 +1406,22 @@ describe('Browser with sites', () => {
     await stable();
     expect(bookmarkIcon()).toBeNull();
     expect(element.querySelector('.bookmark__favicon app-icon')).toBeTruthy();
+
+    // Сайт за перевіркою Cloudflare (hltv.org) адресу значка інтерфейсу не віддає — тоді картинка, яку завантажила сторінка.
+    const picture = 'data:image/png;base64,iVBORw0KGgo=';
+    await typeInOmnibox('hltv.org');
+    await load(1, 'https://www.hltv.org/');
+    pages.emit('page://favicon', {
+      label: label(1),
+      url: 'https://www.hltv.org/',
+      icon: 'https://www.hltv.org/favicon.ico',
+      image: picture,
+    });
+    await stable();
+    expect(tabIcon()?.getAttribute('src')).toBe('https://www.hltv.org/favicon.ico');
+    tabIcon()?.dispatchEvent(new Event('error'));
+    await stable();
+    expect(tabIcon()?.getAttribute('src')).toBe(picture);
   });
 
   it('should show that a site plays sound in its tab and mute it', async () => {

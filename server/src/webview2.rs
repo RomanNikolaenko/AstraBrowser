@@ -19,19 +19,22 @@ use std::{
   time::{Duration, Instant},
 };
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use tauri::{webview::PlatformWebview, AppHandle, Manager, Url, Webview};
 use webview2_com::{
   take_pwstr, AcceleratorKeyPressedEventHandler, AddScriptToExecuteOnDocumentCreatedCompletedHandler,
   BytesReceivedChangedEventHandler, CallDevToolsProtocolMethodCompletedHandler, ClearBrowsingDataCompletedHandler,
   ContainsFullScreenElementChangedEventHandler, DownloadStartingEventHandler, FaviconChangedEventHandler,
-  GetCookiesCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler, HistoryChangedEventHandler,
-  IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler, Microsoft::Web::WebView2::Win32::*,
-  MoveFocusRequestedEventHandler, NavigationStartingEventHandler, SetPermissionStateCompletedHandler, SourceChangedEventHandler,
-  StateChangedEventHandler, WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
+  GetCookiesCompletedHandler, GetFaviconCompletedHandler, GetNonDefaultPermissionSettingsCompletedHandler,
+  HistoryChangedEventHandler, IsDocumentPlayingAudioChangedEventHandler, IsMutedChangedEventHandler,
+  Microsoft::Web::WebView2::Win32::*, MoveFocusRequestedEventHandler, NavigationStartingEventHandler,
+  SetPermissionStateCompletedHandler, SourceChangedEventHandler, StateChangedEventHandler, WebMessageReceivedEventHandler,
+  WebResourceRequestedEventHandler,
 };
 use windows::Win32::{
   Foundation::{E_OUTOFMEMORY, HWND},
   Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_DIFF, RGN_OR},
+  System::Com::{IStream, STREAM_SEEK_SET},
   UI::{
     Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_ESCAPE, VK_MENU, VK_SHIFT, VK_TAB},
     Shell::SHCreateMemStream,
@@ -126,19 +129,40 @@ pub fn set_input_region(webview: &Webview, page: Option<Area>, keep: Vec<Area>, 
   })
 }
 
-/// Повідомляє `report(page_url, icon_url)`, коли WebView2 визначив іконку сторінки (порожня — іконки немає).
-pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String) + Send + 'static) -> tauri::Result<()> {
+/// Повідомляє `report(page_url, icon_url, image)`, коли WebView2 визначив іконку сторінки (порожня — іконки немає).
+/// `image` — той самий значок картинкою data:image/png, як його завантажила сама сторінка: за адресою інтерфейс його
+/// отримає не завжди — сайти за перевіркою Cloudflare (hltv.org) відповідають на такий запит 403. Але WebView2 дає
+/// його лише 16×16, тож адреса (часто 32×32) на екранах зі збільшенням чіткіша — вибирає інтерфейс (FaviconStore).
+pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String, Option<String>) + Send + 'static) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
+    // Сюди потрапляє вже в головному потоці — і обробники WebView2 там же.
+    let report = Rc::new(report);
     let watch = || -> windows_core::Result<()> {
       let core = core(&platform)?.cast::<ICoreWebView2_15>()?;
       let handler = FaviconChangedEventHandler::create(Box::new(move |sender, _| {
         if let Some(sender) = sender {
           let (mut page, mut icon) = (PWSTR::null(), PWSTR::null());
+          let sender = sender.cast::<ICoreWebView2_15>()?;
           unsafe {
             sender.Source(&mut page)?;
-            sender.cast::<ICoreWebView2_15>()?.FaviconUri(&mut icon)?;
+            sender.FaviconUri(&mut icon)?;
           }
-          report(take_pwstr(page), take_pwstr(icon));
+          let (page, icon) = (take_pwstr(page), take_pwstr(icon));
+          if icon.is_empty() {
+            report(page, icon, None);
+            return Ok(());
+          }
+          let handler = GetFaviconCompletedHandler::create(Box::new({
+            let (report, page, icon) = (report.clone(), page.clone(), icon.clone());
+            move |result, stream| {
+              let image = result.ok().and(stream).and_then(|stream| read_stream(&stream).ok()).filter(|png| !png.is_empty());
+              report(page, icon, image.map(|png| format!("data:image/png;base64,{}", BASE64.encode(png))));
+              Ok(())
+            }
+          }));
+          if unsafe { sender.GetFavicon(COREWEBVIEW2_FAVICON_IMAGE_FORMAT_PNG, &handler) }.is_err() {
+            report(page, icon, None);
+          }
         }
         Ok(())
       }));
@@ -147,6 +171,20 @@ pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String) + Send +
     };
     let _ = watch();
   })
+}
+
+/// Увесь вміст потоку COM з початку.
+fn read_stream(stream: &IStream) -> windows_core::Result<Vec<u8>> {
+  unsafe { stream.Seek(0, STREAM_SEEK_SET, None)? };
+  let (mut data, mut chunk) = (Vec::new(), [0u8; 8192]);
+  loop {
+    let mut read = 0;
+    unsafe { stream.Read(chunk.as_mut_ptr().cast(), chunk.len() as u32, Some(&mut read)).ok()? };
+    if read == 0 {
+      return Ok(data);
+    }
+    data.extend_from_slice(&chunk[..read as usize]);
+  }
 }
 
 /// Повідомлення скрипта сторінки (скрипт паролів, passwords.rs) — JSON-об'єкт рядком через chrome.webview.postMessage:

@@ -304,12 +304,36 @@ describe('browser data stores', () => {
     expect(favicons.iconFor('https://www.youtube.com/')).toBeNull();
   });
 
+  it('should fall back to the picture the page loaded when the icon address does not load', () => {
+    // Як hltv.org за перевіркою Cloudflare: адресу інтерфейсу не віддає, а картинку сторінка вже завантажила.
+    const favicons = TestBed.inject(FaviconStore);
+    const picture = 'data:image/png;base64,iVBORw0KGgo=';
+
+    favicons.remember('https://www.hltv.org/', 'https://www.hltv.org/favicon.ico', picture);
+    TestBed.tick();
+    expect(favicons.iconFor('https://www.hltv.org/matches')).toBe('https://www.hltv.org/favicon.ico');
+    expect(JSON.parse(localStorage.getItem('astra.favicon-images') ?? '{}')).toEqual({ 'www.hltv.org': picture });
+
+    favicons.markBroken('https://www.hltv.org/favicon.ico');
+    expect(favicons.iconFor('https://www.hltv.org/matches')).toBe(picture);
+
+    // Той самий значок на наступному переході не повертає адресу, що не вантажиться.
+    favicons.remember('https://www.hltv.org/matches', 'https://www.hltv.org/favicon.ico', picture);
+    expect(favicons.iconFor('https://www.hltv.org/')).toBe(picture);
+
+    favicons.markBroken(picture);
+    expect(favicons.iconFor('https://www.hltv.org/')).toBeNull();
+  });
+
   it('should forget saved icons together with the history', () => {
     const favicons = TestBed.inject(FaviconStore);
     favicons.remember('https://a.example/', 'https://a.example/icon.svg');
+    favicons.remember('https://b.example/', 'https://b.example/icon.svg', 'data:image/png;base64,AAAA');
 
     TestBed.inject(HistoryStore).clear();
 
     expect(favicons.iconFor('https://a.example/')).toBe('https://a.example/favicon.ico');
+    favicons.markBroken('https://b.example/favicon.ico');
+    expect(favicons.iconFor('https://b.example/')).toBeNull();
   });
 });

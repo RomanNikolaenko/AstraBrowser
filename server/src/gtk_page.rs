@@ -239,9 +239,9 @@ fn to_png(surface: &gtk::cairo::Surface) -> Result<Vec<u8>, String> {
 /// Найбільший бік значка, px: у вкладці він 16 px, тож 32 — і для екранів з подвоєною щільністю.
 const FAVICON_SIZE: i32 = 32;
 
-/// Значок, який для сторінки обрав сам WebKit (з її розмітки), — `report(адреса сторінки, значок data:image/png)`.
+/// Значок, який для сторінки обрав сам WebKit (з її розмітки), — `report(адреса сторінки, значок data:image/png, None)`.
 /// Значки WebKit знає, лише коли ввімкнено їхню базу: вона в теці облікового запису, а в приватному вікні її немає.
-pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String) + Send + 'static) -> tauri::Result<()> {
+pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String, Option<String>) + Send + 'static) -> tauri::Result<()> {
   let app = webview.app_handle().clone();
   let dir = crate::profiles::site_data_dir(&app).or_else(|| app.path().app_local_data_dir().ok()).map(|dir| dir.join("favicons"));
   webview.with_webview(move |platform| {
@@ -257,7 +257,7 @@ pub fn watch_favicon(webview: &Webview, report: impl Fn(String, String) + Send +
         return;
       };
       if let Ok(png) = small(&icon).and_then(|icon| to_png(&icon)) {
-        report(uri.to_string(), format!("data:image/png;base64,{}", BASE64.encode(png)));
+        report(uri.to_string(), format!("data:image/png;base64,{}", BASE64.encode(png)), None);
       }
     });
   })

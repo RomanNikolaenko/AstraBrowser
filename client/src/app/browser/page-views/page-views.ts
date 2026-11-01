@@ -33,6 +33,8 @@ export interface PageFaviconEvent {
   readonly label: string;
   readonly url: string;
   readonly icon: string;
+  /** Та сама іконка картинкою (data:), як її завантажила сторінка, — у Windows, де `icon` — адреса. */
+  readonly image?: string | null;
 }
 
 /** Процес сторінки впав чи не відповідає (server/src/page_events.rs). */
