@@ -1569,7 +1569,10 @@ export class Browser {
 
     // У відновленої вкладки, сайт якої ще не завантажено, webview немає — створюється новий.
     if (tab.site && !tab.site.pending) {
-      this.updateSite(tab.id, (site) => ({ ...site, url, loading: true }));
+      // Інший якір тієї самої сторінки — без перезавантаження: ні WebView2, ні WebKit про завантаження не повідомлять, і
+      // лоадер не зник би.
+      const loads = !isSameDocument(tab.site.url, url);
+      this.updateSite(tab.id, (site) => ({ ...site, url, loading: site.loading || loads }));
       this.ignore(this.pageViews.navigate(tab.site.label, url));
       return;
     }
@@ -2494,6 +2497,20 @@ function layerMargins(layer: HTMLElement): readonly number[] | null {
 }
 
 /** Сторінка відео на YouTube (зокрема Shorts, трансляції й вбудований плеєр). */
+/** Перехід з `from` на `to` — лише до якоря тієї самої сторінки (як за посиланням «#розділ»), без нового документа. */
+function isSameDocument(from: string, to: string): boolean {
+  if (!to.includes('#')) {
+    return false;
+  }
+  try {
+    const [current, next] = [new URL(from), new URL(to)];
+    current.hash = next.hash = '';
+    return current.href === next.href;
+  } catch {
+    return false;
+  }
+}
+
 function isYouTubeVideo(url: string): boolean {
   try {
     const { hostname: host, pathname } = new URL(url);

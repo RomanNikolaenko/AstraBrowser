@@ -304,6 +304,21 @@ describe('Browser with sites', () => {
     expect(omnibox().value).toBe('https://angular.dev/');
   });
 
+  it('should not spin when only the anchor of the open page changes', async () => {
+    await typeInOmnibox('instagram.com');
+    await load(1, 'https://www.instagram.com/');
+    expect(element.querySelector('.tab__spinner')).toBeNull();
+
+    // Інший якір тієї самої сторінки — без перезавантаження: ні WebView2, ні WebKit не повідомлять про завантаження.
+    await typeInOmnibox('https://www.instagram.com/#reels');
+    expect(pages.called('navigate').at(-1)).toEqual([label(1), 'https://www.instagram.com/#reels']);
+    expect(element.querySelector('.tab__spinner')).toBeNull();
+
+    // А інша сторінка того самого сайту вантажиться — як і раніше.
+    await typeInOmnibox('https://www.instagram.com/explore/');
+    expect(element.querySelector('.tab__spinner')).toBeTruthy();
+  });
+
   it('should show what the tracking protection blocked on the site and send it the rules of the window', async () => {
     expect(pages.called('tracking-rules')).toEqual([[{ level: 'standard', gpc: true, exceptions: [], smartScreen: true }]]);
     await typeInOmnibox('twitch.tv');
