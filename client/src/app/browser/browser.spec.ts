@@ -113,16 +113,21 @@ describe('Browser', () => {
     expect(document.activeElement).toBe(omnibox());
   });
 
-  it('should activate the tab to the right when the active tab is closed, or the left one if it was last', async () => {
+  it('should return to the tab visited before the active one when it is closed', async () => {
     await openTab();
     await openTab();
-    await selectTab(0);
-
-    await closeTab(0);
-    expect(tabs().length).toBe(2);
-    expect(activeIndex()).toBe(0);
-
+    await openTab();
+    // Відвідали першу, другу, третю, четверту, а тоді знову другу.
     await selectTab(1);
+
+    // Закрили другу — повернулися на четверту, а не на сусідню третю.
+    await closeTab(1);
+    expect(tabs().length).toBe(3);
+    expect(activeIndex()).toBe(2);
+
+    // Закрили й четверту — на третю, а тоді на першу.
+    await closeTab(2);
+    expect(activeIndex()).toBe(1);
     await closeTab(1);
     expect(tabs().length).toBe(1);
     expect(activeIndex()).toBe(0);

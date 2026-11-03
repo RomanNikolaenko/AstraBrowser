@@ -278,6 +278,8 @@ export class Browser {
   private readonly lowMemory = new Set<string>();
   /** Остання вкладка, відкрита з сайту вкладки `opener` (insertRelated): наступна з неї ж стане за нею. */
   private related: { opener: number; last: number } | null = null;
+  /** Вкладки в порядку, як на них переходили востаннє (поточна — в кінці): закриту активну заступає попередня. */
+  private visitedTabs: number[] = [];
   /** Сторінки (мітки), чий звук затих: значок зникне, якщо звук не повернеться (AUDIBLE_HOLD_MS). */
   private readonly quietTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Щойно натиснуто Tab (без Shift) в інтерфейсі: фокус іде вперед, а не повернувся з сайту (enterPage). */
@@ -538,6 +540,12 @@ export class Browser {
     effect(() => {
       const label = this.visiblePage();
       untracked(() => this.queuePageShow(label));
+    });
+
+    const activeId = computed(() => this.activeTab().id);
+    effect(() => {
+      const id = activeId();
+      this.visitedTabs = [...this.visitedTabs.filter((other) => other !== id), id];
     });
 
     // Інша вкладка — повноекранне відео попередньої сторінки згортається.
@@ -1035,6 +1043,7 @@ export class Browser {
 
     // id вкладок не повторюються — лічильник її міток більше не знадобиться.
     this.pagesCreated.delete(id);
+    this.visitedTabs = this.visitedTabs.filter((other) => other !== id);
     const remaining = tabs.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
       const tab = this.createNewTab();
@@ -1045,8 +1054,10 @@ export class Browser {
 
     this.tabs.set(remaining);
     if (id === this.activeTabId()) {
-      // Як у Chrome: активною стає вкладка праворуч, а якщо її немає — ліворуч; фокус — за нею.
-      const next = remaining[Math.min(index, remaining.length - 1)];
+      // Активною стає вкладка, на якій були перед закритою. Якщо таких немає (решту відкрили у фоні) — як у Chrome:
+      // праворуч, а якщо праворуч нічого — ліворуч. Фокус — за нею.
+      const previous = this.visitedTabs.filter((other) => remaining.some((tab) => tab.id === other)).at(-1);
+      const next = remaining.find((tab) => tab.id === previous) ?? remaining[Math.min(index, remaining.length - 1)];
       this.activeTabId.set(next.id);
       this.followFocus(next);
     }

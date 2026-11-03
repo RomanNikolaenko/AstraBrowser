@@ -1390,6 +1390,32 @@ describe('Browser with sites', () => {
     expect(titles().slice(0, 3)).toEqual(['angular.dev', 'deno.land', 'github.com']);
   });
 
+  it('should go back to the visited tab when the active one is closed, not to tabs opened in the background', async () => {
+    const closeTab = async (index: number) => {
+      element.querySelectorAll<HTMLButtonElement>('.tab__close')[index].click();
+      await stable();
+    };
+    const active = () => [...element.querySelectorAll('.tab')].findIndex((tab) => tab.classList.contains('tab--active'));
+    await typeInOmnibox('angular.dev');
+    element.querySelector<HTMLButtonElement>('.new-tab-button')?.click();
+    await stable();
+    await typeInOmnibox('example.com');
+    element.querySelectorAll<HTMLButtonElement>('.tab__select')[0].click();
+    await stable();
+    pages.emit('page://new-tab', { label: label(1), url: 'https://github.com/angular', userInitiated: true, background: true });
+    pages.emit('page://new-tab', { label: label(1), url: 'https://npmjs.com/', userInitiated: true, background: true });
+    await stable();
+    expect(titles()).toEqual(['angular.dev', 'github.com', 'npmjs.com', 'example.com']);
+
+    // Перед angular.dev були на example.com — туди й повертаємося, а не на сусідню github.com, де ще не були.
+    await closeTab(0);
+    expect(titles()[active()]).toBe('example.com');
+
+    // Відвіданих більше немає — як у Chrome: праворуч, а якщо там нічого, ліворуч.
+    await closeTab(2);
+    expect(titles()[active()]).toBe('npmjs.com');
+  });
+
   it('should show the icon a site reported in its tab and bookmark', async () => {
     TestBed.inject(BookmarksStore).add('YouTube', 'https://www.youtube.com/');
     const tabIcon = () => element.querySelector<HTMLImageElement>('.tab__favicon img');

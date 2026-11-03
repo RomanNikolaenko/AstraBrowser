@@ -19,6 +19,9 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 | Вразливості залежностей Rust (cargo-audit)         | `cargo audit` у `server/` (`cargo install cargo-audit --locked`) | —                                  |
 | Дозволи інтерфейсу (Tauri capabilities)            | перевіряються під час збірки Rust                                | `server/capabilities/default.json` |
 
+Збірка Rust (`server/target`) сама не меншає: перед `pnpm run tauri:dev` і `tauri:build` скрипт `scripts/clean-target.mjs`
+видаляє з неї застарілий кеш, а якщо вона все одно більша за 25 ГБ — усю (як `cargo clean`).
+
 ## Development server
 
 To start a local development server, run:
