@@ -13,7 +13,7 @@
         (dragstart)="onTabDragStart($event, tab)"
         (dragend)="onTabDragEnd($event, tab)"
         (contextmenu)="showTabMenu($event, tab)"
-        (appMiddleClick)="closeTab(tab.id)">
+        (appMiddleClick)="closeTab(tab.id, { neighbour: $event.ctrlKey })">
         <button
           class="tab__select"
           type="button"
@@ -52,7 +52,7 @@
             type="button"
             [attr.aria-label]="'Закрити вкладку «{0}»' | t: [tabTitle(tab)]"
             [title]="'Закрити вкладку' | t"
-            (click)="closeTab(tab.id)">
+            (click)="closeTab(tab.id, { neighbour: $event.ctrlKey })">
             <app-icon icon="close" />
           </button>
         }

@@ -1016,8 +1016,11 @@ export class Browser {
     this.tabs.set([...rest.slice(0, at), tab, ...rest.slice(at)]);
   }
 
-  /** `moved` — вкладку перенесли в інше вікно, а не закрили: відновлювати її тут не треба. */
-  protected closeTab(id: number, { moved = false } = {}): void {
+  /**
+   * `moved` — вкладку перенесли в інше вікно, а не закрили: відновлювати її тут не треба. `neighbour` — закрили з
+   * Ctrl: замість неї стає сусідня, а не та, де були перед нею.
+   */
+  protected closeTab(id: number, { moved = false, neighbour = false } = {}): void {
     const tabs = this.tabs();
     const index = tabs.findIndex((tab) => tab.id === id);
     if (index === -1) {
@@ -1054,9 +1057,11 @@ export class Browser {
 
     this.tabs.set(remaining);
     if (id === this.activeTabId()) {
-      // Активною стає вкладка, на якій були перед закритою. Якщо таких немає (решту відкрили у фоні) — як у Chrome:
-      // праворуч, а якщо праворуч нічого — ліворуч. Фокус — за нею.
-      const previous = this.visitedTabs.filter((other) => remaining.some((tab) => tab.id === other)).at(-1);
+      // Активною стає вкладка, на якій були перед закритою. Якщо таких немає (решту відкрили у фоні) чи закрили з
+      // Ctrl — як у Chrome: праворуч, а якщо праворуч нічого — ліворуч. Фокус — за нею.
+      const previous = neighbour
+        ? undefined
+        : this.visitedTabs.filter((other) => remaining.some((tab) => tab.id === other)).at(-1);
       const next = remaining.find((tab) => tab.id === previous) ?? remaining[Math.min(index, remaining.length - 1)];
       this.activeTabId.set(next.id);
       this.followFocus(next);

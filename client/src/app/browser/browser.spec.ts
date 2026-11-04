@@ -47,10 +47,12 @@ describe('Browser', () => {
   const openTab = () => click(element.querySelector<HTMLButtonElement>('.new-tab-button'));
   const selectTab = (index: number) => click(element.querySelectorAll<HTMLButtonElement>('.tab__select')[index]);
   const closeTab = (index: number) => click(element.querySelectorAll<HTMLButtonElement>('.tab__close')[index]);
-  const mouseClick = async (target: Element | null | undefined, button: number) => {
-    const down = new MouseEvent('mousedown', { button, bubbles: true, cancelable: true });
+  const mouseClick = async (target: Element | null | undefined, button: number, init: MouseEventInit = {}) => {
+    const down = new MouseEvent('mousedown', { button, bubbles: true, cancelable: true, ...init });
     target?.dispatchEvent(down);
-    target?.dispatchEvent(new MouseEvent(button === 0 ? 'click' : 'auxclick', { button, bubbles: true, cancelable: true }));
+    target?.dispatchEvent(
+      new MouseEvent(button === 0 ? 'click' : 'auxclick', { button, bubbles: true, cancelable: true, ...init })
+    );
     await fixture.whenStable();
     return down;
   };
@@ -131,6 +133,25 @@ describe('Browser', () => {
     await closeTab(1);
     expect(tabs().length).toBe(1);
     expect(activeIndex()).toBe(0);
+  });
+
+  it('should activate the tab to the right when the active tab is closed with Ctrl held', async () => {
+    await openTab();
+    await openTab();
+    await openTab();
+    await selectTab(1);
+
+    // Хрестик з Ctrl — на сусідню праворуч (третю), а не на відвідану перед другою четверту.
+    await mouseClick(element.querySelectorAll('.tab__close')[1], 0, { ctrlKey: true });
+    expect(tabs().length).toBe(3);
+    expect(activeIndex()).toBe(1);
+
+    // Коліщатко з Ctrl — так само.
+    await openTab();
+    await selectTab(1);
+    await mouseClick(element.querySelectorAll('.tab__title')[1], 1, { ctrlKey: true });
+    expect(tabs().length).toBe(3);
+    expect(activeIndex()).toBe(1);
   });
 
   it('should keep the active tab when another tab is closed', async () => {
