@@ -9,7 +9,7 @@
 
 use std::{
   cell::{Cell, RefCell},
-  collections::{BTreeSet, HashMap},
+  collections::HashMap,
   path::{Path, PathBuf},
   rc::Rc,
   sync::{
@@ -47,8 +47,9 @@ pub use crate::page_types::{Area, Autoplay, ClearKinds, PictureInPicture, Reload
 use crate::{
   adblock::{AdBlock, Verdict},
   downloads::{DownloadRequest, DownloadUpdate},
+  page_counters::Blocked,
   page_types::TabDirection,
-  tracking::{self, Category, Tracking},
+  tracking::{self, Tracking},
 };
 
 /// Відповідь, яку команда чекає з головного потоку.
@@ -945,18 +946,11 @@ pub fn set_autoplay(webview: &Webview, origin: String, autoplay: Autoplay, reply
 
 /// Блокувальник реклами вкладки (adblock.rs): кожен запит сторінки — і з iframe, і з воркерів — перевіряється
 /// за списками фільтрів, а на початку кожного документа додається скрипт, що ховає рекламні блоки й запускає
-/// скриптлети. `report(blocked)` — скільки запитів заблоковано на поточній сторінці.
+/// скриптлети. `report` — зміни лічильників; page_counters збирає їх для інтерфейсу.
 ///
 /// Перший перехід на `url` Tauri починає сам, ще до цих обробників, тож перша сторінка готується тут одразу:
 /// її мережевий запит приходить пізніше, ніж стає фільтр, а документ створюється вже з нашим скриптом.
-/// Що заблоковано на сторінці — для інтерфейсу.
-pub enum Blocked {
-  /// Скільки реклами заблокував блокувальник.
-  Ads(u32),
-  /// Елементи стеження (категорія й хост), які заблокував захист від стеження (tracking.rs).
-  Trackers(Vec<(Category, String)>),
-}
-
+///
 /// Блокувальник реклами й захист від стеження для сторінки вікна `ui`: обидва перевіряють запити в одному обробнику.
 pub fn block_ads(
   webview: &Webview,
@@ -979,9 +973,6 @@ struct AdPage {
   /// Адреса документа (без #…) — джерело запитів для правил — і її хост.
   url: String,
   host: String,
-  blocked: u32,
-  /// Заблоковані елементи стеження: категорія й хост.
-  trackers: BTreeSet<(Category, String)>,
   /// id скрипта сторінки й «покоління»: id, що прийшов уже після наступного переходу, теж прибирається.
   script: Option<String>,
   generation: u64,
@@ -1076,13 +1067,7 @@ fn on_request(
       };
       respond(args, environment, &page_url, verdict)?;
       let host = Url::parse(&uri).ok().and_then(|url| url.host_str().map(str::to_owned)).unwrap_or_default();
-      let trackers = {
-        let mut page = page.borrow_mut();
-        page.trackers.insert((category, host)).then(|| page.trackers.iter().cloned().collect())
-      };
-      if let Some(trackers) = trackers {
-        report(Blocked::Trackers(trackers));
-      }
+      report(Blocked::Tracker(category, host));
       return Ok(());
     }
   }
@@ -1095,12 +1080,7 @@ fn on_request(
     return Ok(());
   }
   respond(args, environment, &page_url, verdict)?;
-  let blocked = {
-    let mut page = page.borrow_mut();
-    page.blocked += 1;
-    page.blocked
-  };
-  report(Blocked::Ads(blocked));
+  report(Blocked::Ad);
   Ok(())
 }
 
@@ -1225,14 +1205,9 @@ fn start_page(
     let mut page = page.borrow_mut();
     page.url = without_fragment(uri).unwrap_or_default();
     page.host = Url::parse(uri).ok().and_then(|url| url.host_str().map(str::to_owned)).unwrap_or_default();
-    if !redirected {
-      page.blocked = 0;
-      page.trackers.clear();
-    }
   }
   if !redirected {
-    report(Blocked::Ads(0));
-    report(Blocked::Trackers(Vec::new()));
+    report(Blocked::Reset);
   }
   replace_page_script(core, page, app.state::<AdBlock>().page_script(uri))
 }

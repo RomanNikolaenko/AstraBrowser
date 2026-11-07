@@ -27,6 +27,12 @@ class Host {
 describe('BookmarksBar', () => {
   beforeEach(() => localStorage.clear());
 
+  // jsdom не реалізує нативне відкриття з popovertarget; перед toggle браузер синхронно шле beforetoggle.
+  const openFolder = (panel: Element) => {
+    panel.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
+    panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
+  };
+
   const setup = async (fill: (bookmarks: BookmarksStore) => void = () => undefined) => {
     await TestBed.configureTestingModule({
       imports: [Host],
@@ -217,8 +223,11 @@ describe('BookmarksBar', () => {
       );
 
     expect(folderButton?.getAttribute('popovertarget')).toBe(folderMenu().id);
+    expect(folderItems()).toEqual([]);
+    openFolder(folderMenu());
     expect(folderItems()).toEqual(['Пошта', 'Архів']);
     // Порожня вкладена тека так і каже.
+    openFolder(folderMenu().querySelector('.bookmark-folder-menu .popover') as HTMLElement);
     expect(
       folderMenu().querySelector('.bookmark-folder-menu .bookmark-folder-menu .bookmark-folder-menu__empty')?.textContent?.trim()
     ).toBe('Порожньо');
@@ -267,6 +276,56 @@ describe('BookmarksBar', () => {
     await save();
     expect(shape()).toEqual([{ Справи: ['Пошта', { Нове: [] }, { Архів: [] }] }]);
     expect(bookmarks.entries().map((bookmark) => bookmark.title)).toEqual(['Пошта']);
+  });
+
+  it('should render only opened folder branches before native focus and release them on close', async () => {
+    const { fixture, element, bookmarks } = await setup((store) => {
+      store.importTree('Імпорт', [
+        { type: 'folder', title: 'Робота', children: [{ type: 'bookmark', title: 'Пошта', url: 'https://mail.example/' }] },
+        {
+          type: 'folder',
+          title: 'Архів',
+          children: Array.from({ length: 1000 }, (_, index) => ({
+            type: 'bookmark',
+            title: `Сторінка ${index}`,
+            url: `https://archive.example/${index}`,
+          })),
+        },
+      ]);
+    });
+    const root = element.querySelector('.bookmark-folder-menu .popover') as HTMLElement;
+    expect(element.querySelectorAll('app-bookmark-folder-menu')).toHaveLength(1);
+    expect(element.querySelectorAll('app-site-icon')).toHaveLength(0);
+
+    // Перше відкриття з кнопки (також Enter/Space) має створити пункти ще до повернення beforetoggle.
+    openFolder(root);
+    expect(root.querySelectorAll('[role="menuitem"]')).toHaveLength(2);
+    expect(element.querySelectorAll('app-bookmark-folder-menu')).toHaveLength(3);
+    expect(element.querySelectorAll('app-site-icon')).toHaveLength(0);
+    const nested = root.querySelector('.bookmark-folder-menu .popover') as HTMLElement;
+    openFolder(nested);
+    const bookmark = nested.querySelector<HTMLButtonElement>('[role="menuitem"]') as HTMLButtonElement;
+    bookmark.focus();
+    expect(document.activeElement).toBe(bookmark);
+    expect(bookmark.getAttribute('popovertarget')).toBe(root.id);
+    expect(element.querySelectorAll('app-site-icon')).toHaveLength(1);
+
+    root.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
+    await fixture.whenStable();
+    expect(root.querySelector('[role="menuitem"]')).toBeNull();
+    expect(element.querySelectorAll('app-bookmark-folder-menu')).toHaveLength(1);
+    expect(element.querySelectorAll('app-site-icon')).toHaveLength(0);
+
+    bookmarks.add('Нова', 'https://new.example/', { folder: bookmarks.bar()[0].id });
+    await fixture.whenStable();
+    openFolder(root);
+    expect([...root.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).toEqual([
+      'Робота',
+      'Архів',
+      'Нова',
+    ]);
+    // Закрита вкладена тека не відновлює своїх попередніх зображень.
+    expect(element.querySelectorAll('app-site-icon')).toHaveLength(1);
   });
 
   it('should give a folder a color, change it and take it away', async () => {
@@ -404,6 +463,7 @@ describe('BookmarksBar', () => {
       expect(shape()).toEqual(['A', { Тека: ['X', 'Y', 'B'] }]);
 
       // З теки — на панель, перед A (ліва половина).
+      openFolder(element.querySelector('.bookmark-folder-menu .popover') as HTMLElement);
       await drag(folderEntries()[0].querySelector('button') as Element, itemAt(0), 10);
       expect(shape()).toEqual(['X', 'A', { Тека: ['Y', 'B'] }]);
 
@@ -418,6 +478,7 @@ describe('BookmarksBar', () => {
         store.addFolder('Вкладена', { folder: store.bar()[0].id });
       });
       const folder = itemAt(0).querySelector('.bookmark') as HTMLElement;
+      openFolder(itemAt(0).querySelector('.bookmark-folder-menu .popover') as HTMLElement);
       const nested = itemAt(0).querySelector('.bookmark-folder-menu__entry') as HTMLElement;
 
       folder.dispatchEvent(dragEvent('dragstart'));
@@ -439,6 +500,7 @@ describe('BookmarksBar', () => {
         store.addFolder('Порожня');
         store.addSeparator();
       });
+      openFolder(element.querySelector('.bookmark-folder-menu .popover') as HTMLElement);
       const empty = element.querySelector('.bookmark-folder-menu__empty') as HTMLElement;
       const source = itemAt(0).querySelector('.bookmark') as HTMLElement;
 
@@ -461,6 +523,35 @@ describe('BookmarksBar', () => {
       separator.dispatchEvent(dragEvent('dragend'));
       await fixture.whenStable();
       expect(shape()).toEqual(['|', { Порожня: ['A'] }]);
+    });
+
+    it('should spring-open a previously unrendered folder while dragging and drop between its items', async () => {
+      const { fixture, element, itemAt, shape } = await setup(fill);
+      const panel = element.querySelector('.bookmark-folder-menu .popover') as HTMLElement;
+      const source = itemAt(0).querySelector('.bookmark') as HTMLElement;
+      const show = vi.fn(() => openFolder(panel));
+      const hide = vi.fn(() => panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' })));
+      panel.showPopover = show;
+      panel.hidePopover = hide;
+      expect(panel.querySelector('[role="menuitem"]')).toBeNull();
+
+      vi.useFakeTimers();
+      try {
+        source.dispatchEvent(dragEvent('dragstart'));
+        itemAt(1).dispatchEvent(dragEvent('dragover', 50));
+        vi.advanceTimersByTime(600);
+        expect(show).toHaveBeenCalledOnce();
+        const entries = panel.querySelectorAll('.bookmark-folder-menu__entry');
+        expect(entries).toHaveLength(2);
+        entries[1].dispatchEvent(dragEvent('dragover', 50, 5));
+        entries[1].dispatchEvent(dragEvent('drop', 50, 5));
+        expect(hide).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+      await fixture.whenStable();
+      expect(shape()).toEqual([{ Тека: ['X', 'A', 'Y'] }, 'B']);
+      expect(panel.querySelector('[role="menuitem"]')).toBeNull();
     });
 
     it('should leave everything in place when the drag is cancelled', async () => {

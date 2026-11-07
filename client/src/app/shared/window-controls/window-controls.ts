@@ -3,6 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { UiIcon } from '../ui-icon/ui-icon';
 import { TranslatePipe } from '../i18n/i18n';
+import { flushStoredSignals } from '../storage/stored-signal';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,6 +34,7 @@ export class WindowControls {
   }
 
   protected closeWindow(): void {
+    flushStoredSignals();
     void getCurrentWindow().close();
   }
 

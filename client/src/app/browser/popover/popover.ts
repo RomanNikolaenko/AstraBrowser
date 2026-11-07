@@ -43,6 +43,8 @@ export class Popover {
   /** `side` — збоку від якоря, як вкладене меню, а не під ним. */
   readonly placement = input<'below' | 'side'>('below');
 
+  /** До нативного відкриття й вибору фокуса: тут можна синхронно створити відкладений вміст. */
+  readonly opening = output<void>();
   readonly opened = output<void>();
   readonly closed = output<void>();
 
@@ -71,7 +73,11 @@ export class Popover {
 
   /** До першого кадру: якір для розташування панелі, а стрілці — його ширина, щоб стати над центром. */
   protected onBeforeToggle(event: Event): void {
-    const anchor = (event as ToggleEvent).newState === 'open' ? (this.anchor ?? this.findAnchor()) : null;
+    if ((event as ToggleEvent).newState !== 'open') {
+      return;
+    }
+    this.opening.emit();
+    const anchor = this.anchor ?? this.findAnchor();
     if (!anchor) {
       return;
     }

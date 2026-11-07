@@ -67,6 +67,9 @@ jobs:
       - name: Тести
         run: pnpm run test:ci
 
+      - name: Скрипти сторінок
+        run: pnpm run test:scripts
+
       - name: Збірка
         run: pnpm run build
 

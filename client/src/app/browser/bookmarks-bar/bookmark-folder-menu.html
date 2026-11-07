@@ -3,90 +3,100 @@
   [popoverId]="menuId()"
   align="start"
   [placement]="nested() ? 'side' : 'below'"
+  (opening)="showContents()"
+  (closed)="contentsVisible.set(false)"
   (dragover)="drag.overEnd($event, folder().id, folder().children.length)">
-  <ul
-    class="bookmark-folder-menu__list"
-    role="menu"
-    [attr.aria-label]="folder().title"
-    (contextmenu)="showMenu($event, null, folder().children.length)">
-    @for (child of folder().children; track child.id; let index = $index) {
-      @switch (child.type) {
-        @case ('bookmark') {
-          <li role="none" [class]="dropClasses(child, index)" (dragover)="drag.overItem($event, child, folder().id, index, 'y')">
-            <button
-              class="bookmark-folder-menu__item"
-              type="button"
-              role="menuitem"
+  @if (contentsVisible()) {
+    <ul
+      class="bookmark-folder-menu__list"
+      role="menu"
+      [attr.aria-label]="folder().title"
+      (contextmenu)="showMenu($event, null, folder().children.length)">
+      @for (child of folder().children; track child.id; let index = $index) {
+        @switch (child.type) {
+          @case ('bookmark') {
+            <li
+              role="none"
+              [class]="dropClasses(child, index)"
+              (dragover)="drag.overItem($event, child, folder().id, index, 'y')">
+              <button
+                class="bookmark-folder-menu__item"
+                type="button"
+                role="menuitem"
+                draggable="true"
+                [appTooltip]="child.title"
+                [tooltipDetail]="child.url"
+                (dragstart)="drag.start($event, child)"
+                [attr.popovertarget]="root()"
+                popovertargetaction="hide"
+                (click)="actions.open(child)"
+                (appMiddleClick)="actions.openInNewTab(child)"
+                (contextmenu)="showMenu($event, child, index)">
+                <app-site-icon class="bookmark-folder-menu__icon" [url]="child.url" [size]="16" />
+                <span class="bookmark-folder-menu__label">{{ child.title }}</span>
+              </button>
+            </li>
+          }
+          @case ('folder') {
+            <li
+              role="none"
+              [class]="dropClasses(child, index)"
+              (dragover)="drag.overItem($event, child, folder().id, index, 'y')">
+              <button
+                class="bookmark-folder-menu__item"
+                type="button"
+                role="menuitem"
+                aria-haspopup="menu"
+                draggable="true"
+                [appTooltip]="child.title"
+                [attr.popovertarget]="folderMenuId(child)"
+                (dragstart)="drag.start($event, child)"
+                (appMiddleClick)="openInBackground(child)"
+                (contextmenu)="showMenu($event, child, index)">
+                <app-icon
+                  class="bookmark-folder-menu__icon bookmark-folder-menu__icon--folder"
+                  [icon]="folderIcon(child)"
+                  [style.color]="folderColor(child)" />
+                <span class="bookmark-folder-menu__label">{{ child.title }}</span>
+                <app-icon class="bookmark-folder-menu__chevron" icon="chevron-right" />
+              </button>
+              <app-bookmark-folder-menu [folder]="child" [rootId]="root()" nested />
+            </li>
+          }
+          @case ('separator') {
+            <li
+              role="separator"
               draggable="true"
-              [appTooltip]="child.title"
-              [tooltipDetail]="child.url"
+              [class]="dropClasses(child, index)"
+              [class.bookmark-folder-menu__separator]="true"
               (dragstart)="drag.start($event, child)"
-              [attr.popovertarget]="root()"
-              popovertargetaction="hide"
-              (click)="actions.open(child)"
-              (appMiddleClick)="actions.openInNewTab(child)"
-              (contextmenu)="showMenu($event, child, index)">
-              <app-site-icon class="bookmark-folder-menu__icon" [url]="child.url" [size]="16" />
-              <span class="bookmark-folder-menu__label">{{ child.title }}</span>
-            </button>
-          </li>
+              (dragover)="drag.overItem($event, child, folder().id, index, 'y')"
+              (contextmenu)="showMenu($event, child, index)"></li>
+          }
         }
-        @case ('folder') {
-          <li role="none" [class]="dropClasses(child, index)" (dragover)="drag.overItem($event, child, folder().id, index, 'y')">
-            <button
-              class="bookmark-folder-menu__item"
-              type="button"
-              role="menuitem"
-              aria-haspopup="menu"
-              draggable="true"
-              [appTooltip]="child.title"
-              [attr.popovertarget]="folderMenuId(child)"
-              (dragstart)="drag.start($event, child)"
-              (appMiddleClick)="openInBackground(child)"
-              (contextmenu)="showMenu($event, child, index)">
-              <app-icon
-                class="bookmark-folder-menu__icon bookmark-folder-menu__icon--folder"
-                [icon]="folderIcon(child)"
-                [style.color]="folderColor(child)" />
-              <span class="bookmark-folder-menu__label">{{ child.title }}</span>
-              <app-icon class="bookmark-folder-menu__chevron" icon="chevron-right" />
-            </button>
-            <app-bookmark-folder-menu [folder]="child" [rootId]="root()" nested />
-          </li>
-        }
-        @case ('separator') {
-          <li
-            role="separator"
-            draggable="true"
-            [class]="dropClasses(child, index)"
-            [class.bookmark-folder-menu__separator]="true"
-            (dragstart)="drag.start($event, child)"
-            (dragover)="drag.overItem($event, child, folder().id, index, 'y')"
-            (contextmenu)="showMenu($event, child, index)"></li>
-        }
+      } @empty {
+        <li
+          class="bookmark-folder-menu__empty"
+          role="none"
+          [class.bookmark-folder-menu__empty--drop]="drag.before(folder().id, 0)"
+          (dragover)="drag.overEnd($event, folder().id, 0)">
+          {{ 'Порожньо' | t }}
+        </li>
       }
-    } @empty {
-      <li
-        class="bookmark-folder-menu__empty"
-        role="none"
-        [class.bookmark-folder-menu__empty--drop]="drag.before(folder().id, 0)"
-        (dragover)="drag.overEnd($event, folder().id, 0)">
-        {{ 'Порожньо' | t }}
-      </li>
-    }
-  </ul>
+    </ul>
 
-  @if (bookmarks().length) {
-    <div class="bookmark-folder-menu__footer">
-      <button
-        class="bookmark-folder-menu__item"
-        type="button"
-        [attr.popovertarget]="root()"
-        popovertargetaction="hide"
-        (click)="actions.openAllOf(bookmarks())">
-        <app-icon class="bookmark-folder-menu__icon" icon="tab-plus" />
-        <span class="bookmark-folder-menu__label">{{ 'Відкрити всі ({0})' | t: [bookmarks().length] }}</span>
-      </button>
-    </div>
+    @if (bookmarks().length) {
+      <div class="bookmark-folder-menu__footer">
+        <button
+          class="bookmark-folder-menu__item"
+          type="button"
+          [attr.popovertarget]="root()"
+          popovertargetaction="hide"
+          (click)="actions.openAllOf(bookmarks())">
+          <app-icon class="bookmark-folder-menu__icon" icon="tab-plus" />
+          <span class="bookmark-folder-menu__label">{{ 'Відкрити всі ({0})' | t: [bookmarks().length] }}</span>
+        </button>
+      </div>
+    }
   }
 </app-popover>

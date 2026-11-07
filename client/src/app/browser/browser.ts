@@ -21,6 +21,7 @@ import { BrowserWindows, isNormalWindow } from '../shared/browser-windows/browse
 import { normalizeAddress } from '../shared/form-field/form-field';
 import { MiddleClick } from '../shared/middle-click/middle-click';
 import { SEARCH_ENGINES, SettingsStore } from '../shared/settings/settings';
+import { flushStoredSignals } from '../shared/storage/stored-signal';
 import { UiIcon } from '../shared/ui-icon/ui-icon';
 import { UiInput } from '../shared/ui-input/ui-input';
 import { TitlebarContent } from '../shared/titlebar/titlebar-content';
@@ -1739,6 +1740,7 @@ export class Browser {
       return;
     }
     const closing = getCurrentWindow().onCloseRequested(async () => {
+      flushStoredSignals();
       try {
         const windows = await getAllWebviewWindows();
         if (windows.some((window) => window.label !== this.windowLabel && isNormalWindow(window.label))) {
@@ -2046,7 +2048,9 @@ export class Browser {
       return;
     }
 
-    this.updateSite(tab.id, (site) => ({ ...site, title }));
+    if (tab.site.title !== title) {
+      this.updateSite(tab.id, (site) => ({ ...site, title }));
+    }
     const entry = tab.site.historyEntry;
     if (entry && entry.url === tab.site.url && title) {
       this.history.rename(entry.id, title);

@@ -67,6 +67,7 @@ describe('SyncService', () => {
           return server.pull(payload.after, payload.collection);
         case 'sync_push':
           return server.push(payload.items);
+        case 'passwords_sync_key':
         case 'passwords_sync_items':
         case 'addresses_sync_items':
         case 'cards_sync_items':
@@ -192,6 +193,7 @@ describe('SyncService', () => {
           return server.pull(payload.after, payload.collection);
         case 'sync_push':
           return server.push(payload.items);
+        case 'passwords_sync_key':
         case 'passwords_sync_items':
         case 'cards_sync_items':
           return { keyId: 'k1', keyTime: 1, items: {} };
@@ -225,6 +227,49 @@ describe('SyncService', () => {
     expect(server.item('addresses', 'a1')?.data).toEqual(envelope('h1'));
     expect(server.item('addresses', 'a2')?.deleted).toBe(false);
     expect(sync.status().passwords).toBe('ok');
+  });
+
+  it('should check the key without reading locked vaults', async () => {
+    await sync.sync();
+
+    expect(calls.filter((command) => command === 'passwords_sync_key')).toHaveLength(1);
+    expect(calls.filter((command) => command.endsWith('_sync_items'))).toEqual([]);
+  });
+
+  it('should read each unchanged unlocked vault once per pass and see later changes', async () => {
+    const local: Record<string, Record<string, unknown>> = { passwords: {}, addresses: {}, cards: {} };
+    clearMocks();
+    mockIPC((command, args) => {
+      calls.push(command);
+      const payload = args as { after: number; collection: string | null; items: SyncRow[] };
+      if (command === 'passwords_sync_key') {
+        return { keyId: 'k1', keyTime: 1 };
+      }
+      if (command.endsWith('_sync_items')) {
+        return { keyId: 'k1', keyTime: 1, items: { ...local[command.replace('_sync_items', '')] } };
+      }
+      if (command === 'sync_pull') {
+        return server.pull(payload.after, payload.collection);
+      }
+      if (command === 'sync_push') {
+        return server.push(payload.items);
+      }
+      return command === 'auth_reload_user' ? { user: null } : { unreadable: [] };
+    });
+
+    await sync.sync();
+    for (const name of Object.keys(local)) {
+      expect(calls.filter((command) => command === `${name}_sync_items`)).toHaveLength(1);
+    }
+    calls.length = 0;
+    local['passwords']['p1'] = { k: 'k1', n: 'n', c: 'c', h: 'changed' };
+
+    await sync.sync();
+
+    expect(server.item('passwords', 'p1')?.data).toEqual(local['passwords']['p1']);
+    for (const name of Object.keys(local)) {
+      expect(calls.filter((command) => command === `${name}_sync_items`)).toHaveLength(1);
+    }
   });
 
   it('should say when the server is not set up for sync', async () => {

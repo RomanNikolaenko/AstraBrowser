@@ -1,6 +1,5 @@
 <button class="profile" type="button" [attr.aria-label]="'Профіль' | t" [title]="'Профіль' | t" popovertarget="profile-menu">
   <app-avatar class="profile__avatar" [guest]="guest()" />
-  <app-icon class="profile__chevron" icon="chevron-down" />
 </button>
 <app-popover class="profile-menu" popoverId="profile-menu" caret>
   <h2 class="profile-menu__title">{{ 'Профіль' | t }}</h2>

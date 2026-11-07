@@ -154,9 +154,15 @@
           node.removeAttribute(name);
         }
         break;
-      case 'remove-class':
-        node.classList.remove(...action.arg.split('|'));
+      case 'remove-class': {
+        // Навіть remove() відсутнього класу може створити mutation record. Не пишемо те саме знову, інакше
+        // власний MutationObserver без кінця запускає всі правила. Сайт може додати клас наново — тоді приберемо.
+        const present = action.arg.split('|').filter((name) => node.classList.contains(name));
+        if (present.length) {
+          node.classList.remove(...present);
+        }
         break;
+      }
     }
   };
 

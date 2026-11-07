@@ -61,14 +61,39 @@ function hostOf(url: string): string {
   }
 }
 
-/** Чи підходить запис до введеного: кожне слово є в назві чи адресі. */
-function matches(words: readonly string[], title: string, url: string): boolean {
-  return contains(searchText(title, url), words);
+/** Назва й адреса запису незалежно від його джерела. */
+interface Searchable {
+  readonly title: string;
+  readonly url: string;
 }
 
-/** Те, в чому шукають введене: назва й адреса так, як її друкують. */
-function searchText(title: string, url: string): string {
-  return `${title} ${displayUrl(url)}`.toLowerCase();
+interface SearchMetadata extends Searchable {
+  readonly display: string;
+  readonly address: string;
+  readonly host: string;
+  readonly titleWords: readonly string[];
+  readonly text: string;
+}
+
+/** Метадані живуть не довше за запис: повторний ввід не розбирає ті самі URL й назви. */
+const metadataByEntry = new WeakMap<Searchable, SearchMetadata>();
+
+function metadataOf(entry: Searchable): SearchMetadata {
+  let metadata = metadataByEntry.get(entry);
+  if (!metadata || metadata.title !== entry.title || metadata.url !== entry.url) {
+    const display = displayUrl(entry.url);
+    metadata = {
+      title: entry.title,
+      url: entry.url,
+      display,
+      address: display.toLowerCase(),
+      host: hostOf(entry.url),
+      titleWords: entry.title.toLowerCase().split(/\s+/),
+      text: `${entry.title} ${display}`.toLowerCase(),
+    };
+    metadataByEntry.set(entry, metadata);
+  }
+  return metadata;
 }
 
 function contains(text: string, words: readonly string[]): boolean {
@@ -81,7 +106,6 @@ interface Visit {
   title: string;
   count: number;
   last: number;
-  text: string;
 }
 
 /**
@@ -101,22 +125,18 @@ function visitsOf(history: readonly HistoryEntry[]): readonly Visit[] {
         visit.title ||= entry.title;
         visit.last = Math.max(visit.last, entry.visitedAt);
       } else if (/^https?:/i.test(entry.url)) {
-        byUrl.set(entry.url, { url: entry.url, title: entry.title, count: 1, last: entry.visitedAt, text: '' });
+        byUrl.set(entry.url, { url: entry.url, title: entry.title, count: 1, last: entry.visitedAt });
       }
     }
     visits = [...byUrl.values()];
-    for (const visit of visits) {
-      visit.text = searchText(visit.title, visit.url);
-    }
     visitsByHistory.set(history, visits);
   }
   return visits;
 }
 
 /** Наскільки запис підходить: сайт, що починається з введеного, — найвище, далі частіші й свіжіші. */
-function score(typed: string, title: string, url: string, visits: number, lastVisit: number, now: number): number {
-  const host = hostOf(url);
-  const address = displayUrl(url).toLowerCase();
+function score(typed: string, metadata: SearchMetadata, visits: number, lastVisit: number, now: number): number {
+  const { host, address, titleWords } = metadata;
   let points = Math.log2(1 + visits) * 10;
   if (host.startsWith(typed)) {
     points += 100;
@@ -124,12 +144,7 @@ function score(typed: string, title: string, url: string, visits: number, lastVi
     points += address === host ? 20 : 0;
   } else if (address.startsWith(typed)) {
     points += 60;
-  } else if (
-    title
-      .toLowerCase()
-      .split(/\s+/)
-      .some((word) => word.startsWith(typed))
-  ) {
+  } else if (titleWords.some((word) => word.startsWith(typed))) {
     points += 30;
   }
   const days = (now - lastVisit) / 86_400_000;
@@ -153,57 +168,69 @@ export function localSuggestions(input: string, sources: SuggestionSources, now 
     : { kind: 'search', title: text, detail: translate('Пошук у {0}', [sources.engine]), fill: text, query: text };
 
   const seen = new Set<string>(url ? [url] : []);
-  const local: { readonly suggestion: Suggestion; readonly score: number }[] = [];
+  const local: {
+    readonly metadata: SearchMetadata;
+    readonly kind: 'tab' | 'bookmark' | 'history';
+    readonly score: number;
+    readonly tabId: number;
+  }[] = [];
+  // Тримаємо лише шість найкращих. Строге > залишає однакові бали в порядку джерел, як stable sort.
+  const offer = (metadata: SearchMetadata, kind: 'tab' | 'bookmark' | 'history', points: number, tabId = 0) => {
+    let index = local.findIndex((candidate) => points > candidate.score);
+    if (index < 0) {
+      index = local.length;
+    }
+    if (index < LOCAL_LIMIT) {
+      local.splice(index, 0, { metadata, kind, score: points, tabId });
+      if (local.length > LOCAL_LIMIT) {
+        local.pop();
+      }
+    }
+  };
   for (const tab of sources.tabs) {
-    if (/^https?:/i.test(tab.url) && matches(words, tab.title, tab.url) && !seen.has(tab.url)) {
+    if (!/^https?:/i.test(tab.url) || seen.has(tab.url)) {
+      continue;
+    }
+    const metadata = metadataOf(tab);
+    if (contains(metadata.text, words)) {
       seen.add(tab.url);
-      local.push({
-        suggestion: {
-          kind: 'tab',
-          title: tab.title || displayUrl(tab.url),
-          detail: translate('Перейти на вкладку'),
-          fill: displayUrl(tab.url),
-          url: tab.url,
-          tabId: tab.id,
-        },
-        score: 1000 + score(typed, tab.title, tab.url, 0, now, now),
-      });
+      offer(metadata, 'tab', 1000 + score(typed, metadata, 0, now, now), tab.id);
     }
   }
   for (const bookmark of sources.bookmarks) {
-    if (matches(words, bookmark.title, bookmark.url) && !seen.has(bookmark.url)) {
+    if (seen.has(bookmark.url)) {
+      continue;
+    }
+    const metadata = metadataOf(bookmark);
+    if (contains(metadata.text, words)) {
       seen.add(bookmark.url);
-      local.push({
-        suggestion: {
-          kind: 'bookmark',
-          title: bookmark.title || displayUrl(bookmark.url),
-          detail: displayUrl(bookmark.url),
-          fill: displayUrl(bookmark.url),
-          url: bookmark.url,
-        },
-        score: 50 + score(typed, bookmark.title, bookmark.url, 0, 0, now),
-      });
+      offer(metadata, 'bookmark', 50 + score(typed, metadata, 0, 0, now));
     }
   }
   // Історія — по адресах: скільки разів і коли востаннє відвідували.
   for (const visit of visitsOf(sources.history)) {
     const address = visit.url;
-    if (!seen.has(address) && contains(visit.text, words)) {
+    if (seen.has(address)) {
+      continue;
+    }
+    const metadata = metadataOf(visit);
+    if (contains(metadata.text, words)) {
       seen.add(address);
-      local.push({
-        suggestion: {
-          kind: 'history',
-          title: visit.title || displayUrl(address),
-          detail: displayUrl(address),
-          fill: displayUrl(address),
-          url: address,
-        },
-        score: score(typed, visit.title, address, visit.count, visit.last, now),
-      });
+      offer(metadata, 'history', score(typed, metadata, visit.count, visit.last, now));
     }
   }
-  local.sort((a, b) => b.score - a.score);
-  return [first, ...local.slice(0, LOCAL_LIMIT).map((item) => item.suggestion)];
+  return [
+    first,
+    ...local.map(({ metadata, kind, tabId }): Suggestion => {
+      const suggestion = {
+        title: metadata.title || metadata.display,
+        detail: kind === 'tab' ? translate('Перейти на вкладку') : metadata.display,
+        fill: metadata.display,
+        url: metadata.url,
+      };
+      return kind === 'tab' ? { ...suggestion, kind, tabId } : { ...suggestion, kind };
+    }),
+  ];
 }
 
 /** Підказки пошукової системи — після своїх, без повторів введеного. */

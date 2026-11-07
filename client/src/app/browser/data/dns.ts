@@ -4,6 +4,7 @@ import { commands } from '../../bindings';
 import { UiSelectOption } from '../../shared/ui-select/ui-select';
 import { SessionStore } from '../session/session';
 import { tr } from '../../shared/i18n/i18n';
+import { flushStoredSignals } from '../../shared/storage/stored-signal';
 
 /** Режим DNS через HTTPS (server/src/dns.rs, Mode). */
 export type DnsMode = 'default' | 'increased' | 'max' | 'off';
@@ -72,6 +73,7 @@ export class DnsStore {
 
   /** Перезапуск браузера: вікна закриваються й відкриваються знову — з тими самими вкладками. */
   async restart(): Promise<void> {
+    flushStoredSignals();
     this.session.restoreOnce();
     await commands.dnsRestart();
   }

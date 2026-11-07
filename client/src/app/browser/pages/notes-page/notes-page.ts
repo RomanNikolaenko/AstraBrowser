@@ -93,10 +93,12 @@ export class NotesPage {
       if (previous) {
         this.dropIfEmpty(previous);
       }
+      this.notes.flush();
     });
   }
 
   protected select(note: Note): void {
+    this.notes.flush();
     this.selectedId.set(note.id);
   }
 

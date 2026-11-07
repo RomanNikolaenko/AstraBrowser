@@ -32,7 +32,7 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager, State, Window};
 use crate::{
   addresses::{focused_field, shown_reply, Addresses, AutofillEvent},
   pages::GUEST_PREFIX,
-  passwords::{open_item, seal_item, Envelope, SyncApplied, SyncChange, SyncItems},
+  passwords::{changed_account, check_sync_owner, open_item, seal_source, Envelope, SyncApplied, SyncChange, SyncItems},
   profiles,
   secure::{self, random_hex},
 };
@@ -132,7 +132,7 @@ pub struct SettingsView {
   verify: bool,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Vault {
   entries: Vec<Entry>,
@@ -226,6 +226,8 @@ pub struct Cards {
   forms: Mutex<HashMap<String, Vec<String>>>,
   /// Уже зашифровані для синхронізації записи: той самий запис не шифрується щоразу наново.
   sealed: Mutex<HashMap<String, Envelope>>,
+  writes: crate::vault_storage::SaveQueue,
+  epoch: AtomicU64,
 }
 
 /// Що шифрується для запису синхронізації.
@@ -356,19 +358,26 @@ impl Cards {
 
   /// Спершу в тимчасовий файл, потім заміна: обірваний запис не зіпсує сховище.
   fn write(&self, vault: &Vault) -> Result<(), String> {
+    self.persist(vault, true)
+  }
+
+  fn defer_write(&self, vault: &Vault) {
+    if let Err(error) = self.persist(vault, false) {
+      log::warn!("Не вдалося поставити запис карток у чергу: {error}");
+    }
+  }
+
+  fn persist(&self, vault: &Vault, wait: bool) -> Result<(), String> {
     let file = self
       .file
       .lock()
       .map_err(|error| error.to_string())?
       .clone()
       .ok_or(crate::i18n::text("Увійдіть в обліковий запис Astra", "Sign in to your Astra account"))?;
-    if let Some(dir) = file.parent() {
-      fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    }
-    let temporary = file.with_extension("json.tmp");
-    fs::write(&temporary, serde_json::to_vec_pretty(vault).map_err(|error| error.to_string())?)
-      .map_err(|error| error.to_string())?;
-    fs::rename(&temporary, &file).map_err(|error| error.to_string())
+    let vault = vault.clone();
+    self.writes.save(file.clone(), wait, move || {
+      crate::vault_storage::atomic_write(&file, &serde_json::to_vec_pretty(&vault).map_err(|error| error.to_string())?)
+    })
   }
 }
 
@@ -385,23 +394,29 @@ pub fn start(app: &AppHandle) {
 
 /// Картки облікового запису `user` (`None` — вийшли: карток немає). Викликає auth.rs, щойно змінився обліковий запис.
 pub fn switch_account(app: &AppHandle, user: Option<&str>) {
+  let cards = app.state::<Cards>();
+  let mut current = match cards.vault.lock() {
+    Ok(vault) => vault,
+    Err(_) => return,
+  };
+  cards.epoch.fetch_add(1, Ordering::SeqCst);
+  if let Err(error) = cards.writes.flush() {
+    log::warn!("Не вдалося завершити запис карток: {error}");
+  }
   let file = user.and_then(|user| profiles::dir(app, user)).map(|dir| dir.join(VAULT_FILE));
   let vault = file
     .as_ref()
     .and_then(|file| fs::read(file).ok())
     .and_then(|bytes| serde_json::from_slice::<Vault>(&bytes).ok())
     .unwrap_or_default();
-  let cards = app.state::<Cards>();
   let state = {
-    let Ok(mut current) = cards.vault.lock() else {
-      return;
-    };
     *current = vault;
     if let Ok(mut current_file) = cards.file.lock() {
       *current_file = file;
     }
     current.state()
   };
+  drop(current);
   if let Ok(mut prompts) = cards.prompts.lock() {
     prompts.clear();
   }
@@ -475,7 +490,7 @@ fn offer_to_save(app: &AppHandle, cards: &Cards, ui: &str, label: &str, card: Ca
     match vault.find(&card.number) {
       Some(index) if card.matches(&vault.entries[index]) => {
         vault.entries[index].used = Some(now());
-        let _ = cards.write(&vault);
+        cards.defer_write(&vault);
         return;
       }
       Some(index) => Some(vault.entries[index].id.clone()),
@@ -683,7 +698,7 @@ pub async fn card_autofill(app: AppHandle, window: Window, label: String, id: St
     entry.used = Some(now());
     let number = decrypt(&entry.number)?;
     let values = fill_values(&kinds, &number, entry);
-    let _ = cards.write(&vault);
+    cards.defer_write(&vault);
     values
   };
   crate::page_bridge::post(&page, &json!({ "astra": "autofill", "type": "fill", "values": values }))
@@ -716,27 +731,48 @@ fn fill_values(kinds: &[String], number: &str, entry: &Entry) -> Map<String, Val
 /// Усі картки облікового запису, зашифровані для синхронізації.
 #[tauri::command]
 #[specta::specta]
-pub fn cards_sync_items(app: AppHandle, window: Window, cards: State<'_, Cards>) -> Result<SyncItems, String> {
+pub async fn cards_sync_items(app: AppHandle, window: Window) -> Result<SyncItems, String> {
   deny_guest(&window)?;
-  let Some((key, key_time)) = crate::auth::sync_key(&app) else {
-    return Ok(SyncItems { key_id: None, key_time: 0, items: BTreeMap::new() });
-  };
-  let key_id = secure::key_id(&key);
-  let vault = cards.vault.lock().map_err(|error| error.to_string())?;
-  let mut cache = cards.sealed.lock().map_err(|error| error.to_string())?;
-  let mut items = BTreeMap::new();
-  for entry in &vault.entries {
-    // Номер, що вже не розшифровується (інший користувач Windows), синхронізувати нічим.
-    let Ok(number) = decrypt(&entry.number) else {
-      continue;
+  let (vault, mut cache, epoch, user, key, key_time) = {
+    let cards = app.state::<Cards>();
+    let vault = cards.vault.lock().map_err(|error| error.to_string())?;
+    let Some((user, key, key_time)) = crate::auth::sync_identity(&app) else {
+      return Ok(SyncItems { key_id: None, key_time: 0, items: BTreeMap::new() });
     };
-    let card =
-      Card { number, holder: entry.holder.clone(), month: entry.month, year: entry.year, nickname: entry.nickname.clone() };
-    let synced = SyncedCard { card, created: entry.created, updated: entry.updated, used: entry.used };
-    let plain = serde_json::to_vec(&synced).map_err(|error| error.to_string())?;
-    items.insert(entry.id.clone(), seal_item(&key, &key_id, &mut cache, &entry.id, &plain)?);
+    check_sync_owner(cards.file.lock().map_err(|error| error.to_string())?.as_deref(), &user)?;
+    let cache = cards.sealed.lock().map_err(|error| error.to_string())?.clone();
+    (vault.clone(), cache, cards.epoch.load(Ordering::SeqCst), user, key, key_time)
+  };
+  let (items, cache) = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+    let key_id = secure::key_id(&key);
+    let mut items = BTreeMap::new();
+    for entry in &vault.entries {
+      let envelope = seal_source(&key, &key_id, &mut cache, &entry.id, entry, || {
+        let Ok(number) = decrypt(&entry.number) else {
+          return Ok(None);
+        };
+        let card =
+          Card { number, holder: entry.holder.clone(), month: entry.month, year: entry.year, nickname: entry.nickname.clone() };
+        let synced = SyncedCard { card, created: entry.created, updated: entry.updated, used: entry.used };
+        serde_json::to_vec(&synced).map(Some).map_err(|error| error.to_string())
+      })?;
+      // Номер, що вже не розшифровується (інший користувач Windows), синхронізувати нічим.
+      if let Some(envelope) = envelope {
+        items.insert(entry.id.clone(), envelope);
+      }
+    }
+    cache.retain(|id, _| items.contains_key(id));
+    Ok((SyncItems { key_id: Some(key_id), key_time, items }, cache))
+  })
+  .await
+  .map_err(|error| error.to_string())??;
+  let cards = app.state::<Cards>();
+  let mut current = cards.sealed.lock().map_err(|error| error.to_string())?;
+  if cards.epoch.load(Ordering::SeqCst) != epoch || crate::auth::sync_identity(&app) != Some((user, key, key_time)) {
+    return Err(changed_account());
   }
-  Ok(SyncItems { key_id: Some(key_id), key_time, items })
+  *current = cache;
+  Ok(items)
 }
 
 /// Записи з сервера: нові й змінені картки — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є.

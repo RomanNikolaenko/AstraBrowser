@@ -50,6 +50,8 @@ mod launch;
 mod logging;
 mod page_bridge;
 #[cfg(windows)]
+mod page_counters;
+#[cfg(windows)]
 mod page_events;
 mod page_types;
 mod pages;
@@ -62,6 +64,7 @@ mod sync;
 mod tracking;
 mod translate;
 mod updates;
+mod vault_storage;
 #[cfg(windows)]
 mod webview2;
 #[cfg_attr(not(windows), path = "other/window_drag.rs")]

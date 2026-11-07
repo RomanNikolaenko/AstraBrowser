@@ -106,6 +106,17 @@ describe('NotesPage', () => {
     expect(element.querySelector<HTMLInputElement>('#note-title')?.value).toBe('Ідеї');
     expect(button('Нова нотатка')).toBeTruthy();
   });
+
+  it('should keep typing immediate and persist the last edit on blur and leaving the page', async () => {
+    const { fixture, element, store, type } = await setup([note('a', 'Note', 'Before', 1000)]);
+    await type('#note-text', 'After typing');
+    expect(store.entries()[0].text).toBe('After typing');
+    element.querySelector('#note-text')?.dispatchEvent(new Event('blur'));
+    expect(JSON.parse(localStorage.getItem('astra.notes') ?? '[]')[0].text).toBe('After typing');
+    await type('#note-text', 'Last character');
+    fixture.destroy();
+    expect(JSON.parse(localStorage.getItem('astra.notes') ?? '[]')[0].text).toBe('Last character');
+  });
 });
 
 describe('note titles', () => {
@@ -117,5 +128,33 @@ describe('note titles', () => {
     expect(notePreview(note('', 'Назва\nТекст'))).toBe('Текст');
     expect(notePreview(note('Назва', 'Текст\nще'))).toBe('Текст ще');
     expect(notePreview(note('Назва', 'а'.repeat(200)), 10)).toBe(`${'а'.repeat(10)}…`);
+  });
+
+  it('should preserve whitespace and truncation semantics for cached previews', () => {
+    const samples = [
+      '',
+      '  \n\t\n',
+      'Перший\nДругий\nТретій',
+      '  a  b \n \n c\t d  ',
+      'one\r\ntwo',
+      '😀\nУкраїна',
+      'a'.repeat(5000),
+    ];
+    for (const text of samples) {
+      for (const title of ['', ' Назва ']) {
+        const item = note(title, text);
+        const previewText = text
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .slice(title.trim() ? 0 : 1)
+          .join(' ');
+        for (const length of [0, 1, 4, 10, 120]) {
+          const expected = previewText.length > length ? `${previewText.slice(0, length).trimEnd()}…` : previewText;
+          expect(notePreview(item, length)).toBe(expected);
+          expect(notePreview(item, length)).toBe(expected);
+        }
+      }
+    }
   });
 });

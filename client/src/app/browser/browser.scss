@@ -260,8 +260,11 @@
       animation: update-pulse 2.4s ease-out infinite;
     }
 
-    // Кнопка лишається «натиснутою», поки її панель відкрита (.is-open — на <app-popover> у меню поруч).
-    &:has(+ * .is-open) {
+    // Відкрита саме панель цієї кнопки: між ними можуть стояти кнопки й меню інших компонентів.
+    &[popovertarget='reload-menu']:has(~ app-reload-menu .is-open),
+    &[popovertarget='tools-menu']:has(~ app-tools-menu .is-open),
+    &[popovertarget='extensions-menu']:has(~ app-extensions-menu .is-open),
+    &[popovertarget='browser-menu']:has(~ app-browser-menu .is-open) {
       color: var(--browser-tab-active-text);
       background: var(--browser-pressed);
     }
@@ -402,12 +405,3 @@
   min-height: 0;
   overflow: hidden auto;
 }
-
-// Вікно не вужче за 800px (minWidth у tauri.conf.json): звільняємо місце для вкладок і адресного рядка.
-@container browser (width < 60rem) {
-  .profile__chevron {
-    display: none;
-  }
-}
-
-// Сторінка впала чи не відповідає: на місці webview — пояснення й «Перезавантажити».

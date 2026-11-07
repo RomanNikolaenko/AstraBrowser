@@ -84,6 +84,7 @@ fn specta() -> tauri_specta::Builder<Wry> {
       sync::sync_pull,
       sync::sync_push,
       passwords::passwords_sync_items,
+      passwords::passwords_sync_key,
       passwords::passwords_sync_apply,
       passwords::passwords_state,
       passwords::password_prompt_answer,

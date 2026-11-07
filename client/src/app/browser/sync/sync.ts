@@ -3,7 +3,7 @@ import { commands } from '../../bindings';
 import { AuthStore, isAuthError } from '../../shared/auth/auth';
 import { BrowserWindows } from '../../shared/browser-windows/browser-windows';
 import { SettingsStore } from '../../shared/settings/settings';
-import { accountKey, accountSignal, onStoredChange } from '../../shared/storage/stored-signal';
+import { accountKey, accountSignal, flushStoredSignals, onStoredChange } from '../../shared/storage/stored-signal';
 import { SealedCollection, SyncCollection, syncCollections } from './sync-collections';
 import { hashOf } from './sync-hash';
 
@@ -159,6 +159,7 @@ export class SyncService {
 
   /** Синхронізувати зараз (з будь-якого вікна). */
   syncNow(): void {
+    flushStoredSignals();
     this.request.set(Date.now());
   }
 
@@ -200,6 +201,7 @@ export class SyncService {
 
   /** Один прохід: (уперше — забрати все), паролі й адреси, надіслати змінене, забрати нове. */
   async sync(): Promise<void> {
+    flushStoredSignals();
     const state = this.loadState();
     this.setStatus({ state: 'syncing' });
     try {
@@ -244,10 +246,8 @@ export class SyncService {
    * змінили тут: позначка оновлюється, а паролі й адреси наново забираються й перешифровуються.
    */
   private async preparePasswords(state: SyncState): Promise<SyncStatus['passwords']> {
-    for (const collection of this.sealed) {
-      await collection.read();
-    }
-    const snapshot = this.passwords.snapshot;
+    // Ключ — окрема дешева команда; самі колекції читаються лише коли потрібні їхні записи.
+    const snapshot = await commands.passwordsSyncKey();
     if (!snapshot?.keyId) {
       return 'locked';
     }
@@ -344,7 +344,8 @@ export class SyncService {
         continue;
       }
       const base = (state.base[name] ??= {});
-      const current = await collection.read();
+      // Сервер повертає й щойно надіслані нами записи: коли відбиток уже відомий, сховище читати не потрібно.
+      let current: ReadonlyMap<string, unknown> | undefined;
       const changes = new Map<string, unknown>();
       for (const row of group) {
         const remote = row.deleted ? null : this.hash(collection, row.data);
@@ -353,6 +354,7 @@ export class SyncService {
           known[1] = Math.max(known[1], row.updated_at);
           continue;
         }
+        current ??= await collection.read();
         const local = current.has(row.id) ? this.hash(collection, current.get(row.id)) : null;
         if (!first && local !== (known?.[0] ?? null)) {
           continue;

@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { isTauri } from '@tauri-apps/api/core';
 import { commands } from '../../bindings';
 import { listen } from '@tauri-apps/api/event';
-import { storedSignal } from '../../shared/storage/stored-signal';
+import { flushStoredSignals, storedSignal } from '../../shared/storage/stored-signal';
 import { SessionStore } from '../session/session';
 import { translate } from '../../shared/i18n/i18n';
 
@@ -90,6 +90,7 @@ export class UpdateStore {
     this.installing.set(true);
     this.percent.set(null);
     this.error.set(null);
+    flushStoredSignals();
     // Після оновлення браузер відкриється з тими самими вкладками, навіть якщо в налаштуваннях — «Нова вкладка».
     this.session.restoreOnce();
     try {

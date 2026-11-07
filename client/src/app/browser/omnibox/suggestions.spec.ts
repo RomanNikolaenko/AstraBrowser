@@ -68,6 +68,60 @@ describe('omnibox suggestions', () => {
     expect(titles('shop samsung', sources(history))).toEqual(['search: shop samsung', 'history: Телефони Samsung']);
   });
 
+  it('should keep only the six highest ranked results and preserve source order for ties', () => {
+    const history = Array.from({ length: 2000 }, (_, index) => visit(`https://example.com/page-${index}`, `Needle ${index}`, 30));
+    // Найкращі кандидати стоять у кінці; однакові бали не міняють порядок.
+    history.push(...Array.from({ length: 8 }, (_, index) => visit(`https://example.com/new-${index}`, `Needle new ${index}`)));
+    expect(titles('needle', sources(history))).toEqual([
+      'search: needle',
+      'history: Needle new 0',
+      'history: Needle new 1',
+      'history: Needle new 2',
+      'history: Needle new 3',
+      'history: Needle new 4',
+      'history: Needle new 5',
+    ]);
+  });
+
+  it('should deduplicate against matching bookmarks even when they fall outside the best six', () => {
+    const bookmarks = Array.from({ length: 6 }, (_, index) => bookmark(`https://example.com/${index}`, `Needle ${index}`));
+    bookmarks.push(bookmark('https://example.com/duplicate', 'A needle'));
+    const history = Array.from({ length: 100 }, () => visit('https://example.com/duplicate', 'Needle frequent'));
+    expect(titles('needle', sources(history, bookmarks))).toEqual([
+      'search: needle',
+      ...Array.from({ length: 6 }, (_, index) => `bookmark: Needle ${index}`),
+    ]);
+  });
+
+  it('should reuse URL metadata across keystrokes and refresh changed bookmark titles and URLs', () => {
+    const saved = bookmark('https://example.com/needle', 'Needle bookmark');
+    const from = sources([visit('https://history.example/needle', 'Needle history')], [saved]);
+    const NativeURL = URL;
+    const parsed: string[] = [];
+    vi.stubGlobal(
+      'URL',
+      class extends NativeURL {
+        constructor(url: string | URL, base?: string | URL) {
+          super(url, base);
+          parsed.push(String(url));
+        }
+      }
+    );
+    try {
+      localSuggestions('need', from, now);
+      localSuggestions('needle', from, now);
+      expect(parsed.filter((url) => url === saved.url)).toHaveLength(1);
+      expect(parsed.filter((url) => url === from.history[0].url)).toHaveLength(1);
+
+      Object.assign(saved, { title: 'Changed', url: 'https://changed.example/' });
+      expect(titles('changed', from)).toEqual(['search: changed', 'bookmark: Changed']);
+      expect(titles('needle', from)).toEqual(['search: needle', 'history: Needle history']);
+      expect(parsed.filter((url) => url === saved.url)).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('should add search engine suggestions after its own, without the typed text', () => {
     const local = localSuggestions('angular', sources([visit('https://angular.dev/', 'Angular')]), now);
     const all = withSearchSuggestions('angular', local, ['angular', 'angular signals', 'Angular Material'], 'Google');

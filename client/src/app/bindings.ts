@@ -122,6 +122,8 @@ export const commands = {
 	syncPush: (items: SyncRow[]) => __TAURI_INVOKE<SyncRow[]>("sync_push", { items }),
 	/**  Усі паролі облікового запису, зашифровані для синхронізації (і список «ніколи не зберігати» — записом `never`). */
 	passwordsSyncItems: () => __TAURI_INVOKE<SyncItems>("passwords_sync_items"),
+	/**  Метадані ключа для початку проходу синхронізації — без читання й шифрування всіх сховищ. */
+	passwordsSyncKey: () => __TAURI_INVOKE<SyncKeyInfo>("passwords_sync_key"),
 	/**  Записи з сервера: нові й змінені паролі — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є. */
 	passwordsSyncApply: (changes: SyncChange[]) => __TAURI_INVOKE<SyncApplied>("passwords_sync_apply", { changes }),
 	passwordsState: () => __TAURI_INVOKE<PasswordsState>("passwords_state"),
@@ -574,6 +576,11 @@ export type SyncItems = {
 	/**  Коли ключ отримано з пароля облікового запису (секунди Unix): новіший ключ перемагає давніший. */
 	keyTime: number,
 	items: { [key in string]: Envelope },
+};
+
+export type SyncKeyInfo = {
+	keyId: string | null,
+	keyTime: number,
 };
 
 /**  Рядок таблиці sync_items (supabase/sync.sql). Інші стовпці (user_id) сервер теж віддає — їх пропускаємо. */

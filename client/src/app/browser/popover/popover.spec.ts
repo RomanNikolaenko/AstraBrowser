@@ -11,6 +11,7 @@ import { Popover } from './popover';
       popoverId="demo"
       align="start"
       caret
+      (opening)="events.push('opening')"
       (opened)="events.push('opened')"
       (closed)="events.push('closed')">
       <p class="content">Вміст</p>
@@ -62,6 +63,14 @@ describe('Popover', () => {
     // Подія від браузера після hide() вже нічого не змінює.
     await toggle('toggle', 'closed');
     expect(fixture.componentInstance.events).toEqual(['opened', 'closed']);
+  });
+
+  it('should notify lazy content synchronously before native opening, but not before closing', async () => {
+    const { fixture, panel } = await setup();
+    panel.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }));
+    expect(fixture.componentInstance.events).toEqual(['opening']);
+    panel.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'closed' }));
+    expect(fixture.componentInstance.events).toEqual(['opening']);
   });
 
   it('should measure the invoker for the caret, not the button that closes the panel', async () => {

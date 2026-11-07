@@ -531,15 +531,16 @@ pub async fn page_open(
   #[cfg(windows)]
   webview2::block_ads(&webview, app.clone(), ui.clone(), address.clone(), {
     let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
-    move |blocked| match blocked {
-      webview2::Blocked::Ads(blocked) => {
+    let reporter = crate::page_counters::Reporter::new(app.clone(), label.clone(), move |snapshot| {
+      if let Some(blocked) = snapshot.ads {
         let _ = app.emit_to(&ui, "page://adblock", AdBlockEvent { label: label.clone(), blocked });
       }
-      webview2::Blocked::Trackers(trackers) => {
+      if let Some(trackers) = snapshot.trackers {
         let trackers = trackers.into_iter().map(|(category, host)| BlockedTracker { category, host }).collect();
         let _ = app.emit_to(&ui, "page://trackers", TrackersEvent { label: label.clone(), trackers });
       }
-    }
+    });
+    move |blocked| reporter.record(blocked)
   })
   .map_err(|error| error.to_string())?;
   // Куки й сховища трекерів — вбудований захист WebView2 на рівні, вибраному в налаштуваннях; SmartScreen — так само.
@@ -863,6 +864,8 @@ pub fn page_close(window: Window, scripts: State<'_, audio::RulesScripts>, label
   let Some(webview) = window.get_webview(&label) else {
     return Ok(());
   };
+  #[cfg(windows)]
+  crate::page_counters::close(&label);
   // Закривають сайт на весь екран — вікно спершу повертається, яким було.
   #[cfg(windows)]
   crate::fullscreen::dismiss(&webview);

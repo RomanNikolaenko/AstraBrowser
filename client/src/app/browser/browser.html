@@ -242,11 +242,6 @@
       </button>
       <app-tools-menu (openPage)="openPage($event)" (runAction)="runTool($event)" />
       <app-translator [pageUrl]="activeSiteUrl()" (navigate)="openLink($event)" (openInNewTab)="openLinkInNewTab($event)" />
-      <app-profile-menu
-        [guest]="isGuest"
-        (openPage)="openPage($event)"
-        (openGuest)="openGuestWindow()"
-        (closeGuest)="closeGuestWindow()" />
       <button
         #extensionsButton
         class="toolbar__button"
@@ -256,6 +251,11 @@
         popovertarget="extensions-menu">
         <app-icon icon="puzzle" />
       </button>
+      <app-profile-menu
+        [guest]="isGuest"
+        (openPage)="openPage($event)"
+        (openGuest)="openGuestWindow()"
+        (closeGuest)="closeGuestWindow()" />
       <app-extensions-menu
         [anchor]="extensionsButton"
         [page]="activeSitePage()"

@@ -72,7 +72,7 @@ impl Default for Settings {
   }
 }
 
-#[derive(Default, Serialize, Deserialize, specta::Type)]
+#[derive(Clone, Default, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
 struct Vault {
   entries: Vec<Entry>,
@@ -151,6 +151,8 @@ pub struct Passwords {
   prompts: Mutex<HashMap<u64, Pending>>,
   /// Уже зашифровані для синхронізації записи: той самий запис не шифрується щоразу наново.
   sealed: Mutex<HashMap<String, Envelope>>,
+  writes: crate::vault_storage::SaveQueue,
+  epoch: AtomicU64,
 }
 
 /// Id запису синхронізації зі списком «ніколи не зберігати» (у звичайних записів id — випадкові hex).
@@ -164,6 +166,10 @@ pub struct Envelope {
   n: String,
   c: String,
   h: String,
+  /// Відбиток локального зашифрованого запису й метаданих: дозволяє обійти DPAPI для незміненого запису.
+  /// Лише пам'ять процесу, не протокол синхронізації й не відкритий текст.
+  #[serde(skip)]
+  source: Option<String>,
 }
 
 /// Що шифрується для запису синхронізації — збережений пароль разом із сайтом та ім'ям.
@@ -185,6 +191,13 @@ pub struct SyncItems {
   /// Коли ключ отримано з пароля облікового запису (секунди Unix): новіший ключ перемагає давніший.
   pub(crate) key_time: u64,
   pub(crate) items: BTreeMap<String, Envelope>,
+}
+
+#[derive(Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncKeyInfo {
+  key_id: Option<String>,
+  key_time: u64,
 }
 
 /// Запис із сервера: `data` — None, якщо його видалили.
@@ -301,26 +314,42 @@ impl Passwords {
 
   /// Спершу в тимчасовий файл, потім заміна: обірваний запис не зіпсує сховище.
   fn write(&self, vault: &Vault) -> Result<(), String> {
+    self.persist(vault, true)
+  }
+
+  fn defer_write(&self, vault: &Vault) {
+    if let Err(error) = self.persist(vault, false) {
+      log::warn!("Не вдалося поставити запис паролів у чергу: {error}");
+    }
+  }
+
+  fn persist(&self, vault: &Vault, wait: bool) -> Result<(), String> {
     let file = self
       .file
       .lock()
       .map_err(|error| error.to_string())?
       .clone()
       .ok_or(crate::i18n::text("Увійдіть в обліковий запис Astra", "Sign in to your Astra account"))?;
-    let file = &file;
-    if let Some(dir) = file.parent() {
-      fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    }
-    let temporary = file.with_extension("json.tmp");
-    fs::write(&temporary, serde_json::to_vec_pretty(vault).map_err(|error| error.to_string())?)
-      .map_err(|error| error.to_string())?;
-    fs::rename(&temporary, file).map_err(|error| error.to_string())
+    // Знімок містить лише зашифровані паролі; серіалізація й диск — у записувачі, без блокування vault.
+    let vault = vault.clone();
+    self.writes.save(file.clone(), wait, move || {
+      crate::vault_storage::atomic_write(&file, &serde_json::to_vec_pretty(&vault).map_err(|error| error.to_string())?)
+    })
   }
 }
 
 /// Паролі облікового запису `user` (`None` — вийшли: паролів немає). Власник облікових записів на цьому комп'ютері
 /// забирає паролі, збережені ще до них. Викликає auth.rs, щойно змінився обліковий запис.
 pub fn switch_account(app: &AppHandle, user: Option<&str>) {
+  let passwords = app.state::<Passwords>();
+  let mut current = match passwords.vault.lock() {
+    Ok(vault) => vault,
+    Err(_) => return,
+  };
+  passwords.epoch.fetch_add(1, Ordering::SeqCst);
+  if let Err(error) = passwords.writes.flush() {
+    log::warn!("Не вдалося завершити запис паролів: {error}");
+  }
   let file = user.and_then(|user| profiles::dir(app, user)).map(|dir| dir.join(VAULT_FILE));
   if let (Some(user), Some(file), Ok(base)) = (user, &file, app.path().app_data_dir()) {
     let legacy = base.join(VAULT_FILE);
@@ -336,17 +365,14 @@ pub fn switch_account(app: &AppHandle, user: Option<&str>) {
     .and_then(|file| fs::read(file).ok())
     .and_then(|bytes| serde_json::from_slice::<Vault>(&bytes).ok())
     .unwrap_or_default();
-  let passwords = app.state::<Passwords>();
   let state = {
-    let Ok(mut current) = passwords.vault.lock() else {
-      return;
-    };
     *current = vault;
     if let Ok(mut current_file) = passwords.file.lock() {
       *current_file = file;
     }
     current.state()
   };
+  drop(current);
   if let Ok(mut prompts) = passwords.prompts.lock() {
     prompts.clear();
   }
@@ -401,7 +427,7 @@ pub fn on_page_message(app: &AppHandle, ui: &str, label: &str, token: &str, sour
         let index = vault.find(&origin, &username)?;
         vault.entries[index].used = Some(now());
         let password = decrypt(&vault.entries[index].password).ok()?;
-        let _ = passwords.write(&vault);
+        passwords.defer_write(&vault);
         password
       };
       Some(json!({ "astra": "password", "type": "fill", "username": username, "password": password }))
@@ -439,7 +465,7 @@ fn offer_to_save(
       Some(index) if decrypt(&vault.entries[index].password).is_ok_and(|saved| saved == password) => {
         // Той самий пароль — вхід зі збереженим, питати нічого.
         vault.entries[index].used = Some(now());
-        let _ = passwords.write(&vault);
+        passwords.defer_write(&vault);
         return;
       }
       Some(_) => true,
@@ -486,9 +512,54 @@ pub(crate) fn seal_item(
     return Ok(cached.clone());
   }
   let (nonce, sealed) = secure::seal(key, plain)?;
-  let envelope = Envelope { k: key_id.to_string(), n: STANDARD.encode(nonce), c: STANDARD.encode(sealed), h };
+  let envelope = Envelope { k: key_id.to_string(), n: STANDARD.encode(nonce), c: STANDARD.encode(sealed), h, source: None };
   cache.insert(id.to_string(), envelope.clone());
   Ok(envelope)
+}
+
+/// Кеш перевіряється до розшифрування локального секрету. source містить шифр на диску й усі метадані запису;
+/// у кеші лишається лише його HMAC, тож зміна used чи самого секрету теж перебудовує конверт.
+pub(crate) fn seal_source(
+  key: &secure::SyncKey,
+  key_id: &str,
+  cache: &mut HashMap<String, Envelope>,
+  id: &str,
+  source: &impl Serialize,
+  plaintext: impl FnOnce() -> Result<Option<Vec<u8>>, String>,
+) -> Result<Option<Envelope>, String> {
+  let source = secure::mac(key, &serde_json::to_vec(source).map_err(|error| error.to_string())?);
+  if let Some(cached) = cache.get(id).filter(|cached| cached.k == key_id && cached.source.as_ref() == Some(&source)) {
+    return Ok(Some(cached.clone()));
+  }
+  let Some(plaintext) = plaintext()? else {
+    return Ok(None);
+  };
+  let mut envelope = seal_item(key, key_id, cache, id, &plaintext)?;
+  envelope.source = Some(source);
+  cache.insert(id.to_string(), envelope.clone());
+  Ok(Some(envelope))
+}
+
+pub(crate) fn changed_account() -> String {
+  crate::i18n::text("Обліковий запис змінився. Повторіть синхронізацію.", "The account changed. Sync again.").into()
+}
+
+/// Файл має належати саме обліковому запису, ключ якого щойно прочитано.
+pub(crate) fn check_sync_owner(file: Option<&std::path::Path>, user: &str) -> Result<(), String> {
+  if file.and_then(|file| file.parent()).and_then(|dir| dir.file_name()).and_then(|name| name.to_str()) == Some(user) {
+    Ok(())
+  } else {
+    Err(changed_account())
+  }
+}
+
+/// Метадані ключа для початку проходу синхронізації — без читання й шифрування всіх сховищ.
+#[tauri::command]
+#[specta::specta]
+pub fn passwords_sync_key(app: AppHandle, window: Window) -> Result<SyncKeyInfo, String> {
+  deny_guest(&window)?;
+  let key = crate::auth::sync_key(&app);
+  Ok(SyncKeyInfo { key_id: key.as_ref().map(|(key, _)| secure::key_id(key)), key_time: key.map_or(0, |(_, time)| time) })
 }
 
 pub(crate) fn open_item(key: &secure::SyncKey, envelope: &Envelope) -> Result<Vec<u8>, String> {
@@ -500,24 +571,41 @@ pub(crate) fn open_item(key: &secure::SyncKey, envelope: &Envelope) -> Result<Ve
 /// Усі паролі облікового запису, зашифровані для синхронізації (і список «ніколи не зберігати» — записом `never`).
 #[tauri::command]
 #[specta::specta]
-pub fn passwords_sync_items(app: AppHandle, window: Window, passwords: State<'_, Passwords>) -> Result<SyncItems, String> {
+pub async fn passwords_sync_items(app: AppHandle, window: Window) -> Result<SyncItems, String> {
   deny_guest(&window)?;
-  let Some((key, key_time)) = crate::auth::sync_key(&app) else {
-    return Ok(SyncItems { key_id: None, key_time: 0, items: BTreeMap::new() });
+  let (vault, mut cache, epoch, user, key, key_time) = {
+    let passwords = app.state::<Passwords>();
+    let vault = passwords.vault.lock().map_err(|error| error.to_string())?;
+    let Some((user, key, key_time)) = crate::auth::sync_identity(&app) else {
+      return Ok(SyncItems { key_id: None, key_time: 0, items: BTreeMap::new() });
+    };
+    check_sync_owner(passwords.file.lock().map_err(|error| error.to_string())?.as_deref(), &user)?;
+    let cache = passwords.sealed.lock().map_err(|error| error.to_string())?.clone();
+    (vault.clone(), cache, passwords.epoch.load(Ordering::SeqCst), user, key, key_time)
   };
-  let key_id = secure::key_id(&key);
-  let vault = passwords.vault.lock().map_err(|error| error.to_string())?;
-  let mut cache = passwords.sealed.lock().map_err(|error| error.to_string())?;
-  let mut items = BTreeMap::new();
-  for entry in &vault.entries {
-    // Пароль, що вже не розшифровується (інший користувач Windows), синхронізувати нічим.
-    if let Ok(plain) = synced_entry(entry) {
-      items.insert(entry.id.clone(), seal_item(&key, &key_id, &mut cache, &entry.id, &plain)?);
+  let (items, cache) = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+    let key_id = secure::key_id(&key);
+    let mut items = BTreeMap::new();
+    for entry in &vault.entries {
+      // Пароль, що вже не розшифровується (інший користувач Windows), синхронізувати нічим.
+      if let Some(envelope) = seal_source(&key, &key_id, &mut cache, &entry.id, entry, || Ok(synced_entry(entry).ok()))? {
+        items.insert(entry.id.clone(), envelope);
+      }
     }
+    let never = serde_json::to_vec(&vault.never).map_err(|error| error.to_string())?;
+    items.insert(NEVER_ITEM.to_string(), seal_item(&key, &key_id, &mut cache, NEVER_ITEM, &never)?);
+    cache.retain(|id, _| items.contains_key(id));
+    Ok((SyncItems { key_id: Some(key_id), key_time, items }, cache))
+  })
+  .await
+  .map_err(|error| error.to_string())??;
+  let passwords = app.state::<Passwords>();
+  let mut current = passwords.sealed.lock().map_err(|error| error.to_string())?;
+  if passwords.epoch.load(Ordering::SeqCst) != epoch || crate::auth::sync_identity(&app) != Some((user, key, key_time)) {
+    return Err(changed_account());
   }
-  let never = serde_json::to_vec(&vault.never).map_err(|error| error.to_string())?;
-  items.insert(NEVER_ITEM.to_string(), seal_item(&key, &key_id, &mut cache, NEVER_ITEM, &never)?);
-  Ok(SyncItems { key_id: Some(key_id), key_time, items })
+  *current = cache;
+  Ok(items)
 }
 
 /// Записи з сервера: нові й змінені паролі — у сховище, видалені — геть. Зашифровані іншим ключем лишаються як є.
@@ -798,6 +886,41 @@ mod tests {
     assert!(!STANDARD.decode(&first.c).expect("base64").windows(8).any(|part| part == b"password"));
     assert_eq!(open_item(&key, &first).expect("open"), b"{\"password\":\"x\"}");
     assert!(open_item(&secure::derive_key("інший", "user-1").expect("key"), &first).is_err());
+  }
+
+  #[test]
+  fn unchanged_sources_skip_decryption_but_usage_and_key_changes_do_not() {
+    use std::cell::Cell;
+    let key = [7; 32];
+    let key_id = secure::key_id(&key);
+    let mut cache = HashMap::new();
+    let calls = Cell::new(0);
+    let plaintext = || {
+      calls.set(calls.get() + 1);
+      Ok(Some(b"secret".to_vec()))
+    };
+    let original = json!({ "encrypted": "ciphertext", "used": 1 });
+    let first = seal_source(&key, &key_id, &mut cache, "a", &original, plaintext).unwrap().unwrap();
+    let same = seal_source(&key, &key_id, &mut cache, "a", &original, plaintext).unwrap().unwrap();
+    assert_eq!(calls.get(), 1);
+    assert_eq!(first.c, same.c);
+
+    let used = json!({ "encrypted": "ciphertext", "used": 2 });
+    seal_source(&key, &key_id, &mut cache, "a", &used, plaintext).unwrap().unwrap();
+    assert_eq!(calls.get(), 2);
+    let changed_key = [8; 32];
+    let changed = seal_source(&changed_key, &secure::key_id(&changed_key), &mut cache, "a", &used, plaintext).unwrap().unwrap();
+    assert_eq!(calls.get(), 3);
+    assert_ne!(first.c, changed.c);
+    assert!(!serde_json::to_value(&changed).unwrap().as_object().unwrap().contains_key("source"));
+    assert_eq!(open_item(&changed_key, &changed).unwrap(), b"secret");
+  }
+
+  #[test]
+  fn sync_rejects_a_vault_from_another_account() {
+    assert!(check_sync_owner(Some(std::path::Path::new("profiles/alice/passwords.json")), "alice").is_ok());
+    assert!(check_sync_owner(Some(std::path::Path::new("profiles/alice/passwords.json")), "bob").is_err());
+    assert!(check_sync_owner(None, "alice").is_err());
   }
 
   #[test]

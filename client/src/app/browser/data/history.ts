@@ -1,6 +1,6 @@
 import { Injectable, computed, effect, inject, untracked } from '@angular/core';
 import { SettingsStore } from '../../shared/settings/settings';
-import { accountSignal } from '../../shared/storage/stored-signal';
+import { accountSignal, mergeStoredList } from '../../shared/storage/stored-signal';
 import { FaviconStore } from './favicons';
 
 /**
@@ -18,7 +18,10 @@ export interface HistoryEntry {
 
 @Injectable({ providedIn: 'root' })
 export class HistoryStore {
-  private readonly items = accountSignal<readonly HistoryEntry[]>('astra.history', []);
+  private readonly items = accountSignal<readonly HistoryEntry[]>('astra.history', [], {
+    delayMs: 300,
+    merge: mergeStoredList,
+  });
   private readonly favicons = inject(FaviconStore);
   private readonly settings = inject(SettingsStore);
 
@@ -42,7 +45,15 @@ export class HistoryStore {
   }
 
   rename(id: string, title: string): void {
-    this.items.update((items) => items.map((item) => (item.id === id ? { ...item, title } : item)));
+    this.items.update((items) => {
+      const index = items.findIndex((item) => item.id === id);
+      if (index < 0 || items[index].title === title) {
+        return items;
+      }
+      const next = [...items];
+      next[index] = { ...items[index], title };
+      return next;
+    });
   }
 
   remove(id: string): void {

@@ -29,7 +29,7 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager, State, Window};
 
 use crate::{
   pages::GUEST_PREFIX,
-  passwords::{open_item, seal_item, Envelope, SyncApplied, SyncChange, SyncItems},
+  passwords::{changed_account, check_sync_owner, open_item, seal_source, Envelope, SyncApplied, SyncChange, SyncItems},
   profiles,
   secure::{self, random_hex},
 };
@@ -275,7 +275,7 @@ pub struct SettingsView {
   autofill: bool,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Book {
   entries: Vec<Address>,
@@ -401,6 +401,8 @@ pub struct Addresses {
   forms: Mutex<HashMap<String, Vec<String>>>,
   /// Уже зашифровані для синхронізації записи: той самий запис не шифрується щоразу наново.
   sealed: Mutex<HashMap<String, Envelope>>,
+  writes: crate::vault_storage::SaveQueue,
+  epoch: AtomicU64,
 }
 
 /// Що шифрується для запису синхронізації.
@@ -442,19 +444,27 @@ impl Addresses {
 
   /// Зашифровано, спершу в тимчасовий файл, потім заміна: обірваний запис не зіпсує сховище.
   fn write(&self, book: &Book) -> Result<(), String> {
+    self.persist(book, true)
+  }
+
+  fn defer_write(&self, book: &Book) {
+    if let Err(error) = self.persist(book, false) {
+      log::warn!("Не вдалося поставити запис адрес у чергу: {error}");
+    }
+  }
+
+  fn persist(&self, book: &Book, wait: bool) -> Result<(), String> {
     let file = self
       .file
       .lock()
       .map_err(|error| error.to_string())?
       .clone()
       .ok_or(crate::i18n::text("Увійдіть в обліковий запис Astra", "Sign in to your Astra account"))?;
-    if let Some(dir) = file.parent() {
-      fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    }
-    let plain = serde_json::to_vec(book).map_err(|error| error.to_string())?;
-    let temporary = file.with_extension("dat.tmp");
-    fs::write(&temporary, secure::protect(&plain, ENTROPY)?).map_err(|error| error.to_string())?;
-    fs::rename(&temporary, &file).map_err(|error| error.to_string())
+    let book = book.clone();
+    self.writes.save(file.clone(), wait, move || {
+      let plain = serde_json::to_vec(&book).map_err(|error| error.to_string())?;
+      crate::vault_storage::atomic_write(&file, &secure::protect(&plain, ENTROPY)?)
+    })
   }
 
   pub(crate) fn emit(app: &AppHandle, ui: &str, event: AutofillEvent) {
@@ -464,6 +474,15 @@ impl Addresses {
 
 /// Адреси облікового запису `user` (`None` — вийшли: адрес немає). Викликає auth.rs, щойно змінився обліковий запис.
 pub fn switch_account(app: &AppHandle, user: Option<&str>) {
+  let addresses = app.state::<Addresses>();
+  let mut current = match addresses.book.lock() {
+    Ok(book) => book,
+    Err(_) => return,
+  };
+  addresses.epoch.fetch_add(1, Ordering::SeqCst);
+  if let Err(error) = addresses.writes.flush() {
+    log::warn!("Не вдалося завершити запис адрес: {error}");
+  }
   let file = user.and_then(|user| profiles::dir(app, user)).map(|dir| dir.join(BOOK_FILE));
   let book = file
     .as_ref()
@@ -471,17 +490,14 @@ pub fn switch_account(app: &AppHandle, user: Option<&str>) {
     .and_then(|bytes| secure::unprotect(&bytes, ENTROPY).ok())
     .and_then(|plain| serde_json::from_slice::<Book>(&plain).ok())
     .unwrap_or_default();
-  let addresses = app.state::<Addresses>();
   let state = {
-    let Ok(mut current) = addresses.book.lock() else {
-      return;
-    };
     *current = book;
     if let Ok(mut current_file) = addresses.file.lock() {
       *current_file = file;
     }
     current.state()
   };
+  drop(current);
   if let Ok(mut prompts) = addresses.prompts.lock() {
     prompts.clear();
   }
@@ -569,7 +585,7 @@ fn offer_to_save(app: &AppHandle, addresses: &Addresses, ui: &str, label: &str, 
     }
     if let Some(entry) = book.entries.iter_mut().find(|entry| entry.fields.covers(&fields)) {
       entry.used = Some(now());
-      let _ = addresses.write(&book);
+      addresses.defer_write(&book);
       return;
     }
     match book.entries.iter().find(|entry| entry.fields.same_owner(&fields)) {
@@ -737,7 +753,7 @@ pub fn address_autofill(
         (!value.is_empty()).then(|| (kind.clone(), Value::from(value)))
       })
       .collect();
-    let _ = addresses.write(&book);
+    addresses.defer_write(&book);
     values
   };
   crate::page_bridge::post(&page, &json!({ "astra": "autofill", "type": "fill", "values": values }))
@@ -755,19 +771,38 @@ fn synced_address(entry: &Address) -> Result<Vec<u8>, String> {
 /// Усі адреси облікового запису, зашифровані для синхронізації.
 #[tauri::command]
 #[specta::specta]
-pub fn addresses_sync_items(app: AppHandle, window: Window, addresses: State<'_, Addresses>) -> Result<SyncItems, String> {
+pub async fn addresses_sync_items(app: AppHandle, window: Window) -> Result<SyncItems, String> {
   deny_guest(&window)?;
-  let Some((key, key_time)) = crate::auth::sync_key(&app) else {
-    return Ok(SyncItems { key_id: None, key_time: 0, items: BTreeMap::new() });
+  let (book, mut cache, epoch, user, key, key_time) = {
+    let addresses = app.state::<Addresses>();
+    let book = addresses.book.lock().map_err(|error| error.to_string())?;
+    let Some((user, key, key_time)) = crate::auth::sync_identity(&app) else {
+      return Ok(SyncItems { key_id: None, key_time: 0, items: BTreeMap::new() });
+    };
+    check_sync_owner(addresses.file.lock().map_err(|error| error.to_string())?.as_deref(), &user)?;
+    let cache = addresses.sealed.lock().map_err(|error| error.to_string())?.clone();
+    (book.clone(), cache, addresses.epoch.load(Ordering::SeqCst), user, key, key_time)
   };
-  let key_id = secure::key_id(&key);
-  let book = addresses.book.lock().map_err(|error| error.to_string())?;
-  let mut cache = addresses.sealed.lock().map_err(|error| error.to_string())?;
-  let mut items = BTreeMap::new();
-  for entry in &book.entries {
-    items.insert(entry.id.clone(), seal_item(&key, &key_id, &mut cache, &entry.id, &synced_address(entry)?)?);
+  let (items, cache) = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+    let key_id = secure::key_id(&key);
+    let mut items = BTreeMap::new();
+    for entry in &book.entries {
+      if let Some(envelope) = seal_source(&key, &key_id, &mut cache, &entry.id, entry, || synced_address(entry).map(Some))? {
+        items.insert(entry.id.clone(), envelope);
+      }
+    }
+    cache.retain(|id, _| items.contains_key(id));
+    Ok((SyncItems { key_id: Some(key_id), key_time, items }, cache))
+  })
+  .await
+  .map_err(|error| error.to_string())??;
+  let addresses = app.state::<Addresses>();
+  let mut current = addresses.sealed.lock().map_err(|error| error.to_string())?;
+  if addresses.epoch.load(Ordering::SeqCst) != epoch || crate::auth::sync_identity(&app) != Some((user, key, key_time)) {
+    return Err(changed_account());
   }
-  Ok(SyncItems { key_id: Some(key_id), key_time, items })
+  *current = cache;
+  Ok(items)
 }
 
 /// Записи з сервера: нові й змінені адреси — у книгу, видалені — геть. Зашифровані іншим ключем лишаються як є.

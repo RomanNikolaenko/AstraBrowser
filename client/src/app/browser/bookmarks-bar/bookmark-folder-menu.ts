@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, booleanAttribute, computed, inject, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  booleanAttribute,
+  computed,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { MiddleClick } from '../../shared/middle-click/middle-click';
 import { Tooltip } from '../../shared/tooltip/tooltip';
 import { UiIcon } from '../../shared/ui-icon/ui-icon';
@@ -31,6 +40,8 @@ export class BookmarkFolderMenu {
 
   protected readonly actions = inject(BookmarkActions);
   protected readonly drag = inject(BookmarkDrag);
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  protected readonly contentsVisible = signal(false);
 
   protected readonly menuId = computed(() => folderMenuId(this.folder()));
   protected readonly root = computed(() => this.rootId() ?? this.menuId());
@@ -39,6 +50,12 @@ export class BookmarkFolderMenu {
   protected readonly folderMenuId = folderMenuId;
   protected readonly folderIcon = folderIcon;
   protected readonly folderColor = folderColor;
+
+  /** До showPopover: браузер має одразу бачити пункти для фокуса й порядку Tab. */
+  protected showContents(): void {
+    this.contentsVisible.set(true);
+    this.changeDetector.detectChanges();
+  }
 
   /** Лінія перед чи після пункту, підсвічена тека й напівпрозорий пункт, який зараз тягнуть. */
   protected dropClasses(item: BookmarkItem, index: number): Record<string, boolean> {

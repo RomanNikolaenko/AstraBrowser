@@ -94,6 +94,7 @@
             [attr.aria-label]="'Назва нотатки' | t"
             [value]="note.title"
             (input)="setTitle(note, $event)"
+            (blur)="notes.flush()"
             (keydown.enter)="focusText($event)" />
           <textarea
             #textInput
@@ -103,6 +104,7 @@
             [placeholder]="'Почніть писати…' | t"
             [attr.aria-label]="'Текст нотатки' | t"
             [value]="note.text"
+            (blur)="notes.flush()"
             (input)="setText(note, $event)"></textarea>
           <p class="notes__footer">{{ counts(note) }}</p>
         </article>

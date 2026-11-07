@@ -40,6 +40,17 @@ describe('browser data stores', () => {
     expect(history.entries().map((entry) => entry.title)).toEqual(['Сьогодні']);
   });
 
+  it('should ignore duplicate titles and titles for deleted history entries', () => {
+    const history = TestBed.inject(HistoryStore);
+    const id = history.record('https://a.example', 'A');
+    const before = history.entries();
+    history.rename(id, 'A');
+    history.rename('missing', 'Ignored');
+    expect(history.entries()).toBe(before);
+    history.rename(id, 'Changed');
+    expect(history.entries()[0].title).toBe('Changed');
+  });
+
   it('should keep only the latest entries of a history kept forever', () => {
     TestBed.inject(SettingsStore).historyDays.set(0);
     // Повна історія — одразу в сховище: десять тисяч відвідувань по одному — секунди, і під навантаженням тест не встигав.

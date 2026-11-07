@@ -191,6 +191,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "tauri-specta",
+ "tokio",
  "ureq",
  "webkit2gtk",
  "webkit2gtk-sys",

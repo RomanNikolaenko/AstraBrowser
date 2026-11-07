@@ -528,9 +528,14 @@ fn signed_out() -> AuthError {
 
 /// Ключ синхронізації паролів поточного облікового запису і коли його отримано з пароля (секунди Unix).
 pub fn sync_key(app: &AppHandle) -> Option<(secure::SyncKey, u64)> {
+  sync_identity(app).map(|(_, key, time)| (key, time))
+}
+
+/// Обліковий запис і його ключ одним знімком: фонова підготовка синхронізації не змішує їх під час виходу/входу.
+pub(crate) fn sync_identity(app: &AppHandle) -> Option<(String, secure::SyncKey, u64)> {
   let session = app.state::<Auth>().current()?;
   let key = secure::from_hex(&session.sync_key?)?;
-  Some((key.try_into().ok()?, session.sync_key_at))
+  Some((session.user.id, key.try_into().ok()?, session.sync_key_at))
 }
 
 /// Запит до бази Supabase (REST API, `path` — після /rest/v1/) від імені користувача. Якщо сервер каже, що токен

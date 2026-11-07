@@ -188,14 +188,6 @@ interface SealedEnvelope {
   readonly h: string;
 }
 
-/** Записи зашифрованої колекції з Rust — уже зашифровані ключем облікового запису. */
-export interface SealedSnapshot {
-  readonly keyId: string | null;
-  /** Коли ключ отримано з пароля облікового запису (секунди Unix). */
-  readonly keyTime: number;
-  readonly items: Readonly<Record<string, SealedEnvelope>>;
-}
-
 /**
  * Колекція, яку шифрує Rust ключем із пароля облікового запису: паролі сайтів (passwords.rs), адреси (addresses.rs)
  * і банківські картки (cards.rs).
@@ -203,9 +195,6 @@ export interface SealedSnapshot {
  */
 export class SealedCollection implements SyncCollection {
   readonly keys: readonly string[] = [];
-  /** Останнє прочитане: ключ і записи. */
-  snapshot: SealedSnapshot | null = null;
-
   constructor(
     readonly name: string,
     private readonly items: () => Promise<SealedItems>,
@@ -213,8 +202,8 @@ export class SealedCollection implements SyncCollection {
   ) {}
 
   async read(): Promise<SyncItems> {
-    this.snapshot = await this.items();
-    return new Map(Object.entries(this.snapshot.items));
+    const snapshot = await this.items();
+    return new Map(Object.entries(snapshot.items));
   }
 
   async write(changes: SyncItems): Promise<readonly string[]> {

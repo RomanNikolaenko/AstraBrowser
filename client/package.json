@@ -8,6 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:ci": "ng test --watch=false",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "lint": "node --disable-warning=ESLintIgnoreWarning node_modules/@angular/cli/bin/ng.js lint",
     "lint:fix": "node --disable-warning=ESLintIgnoreWarning node_modules/@angular/cli/bin/ng.js lint --fix",
     "lint:ox": "oxlint --deny-warnings",
