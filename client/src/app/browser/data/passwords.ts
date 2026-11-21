@@ -16,6 +16,8 @@ export type PasswordCommand =
   | 'passwordsSetSettings';
 export type PasswordCommandArgs<K extends PasswordCommand> = Parameters<Commands[K]>;
 export type PasswordCommandResult<K extends PasswordCommand> = ReturnType<Commands[K]>;
+/** Ті самі команди з підписом кожної окремо: виклик за назвою (call) перевіряється без приведення типів. */
+const passwordCommands: { [K in PasswordCommand]: (...args: PasswordCommandArgs<K>) => PasswordCommandResult<K> } = commands;
 
 /** Збережений пароль — без самого пароля (server/src/passwords.rs, PasswordInfo). */
 export interface SavedPassword {
@@ -124,8 +126,7 @@ export class PasswordsStore {
 
   /** Команда server/src/passwords.rs (bindings.ts); тести підміняють її, щоб обійтися без Rust. */
   protected call<K extends PasswordCommand>(command: K, ...args: PasswordCommandArgs<K>): PasswordCommandResult<K> {
-    const run = commands[command] as (...args: PasswordCommandArgs<K>) => PasswordCommandResult<K>;
-    return run(...args);
+    return passwordCommands[command](...args);
   }
 
   private async change<K extends PasswordCommand>(command: K, ...args: PasswordCommandArgs<K>): Promise<void> {

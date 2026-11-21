@@ -16,6 +16,8 @@ export type AddressCommand =
   | 'addressAutofill';
 export type AddressCommandArgs<K extends AddressCommand> = Parameters<Commands[K]>;
 export type AddressCommandResult<K extends AddressCommand> = ReturnType<Commands[K]>;
+/** Ті самі команди з підписом кожної окремо: виклик за назвою (call) перевіряється без приведення типів. */
+const addressCommands: { [K in AddressCommand]: (...args: AddressCommandArgs<K>) => AddressCommandResult<K> } = commands;
 
 /** «Зберегти адресу?» після надсилання форми на сайті (server/src/addresses.rs, PromptEvent). */
 export interface AddressPromptRequest {
@@ -128,8 +130,7 @@ export class AddressesStore {
 
   /** Команда server/src/addresses.rs (bindings.ts); тести підміняють її, щоб обійтися без Rust. */
   protected call<K extends AddressCommand>(command: K, ...args: AddressCommandArgs<K>): AddressCommandResult<K> {
-    const run = commands[command] as (...args: AddressCommandArgs<K>) => AddressCommandResult<K>;
-    return run(...args);
+    return addressCommands[command](...args);
   }
 
   private async change<K extends AddressCommand>(command: K, ...args: AddressCommandArgs<K>): Promise<void> {

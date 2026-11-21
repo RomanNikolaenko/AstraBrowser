@@ -11,6 +11,8 @@ type Commands = typeof commands;
 export type CardCommand = 'cardsState' | 'cardSave' | 'cardRemove' | 'cardsSetSettings' | 'cardPromptAnswer' | 'cardAutofill';
 export type CardCommandArgs<K extends CardCommand> = Parameters<Commands[K]>;
 export type CardCommandResult<K extends CardCommand> = ReturnType<Commands[K]>;
+/** Ті самі команди з підписом кожної окремо: виклик за назвою (call) перевіряється без приведення типів. */
+const cardCommands: { [K in CardCommand]: (...args: CardCommandArgs<K>) => CardCommandResult<K> } = commands;
 
 /** «Зберегти картку?» після оплати на сайті (server/src/cards.rs, PromptEvent) — без номера. */
 export interface CardPromptRequest {
@@ -124,8 +126,7 @@ export class CardsStore {
 
   /** Команда server/src/cards.rs (bindings.ts); тести підміняють її, щоб обійтися без Rust. */
   protected call<K extends CardCommand>(command: K, ...args: CardCommandArgs<K>): CardCommandResult<K> {
-    const run = commands[command] as (...args: CardCommandArgs<K>) => CardCommandResult<K>;
-    return run(...args);
+    return cardCommands[command](...args);
   }
 
   private async change<K extends CardCommand>(command: K, ...args: CardCommandArgs<K>): Promise<void> {
