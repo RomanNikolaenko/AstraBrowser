@@ -90,6 +90,9 @@ class FakePageViews {
   reload(label: string) {
     return this.record('reload', label);
   }
+  stop(label: string) {
+    return this.record('stop', label);
+  }
   pictureInPicture(label: string) {
     this.calls.push(['pip', label]);
     return Promise.resolve('opened' as const);
@@ -131,17 +134,23 @@ class FakePageViews {
   showDownload(path: string) {
     return this.record('show-download', path);
   }
-  resolveDownload(id: number, folder: string | null, replace = false) {
-    return replace ? this.record('resolve-download', id, folder, 'replace') : this.record('resolve-download', id, folder);
+  resolveDownload(id: number, target: { folder: string; fileName: string; replace: boolean } | null) {
+    if (!target) {
+      return this.record('resolve-download', id, null);
+    }
+    const { folder, fileName, replace } = target;
+    return replace
+      ? this.record('resolve-download', id, folder, fileName, 'replace')
+      : this.record('resolve-download', id, folder, fileName);
   }
   existingFiles: string[] = [];
   downloadFileExists(folder: string, fileName: string) {
     return Promise.resolve(this.existingFiles.includes(`${folder}\\${fileName}`));
   }
-  pickedFolder: string | null = 'D:\\Файли';
-  pickDownloadFolder(current: string) {
-    this.calls.push(['pick-folder', current]);
-    return Promise.resolve(this.pickedFolder);
+  savedAs: { folder: string; fileName: string } | null = { folder: 'D:\\Файли', fileName: 'звіт.pdf' };
+  saveDownloadAs(folder: string, fileName: string) {
+    this.calls.push(['save-as', folder, fileName]);
+    return Promise.resolve(this.savedAs);
   }
   print(label: string) {
     return this.record('print', label);
@@ -1242,6 +1251,46 @@ describe('Browser with sites', () => {
     expect(button('Назад').disabled).toBe(true);
   });
 
+  it('should turn the reload button into stop while the page loads', async () => {
+    const stopButton = () => button('Зупинити завантаження');
+    const spinner = () => !!element.querySelector('.tab__spinner');
+
+    // Сайт відкривається — хрестик; натиснули — завантаження зупинено, знову «Оновити».
+    await typeInOmnibox('angular.dev');
+    expect(stopButton()).toBeTruthy();
+    expect(spinner()).toBe(true);
+    stopButton().click();
+    await stable();
+    expect(pages.called('stop')).toEqual([[label(1)]]);
+    expect(button('Оновити сторінку')).toBeTruthy();
+    expect(spinner()).toBe(false);
+
+    // «Оновити» — хрестик одразу, ще до відповіді сервера; другий клік подвійного — не «Стоп».
+    await load(1, 'https://angular.dev/');
+    button('Оновити сторінку').click();
+    await stable();
+    expect(pages.called('reload')).toEqual([[label(1)]]);
+    stopButton().click();
+    await stable();
+    expect(pages.called('stop')).toEqual([[label(1)]]);
+    expect(stopButton()).toBeTruthy();
+
+    // Завантажилося — знову «Оновити».
+    pages.emit('page://load', { label: label(1), url: 'https://angular.dev/', loading: false });
+    await stable();
+    expect(button('Оновити сторінку')).toBeTruthy();
+
+    // Перехід за посиланням на сайті (Windows): хрестик ще до відповіді сервера, адреса поки стара.
+    const address = omnibox().value;
+    pages.emit('page://navigating', { label: label(1) });
+    await stable();
+    expect(stopButton()).toBeTruthy();
+    expect(omnibox().value).toBe(address);
+    pages.emit('page://load', { label: label(1), url: 'https://angular.dev/', loading: false });
+    await stable();
+    expect(button('Оновити сторінку')).toBeTruthy();
+  });
+
   describe('reload menu', () => {
     const reloadButton = () => button('Оновити сторінку');
     const menuOpen = () => !!element.querySelector('app-reload-menu .is-open');
@@ -1250,6 +1299,7 @@ describe('Browser with sites', () => {
 
     it('should reload on a click and keep the menu closed', async () => {
       await typeInOmnibox('angular.dev');
+      await load(1, 'https://angular.dev/');
 
       const click = new MouseEvent('click', { bubbles: true, cancelable: true });
       reloadButton().dispatchEvent(click);
@@ -1262,6 +1312,7 @@ describe('Browser with sites', () => {
 
     it('should open the menu by holding the button and not reload on release', async () => {
       await typeInOmnibox('angular.dev');
+      await load(1, 'https://angular.dev/');
 
       reloadButton().dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 600));
@@ -1275,6 +1326,7 @@ describe('Browser with sites', () => {
 
     it('should not open the menu for a short press', async () => {
       await typeInOmnibox('angular.dev');
+      await load(1, 'https://angular.dev/');
 
       reloadButton().dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
       reloadButton().dispatchEvent(new MouseEvent('pointerup', { button: 0, bubbles: true }));
@@ -1296,6 +1348,7 @@ describe('Browser with sites', () => {
 
     it('should close the menu when another tab is shown', async () => {
       await typeInOmnibox('angular.dev');
+      await load(1, 'https://angular.dev/');
       reloadButton().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       await stable();
       expect(menuOpen()).toBe(true);
@@ -1309,6 +1362,7 @@ describe('Browser with sites', () => {
 
     it('should open the menu from the context menu and run the chosen reload', async () => {
       await typeInOmnibox('angular.dev');
+      await load(1, 'https://angular.dev/');
 
       const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
       reloadButton().dispatchEvent(contextMenu);
@@ -1335,6 +1389,7 @@ describe('Browser with sites', () => {
 
   it('should reload, print and find on the site', async () => {
     await typeInOmnibox('angular.dev');
+    await load(1, 'https://angular.dev/');
 
     button('Оновити сторінку').click();
     document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, code: 'KeyP', key: 'з', cancelable: true }));
@@ -2259,9 +2314,10 @@ describe('Browser with sites', () => {
       expect(downloadsButton()).toBeNull();
     });
 
-    it('should ask where to save a file and let the folder change for it alone', async () => {
+    it('should ask where to save a file and let its name or place change for it alone', async () => {
       await typeInOmnibox('angular.dev');
       const prompt = () => element.querySelector('.download-prompt') as HTMLDialogElement;
+      const name = () => prompt().querySelector<HTMLInputElement>('.download-prompt__name input');
       const ask = async (id: number) => {
         pages.emit('page://download-prompt', {
           label: label(1),
@@ -2279,32 +2335,90 @@ describe('Browser with sites', () => {
       };
       const setAsk = vi.spyOn(TestBed.inject(DownloadSettingsStore), 'setAsk').mockResolvedValue();
 
+      expect(element.querySelector('.tab__spinner')).toBeTruthy();
       await ask(5);
       await ask(6);
-      expect(prompt().querySelector('.download-prompt__name')?.textContent).toBe('report-5.pdf');
+      // Перехід виявився файлом — сторінка вже не вантажиться, навіть якщо збереження скасують.
+      expect(element.querySelector('.tab__spinner')).toBeNull();
+      expect(name()?.value).toBe('report-5.pdf');
       expect(prompt().querySelector('.download-prompt__meta')?.textContent?.trim()).toBe('2 КБ · x.example');
       expect(prompt().querySelector('.download-prompt__path')?.textContent).toBe('C:\\Users\\me\\Downloads');
 
-      // Інша тека — лише для цього файла.
+      // «Зберегти як» Windows: тека, назва чи наявний файл (заміну там підтверджують) — і файл одразу туди.
       await click('.download-prompt__folder .download-prompt__button');
-      expect(pages.called('pick-folder')).toEqual([['C:\\Users\\me\\Downloads']]);
-      expect(prompt().querySelector('.download-prompt__path')?.textContent).toBe('D:\\Файли');
-      await click('.download-prompt__button--primary');
-      expect(pages.called('resolve-download')).toEqual([[5, 'D:\\Файли']]);
+      expect(pages.called('save-as')).toEqual([['C:\\Users\\me\\Downloads', 'report-5.pdf']]);
+      expect(pages.called('resolve-download')).toEqual([[5, 'D:\\Файли', 'звіт.pdf', 'replace']]);
 
-      // Наступний запит — зі своєю текою; «Скасувати» не завантажує.
-      expect(prompt().querySelector('.download-prompt__name')?.textContent).toBe('report-6.pdf');
+      // Наступний запит — зі своєю назвою й текою; назву можна змінити тут же.
+      expect(name()?.value).toBe('report-6.pdf');
       expect(prompt().querySelector('.download-prompt__path')?.textContent).toBe('C:\\Users\\me\\Downloads');
+      name()!.value = 'мій звіт.pdf';
+      name()!.dispatchEvent(new Event('input'));
+      await stable();
+      await click('.download-prompt__button--primary');
+      expect(pages.called('resolve-download').at(-1)).toEqual([6, 'C:\\Users\\me\\Downloads', 'мій звіт.pdf']);
+
+      // Вікно «Зберегти як» закрили без вибору — питання лишається; «Скасувати» не завантажує.
+      await ask(7);
+      pages.savedAs = null;
+      await click('.download-prompt__folder .download-prompt__button');
+      expect(name()?.value).toBe('report-7.pdf');
       await click('.download-prompt__actions .download-prompt__button:not(.download-prompt__button--primary)');
-      expect(pages.called('resolve-download').at(-1)).toEqual([6, null]);
-      expect(prompt().querySelector('.download-prompt__name')).toBeNull();
+      expect(pages.called('resolve-download').at(-1)).toEqual([7, null]);
+      expect(name()).toBeNull();
 
       // «Більше не питати» вимикає налаштування.
-      await ask(7);
+      await ask(8);
       await click('.download-prompt__dont-ask input');
       await click('.download-prompt__button--primary');
       expect(setAsk).toHaveBeenCalledWith(false);
-      expect(pages.called('resolve-download').at(-1)).toEqual([7, 'C:\\Users\\me\\Downloads']);
+      expect(pages.called('resolve-download').at(-1)).toEqual([8, 'C:\\Users\\me\\Downloads', 'report-8.pdf']);
+    });
+
+    it('should not save a file under a name the system does not allow', async () => {
+      await typeInOmnibox('angular.dev');
+      const prompt = () => element.querySelector('.download-prompt') as HTMLDialogElement;
+      const name = () => prompt().querySelector<HTMLInputElement>('.download-prompt__name input') as HTMLInputElement;
+      const primary = () => prompt().querySelector<HTMLButtonElement>('.download-prompt__button--primary') as HTMLButtonElement;
+      const error = () =>
+        prompt().querySelector('.download-prompt__name .ui-input__message--visible')?.textContent?.trim() ?? null;
+      const rename = async (value: string) => {
+        name().value = value;
+        name().dispatchEvent(new Event('input'));
+        await stable();
+      };
+      pages.emit('page://download-prompt', {
+        label: label(1),
+        id: 11,
+        url: 'https://x.example/files/report.pdf',
+        fileName: 'report.pdf',
+        folder: 'C:\\Users\\me\\Downloads',
+        total: 2048,
+      });
+      await stable();
+
+      for (const [value, message] of [
+        ['   ', 'Вкажіть назву файла'],
+        ['звіт: травень.pdf', 'У назві не може бути символів \\ / : * ? " < > |'],
+        ['..\\інша тека\\звіт.pdf', 'У назві не може бути символів \\ / : * ? " < > |'],
+        ['звіт.', 'Така назва файла недопустима'],
+        ['CON.txt', 'Така назва файла недопустима'],
+      ]) {
+        await rename(value);
+        expect(error()).toBe(message);
+        expect(primary().disabled).toBe(true);
+        primary().click();
+        name().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await stable();
+        expect(pages.called('resolve-download')).toEqual([]);
+      }
+
+      // Enter у полі назви — як «Зберегти».
+      await rename('звіт за травень.pdf');
+      expect(error()).toBeNull();
+      name().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await stable();
+      expect(pages.called('resolve-download')).toEqual([[11, 'C:\\Users\\me\\Downloads', 'звіт за травень.pdf']]);
     });
 
     it('should ask whether to replace a file that already exists or keep both', async () => {
@@ -2332,25 +2446,30 @@ describe('Browser with sites', () => {
       expect(prompt().querySelector('.download-prompt__title')?.textContent?.trim()).toBe('Такий файл уже є');
       expect(primary()).toBe('Зберегти обидва');
       await click('.download-prompt__button--replace');
-      expect(pages.called('resolve-download').at(-1)).toEqual([8, 'C:\\Users\\me\\Downloads', 'replace']);
+      expect(pages.called('resolve-download').at(-1)).toEqual([8, 'C:\\Users\\me\\Downloads', 'report.pdf', 'replace']);
 
       // «Зберегти обидва» — новий поряд, наявний не чіпається.
       await ask(9);
       await click('.download-prompt__button--primary');
-      expect(pages.called('resolve-download').at(-1)).toEqual([9, 'C:\\Users\\me\\Downloads']);
+      expect(pages.called('resolve-download').at(-1)).toEqual([9, 'C:\\Users\\me\\Downloads', 'report.pdf']);
 
-      // В іншій теці такого файла немає — звичайне «Зберегти».
+      // Під іншою назвою, якої в теці немає, — звичайне «Зберегти».
       await ask(10);
-      await click('.download-prompt__folder .download-prompt__button');
+      const rename = async (value: string) => {
+        const name = prompt().querySelector<HTMLInputElement>('.download-prompt__name input') as HTMLInputElement;
+        name.value = value;
+        name.dispatchEvent(new Event('input'));
+        await stable();
+      };
+      await rename('report-new.pdf');
       expect(prompt().querySelector('.download-prompt__button--replace')).toBeNull();
       expect(primary()).toBe('Зберегти');
-      // А в теці, де він є, — знову вибір.
-      pages.existingFiles = ['E:\\Архів\\report.pdf'];
-      pages.pickedFolder = 'E:\\Архів';
-      await click('.download-prompt__folder .download-prompt__button');
+      // А під назвою файла, що вже є, — знову вибір.
+      pages.existingFiles = ['C:\\Users\\me\\Downloads\\old.pdf'];
+      await rename('old.pdf');
       expect(primary()).toBe('Зберегти обидва');
       await click('.download-prompt__button--replace');
-      expect(pages.called('resolve-download').at(-1)).toEqual([10, 'E:\\Архів', 'replace']);
+      expect(pages.called('resolve-download').at(-1)).toEqual([10, 'C:\\Users\\me\\Downloads', 'old.pdf', 'replace']);
     });
 
     it('should let a failed download be removed from the list', async () => {

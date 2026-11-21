@@ -15,6 +15,8 @@ export const commands = {
 	/**  Крок по історії сторінки: -1 — назад, 1 — вперед. */
 	pageGo: (label: string, step: number) => __TAURI_INVOKE<null>("page_go", { label, step }),
 	pageReload: (label: string) => __TAURI_INVOKE<null>("page_reload", { label }),
+	/**  Кнопка «Стоп» замість «Оновити», поки сторінка вантажиться. */
+	pageStop: (label: string) => __TAURI_INVOKE<null>("page_stop", { label }),
 	pageSetBounds: (label: string, bounds: Bounds) => __TAURI_INVOKE<null>("page_set_bounds", { label, bounds }),
 	pageSetVisible: (label: string, visible: boolean) => __TAURI_INVOKE<null>("page_set_visible", { label, visible }),
 	pageSetZoom: (label: string, scale: number | null) => __TAURI_INVOKE<null>("page_set_zoom", { label, scale }),
@@ -52,15 +54,15 @@ export const commands = {
 	downloadsSetAsk: (ask: boolean) => __TAURI_INVOKE<DownloadSettings>("downloads_set_ask", { ask }),
 	/**  Відкриває теку завантажень у Провіднику. */
 	downloadsOpenFolder: () => __TAURI_INVOKE<null>("downloads_open_folder"),
-	/**
-	 *  Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None). `replace` — файл із такою
-	 *  назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf».
-	 */
-	downloadResolve: (id: number, folder: string | null, replace: boolean) => __TAURI_INVOKE<null>("download_resolve", { id, folder, replace }),
-	/**  Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли для файла вибрали іншу теку. */
+	/**  Відповідь на «куди зберегти»: зберегти туди, куди вибрали, чи скасувати завантаження (None). */
+	downloadResolve: (id: number, target: SaveTarget | null) => __TAURI_INVOKE<null>("download_resolve", { id, target }),
+	/**  Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли файлу дали іншу назву. */
 	downloadsFileExists: (folder: string, fileName: string) => __TAURI_INVOKE<boolean>("downloads_file_exists", { folder, fileName }),
-	/**  Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються. */
-	downloadsPickFolder: (current: string | null) => __TAURI_INVOKE<string | null>("downloads_pick_folder", { current }),
+	/**
+	 *  Вікно «Зберегти як» системи лише для одного завантаження: у ньому видно файли теки, можна дати свою назву чи
+	 *  вибрати наявний файл, щоб замінити його (заміну система підтверджує сама). Налаштування не змінюються.
+	 */
+	downloadsSaveAs: (folder: string, fileName: string) => __TAURI_INVOKE<SavePath | null>("downloads_save_as", { folder, fileName }),
 	downloadCancel: (id: number) => __TAURI_INVOKE<null>("download_cancel", { id }),
 	/**  Відкриває файл програмою, що стоїть для нього в системі (як подвійний клік у Провіднику). */
 	downloadOpen: (path: string) => __TAURI_INVOKE<null>("download_open", { path }),
@@ -536,6 +538,20 @@ export type Rules = {
 	exceptions?: string[],
 	/**  Microsoft Defender SmartScreen: попередження про фішинг і шкідливі завантаження (page_events.rs). */
 	smartScreen?: boolean,
+};
+
+/**  Що вибрали у вікні «Зберегти як». */
+export type SavePath = {
+	folder: string,
+	fileName: string,
+};
+
+/**  Куди зберегти файл із «куди зберегти»: тека й назва (своя чи запропонована сайтом). */
+export type SaveTarget = {
+	folder: string,
+	fileName: string,
+	/**  Файл із такою назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf». */
+	replace: boolean,
 };
 
 export type SignUpResult = {

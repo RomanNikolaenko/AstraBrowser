@@ -425,6 +425,14 @@ pub fn clear_browsing_data(
   })
 }
 
+/// Зупиняє завантаження сторінки (кнопка «Стоп»): WebKit повідомить, що завантаження скінчилося (load-changed).
+pub fn stop(webview: &Webview) -> tauri::Result<()> {
+  webview.with_webview(|platform| {
+    let view: webkit2gtk::WebView = platform.inner();
+    view.stop_loading();
+  })
+}
+
 fn reload(view: &webkit2gtk::WebView, bypass_cache: bool) {
   if bypass_cache {
     view.reload_bypass_cache();

@@ -67,8 +67,10 @@ import {
   PageMediaEvent,
   PageBounds,
   PageDownloadEvent,
+  PageDownloadPromptEvent,
   PageFaviconEvent,
   PageFullscreenEvent,
+  PageNavigatingEvent,
   PageNavigationEvent,
   ReloadMode,
   PageLoadEvent,
@@ -281,6 +283,13 @@ export class Browser {
   private related: { opener: number; last: number } | null = null;
   /** Вкладки в порядку, як на них переходили востаннє (поточна — в кінці): закриту активну заступає попередня. */
   private visitedTabs: number[] = [];
+  /**
+   * Ширина вкладок, закріплена після закриття мишею (lockTabWidths), — як у Firefox: поки курсор над заголовком, решта
+   * вкладок не розширюється на звільнене місце, і під курсором стає хрестик наступної.
+   */
+  protected readonly lockedTabWidth = signal<number | null>(null);
+  /** Знімає закріплену ширину вкладок і перестає стежити за курсором (поки ширину закріплено). */
+  private unlockTabWidths: (() => void) | null = null;
   /** Сторінки (мітки), чий звук затих: значок зникне, якщо звук не повернеться (AUDIBLE_HOLD_MS). */
   private readonly quietTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Щойно натиснуто Tab (без Shift) в інтерфейсі: фокус іде вперед, а не повернувся з сайту (enterPage). */
@@ -387,6 +396,13 @@ export class Browser {
     const tab = this.activeTab();
     return tab.site ? tab.site.canGoForward : !!tab.forward;
   });
+  /** Сайт у вкладці вантажиться — замість «Оновити» кнопка «Стоп». Відновлена, ще не відкрита вкладка — не вантажиться. */
+  protected readonly stoppable = computed(() => {
+    const tab = this.activeTab();
+    return tab.page === 'web' && !!tab.site?.loading && !tab.site.pending;
+  });
+  /** Коли востаннє натиснули «Оновити»: другий клік подвійного — не «Стоп» (кнопка вже стала хрестиком). */
+  private reloadedAt = 0;
 
   /** Масштаб вмісту сторінки у відсотках; змінюється в головному меню. */
   protected readonly zoom = signal(DEFAULT_ZOOM);
@@ -549,6 +565,17 @@ export class Browser {
       this.visitedTabs = [...this.visitedTabs.filter((other) => other !== id), id];
     });
 
+    // Нова вкладка — як у Firefox, закріплена після закриття ширина вже ні до чого: вкладки знову ділять місце порівну.
+    let tabCount = 0;
+    effect(() => {
+      const count = this.tabs().length;
+      if (count > tabCount) {
+        this.unlockTabWidths?.();
+      }
+      tabCount = count;
+    });
+    destroyRef.onDestroy(() => this.unlockTabWidths?.());
+
     // Інша вкладка — повноекранне відео попередньої сторінки згортається.
     effect(() => {
       const label = this.visiblePage();
@@ -684,6 +711,7 @@ export class Browser {
       const listeners = [
         this.pageViews.on('page://load', (event) => this.onPageLoad(event)),
         this.pageViews.on('page://navigation', (event) => this.onPageNavigation(event)),
+        this.pageViews.on('page://navigating', (event) => this.onPageNavigating(event)),
         this.pageViews.on('page://title', (event) => this.onPageTitle(event)),
         this.pageViews.on('page://audio', (event) => this.onPageAudio(event)),
         this.pageViews.on('page://media', (event) => this.onPageMedia(event)),
@@ -691,7 +719,7 @@ export class Browser {
         this.pageViews.on('page://favicon', (event) => this.onPageFavicon(event)),
         this.pageViews.on('page://new-tab', (event) => this.onPageNewTab(event)),
         this.pageViews.on('page://download', (event) => this.onPageDownload(event)),
-        this.pageViews.on('page://download-prompt', (event) => this.downloads.ask(event)),
+        this.pageViews.on('page://download-prompt', (event) => this.onPageDownloadPrompt(event)),
         this.pageViews.on('page://adblock', (event) => this.onPageAdBlock(event)),
         this.pageViews.on('page://trackers', (event) => this.onPageTrackers(event)),
         this.pageViews.on('page://external', (event) => void this.onPageExternal(event)),
@@ -1069,6 +1097,72 @@ export class Browser {
     }
   }
 
+  /** Хрестик чи коліщатко. Клавіатура (Enter на хрестику, detail 0) ширину вкладок не закріплює — як у Firefox. */
+  protected closeTabWithMouse(event: MouseEvent, id: number): void {
+    if (event.detail > 0) {
+      this.lockTabWidths(event);
+    }
+    this.closeTab(id, { neighbour: event.ctrlKey });
+  }
+
+  /**
+   * Як у Firefox: після закриття мишею решта вкладок не розширюється на звільнене місце, поки курсор над заголовком, —
+   * вкладки праворуч лише зсуваються, і під курсором стає хрестик наступної: можна закривати одну за одною, не
+   * ведучи мишу. Закрили останню — решта розширюється рівно настільки, щоб правий край смуги лишився на місці (під
+   * курсором — хрестик нової останньої); якщо ширину ще не закріплено, так виходить і саме собою.
+   */
+  private lockTabWidths(event: MouseEvent): void {
+    const closed = event.target instanceof Element ? event.target.closest<HTMLElement>('.tab') : null;
+    const list = closed?.parentElement;
+    if (!closed || !list || closed.classList.contains('tab--pinned')) {
+      return;
+    }
+    const unpinned = [...list.querySelectorAll<HTMLElement>(':scope > .tab:not(.tab--pinned)')];
+    const others = unpinned.filter((tab) => tab !== closed);
+    const last = closed === unpinned.at(-1);
+    if (others.length === 0 || (last && this.lockedTabWidth() === null)) {
+      return;
+    }
+    const box = closed.getBoundingClientRect();
+    let width = box.width;
+    if (last) {
+      const gap = parseFloat(getComputedStyle(list).columnGap) || 0;
+      width = (box.right - others[0].getBoundingClientRect().left - gap * (others.length - 1)) / others.length;
+    }
+    this.lockedTabWidth.set(width);
+    this.watchTabStripLeave();
+  }
+
+  /** Курсор пішов із заголовка — на панель, сайт чи за вікно — і вкладки знову ділять місце порівну. */
+  private watchTabStripLeave(): void {
+    if (this.unlockTabWidths) {
+      return;
+    }
+    // Меню вкладки відкривається під заголовком, але це теж «над вкладками».
+    const onMove = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('app-titlebar, app-tab-menu')) {
+        unlock();
+      }
+    };
+    // Курсор пішов з інтерфейсу: на сайт (інший webview) чи за вікно.
+    const onOut = (event: MouseEvent) => {
+      if (!event.relatedTarget) {
+        unlock();
+      }
+    };
+    const unlock = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseout', onOut);
+      window.removeEventListener('resize', unlock);
+      this.unlockTabWidths = null;
+      this.lockedTabWidth.set(null);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseout', onOut);
+    window.addEventListener('resize', unlock);
+    this.unlockTabWidths = unlock;
+  }
+
   /** Відкриває знову останню закриту вкладку — на тому самому місці, з тим самим сайтом чи сторінкою. */
   protected reopenClosedTab(): void {
     const closed = this.closedTabs().at(-1);
@@ -1220,10 +1314,24 @@ export class Browser {
     }
   }
 
+  /** Оновлення одразу показує завантаження (і «Стоп»), не чекаючи, поки сервер почне відповідати. */
   protected reload(): void {
     const tab = this.activeTab();
     if (tab.site) {
+      this.reloadedAt = Date.now();
+      if (!tab.site.pending) {
+        this.updateSite(tab.id, (site) => ({ ...site, loading: true }));
+      }
       this.ignore(this.pageViews.reload(tab.site.label));
+    }
+  }
+
+  /** «Стоп»: сторінка лишається такою, якою встигла завантажитися. */
+  protected stopLoading(): void {
+    const tab = this.activeTab();
+    if (tab.site) {
+      this.updateSite(tab.id, (site) => ({ ...site, loading: false }));
+      this.ignore(this.pageViews.stop(tab.site.label));
     }
   }
 
@@ -1273,8 +1381,10 @@ export class Browser {
       this.reloadHeld = false;
     } else if (this.reloadMenu().isOpen()) {
       this.reloadMenu().hide();
-    } else {
+    } else if (!this.stoppable()) {
       this.reload();
+    } else if (Date.now() - this.reloadedAt >= DOUBLE_CLICK_MS) {
+      this.stopLoading();
     }
   }
 
@@ -2011,6 +2121,14 @@ export class Browser {
     });
   }
 
+  /** Сайт почав перехід (посилання, форма): значок завантаження й «Стоп» — одразу, ще до відповіді сервера. */
+  private onPageNavigating({ label }: PageNavigatingEvent): void {
+    const tab = this.tabByLabel(label);
+    if (tab?.site && !tab.site.loading && !tab.site.pending) {
+      this.updateSite(tab.id, (site) => ({ ...site, loading: true }));
+    }
+  }
+
   /** Нова адреса (і без перезавантаження) — запис в історії; «Назад» і «Вперед» — як каже WebView2. */
   private onPageNavigation({ label, url, canGoBack, canGoForward }: PageNavigationEvent): void {
     const tab = this.tabByLabel(label);
@@ -2385,6 +2503,15 @@ export class Browser {
     }
   }
 
+  /** Перехід виявився файлом, і браузер питає, куди його зберегти: сторінка лишається та сама — і коли скасують. */
+  private onPageDownloadPrompt(event: PageDownloadPromptEvent): void {
+    this.downloads.ask(event);
+    const tab = this.tabByLabel(event.label);
+    if (tab?.site?.loading) {
+      this.updateSite(tab.id, (site) => ({ ...site, loading: false }));
+    }
+  }
+
   private updateSite(tabId: number, update: (site: Site) => Site): void {
     this.tabs.update((tabs) => tabs.map((tab) => (tab.id === tabId && tab.site ? { ...tab, site: update(tab.site) } : tab)));
   }
@@ -2551,3 +2678,5 @@ const LOW_MEMORY_AFTER_MS = 5 * 60_000;
 
 /** Скільки тримати кнопку «Оновити», щоб відкрилося меню оновлення. */
 const RELOAD_HOLD_MS = 500;
+/** Подвійний клік по «Оновити» (як у Windows за замовчуванням): другий клік не зупиняє щойно почате оновлення. */
+const DOUBLE_CLICK_MS = 500;

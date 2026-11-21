@@ -54,6 +54,13 @@ struct LoadEvent {
   loading: bool,
 }
 
+/// Сторінка почала перехід (page://navigating, лише Windows): адреса ще стара — нова з'явиться з page://load.
+#[cfg(windows)]
+#[derive(Clone, Serialize, specta::Type)]
+struct NavigatingEvent {
+  label: String,
+}
+
 #[derive(Clone, Serialize, specta::Type)]
 struct TitleEvent {
   label: String,
@@ -431,7 +438,16 @@ pub async fn page_open(
     .on_navigation({
       let (app, ui, label) = (app.clone(), ui.clone(), label.clone());
       move |url| {
-        if (is_page_url(url) && may_open(&label, url)) || url.as_str() == "about:blank" {
+        if is_page_url(url) && may_open(&label, url) {
+          // У Windows «завантаження почалося» (on_page_load) приходить лише з першими байтами відповіді (ContentLoading),
+          // і поки сервер думає, не видно, що щось відбувається. Тож уже тут — як у Chrome: значок завантаження й «Стоп».
+          // Кожен такий перехід WebView2 завершує NavigationCompleted (і скасований теж), а з ним — on_page_load.
+          // У Linux on_page_load і так приходить одразу.
+          #[cfg(windows)]
+          let _ = app.emit_to(&ui, "page://navigating", NavigatingEvent { label: label.clone() });
+          return true;
+        }
+        if url.as_str() == "about:blank" {
           return true;
         }
         if crate::external::scheme_of(url).is_some() {
@@ -756,6 +772,13 @@ pub fn page_go(window: Window, label: String, step: i32) -> Result<(), String> {
 #[specta::specta]
 pub fn page_reload(window: Window, label: String) -> Result<(), String> {
   page(&window, &label)?.reload().map_err(|error| error.to_string())
+}
+
+/// Кнопка «Стоп» замість «Оновити», поки сторінка вантажиться.
+#[tauri::command]
+#[specta::specta]
+pub fn page_stop(window: Window, label: String) -> Result<(), String> {
+  engine::stop(&page(&window, &label)?).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

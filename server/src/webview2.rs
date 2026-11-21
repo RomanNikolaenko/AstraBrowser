@@ -770,6 +770,13 @@ pub fn picture_in_picture(webview: &Webview, reply: Reply<PictureInPicture>) -> 
   })
 }
 
+/// Зупиняє завантаження сторінки (кнопка «Стоп»): WebView2 завершить перехід (NavigationCompleted).
+pub fn stop(webview: &Webview) -> tauri::Result<()> {
+  webview.with_webview(|platform| {
+    let _ = core(&platform).and_then(|core| unsafe { core.Stop() });
+  })
+}
+
 /// «Назад» (step < 0) чи «Вперед» історією вкладки.
 pub fn go(webview: &Webview, step: i32) -> tauri::Result<()> {
   webview.with_webview(move |platform| {
@@ -1250,6 +1257,28 @@ struct RunningDownload {
   silent: (i64, u32),
   /// Файл, що чекав підтвердження, зберігається (keep_download).
   keeping: Option<Keeping>,
+  /// Файл, що лежав на місці завантаження ще до нього («Замінити»), — поки його не замінено, він не завантаження.
+  replaced: Option<OnDisk>,
+}
+
+/// Розмір і час зміни файла: чи це досі той самий файл.
+#[derive(Clone, Copy, PartialEq)]
+struct OnDisk {
+  len: u64,
+  modified: Option<std::time::SystemTime>,
+}
+
+fn snapshot(path: &Path) -> Option<OnDisk> {
+  std::fs::metadata(path).ok().map(|metadata| OnDisk { len: metadata.len(), modified: metadata.modified().ok() })
+}
+
+/// Скільки завантаження вже на диску. Файл, що лежав там до нього (`replaced`) і ще не замінений, — не воно: інакше
+/// старий файл, не менший за новий, здавався б докачаним завантаженням.
+fn written(path: &Path, replaced: Option<OnDisk>) -> i64 {
+  match snapshot(path) {
+    Some(now) if Some(now) != replaced => i64::try_from(now.len).unwrap_or(i64::MAX),
+    _ => 0,
+  }
 }
 
 /// Файл, що чекав підтвердження: його друге ім'я, поки WebView2 прибирає перше.
@@ -1453,6 +1482,7 @@ fn begin_download(
     label: label.to_string(),
     silent: (0, 0),
     keeping: None,
+    replaced: snapshot(Path::new(&path)),
   };
   DOWNLOADS.with(|downloads| downloads.borrow_mut().insert(id, running));
   PAGE_DOWNLOADS.with(|downloads| *downloads.borrow_mut().entry(label.to_string()).or_default() += 1);
@@ -1542,11 +1572,10 @@ fn file_size(path: &Path) -> i64 {
 /// Лише в головному потоці.
 fn check_download(id: u64) {
   settle_download(id);
-  let Some((operation, path, report, keeping)) = DOWNLOADS.with(|downloads| {
-    downloads
-      .borrow()
-      .get(&id)
-      .map(|running| (running.operation.clone(), running.path.clone(), running.report.clone(), running.keeping.is_some()))
+  let Some((operation, path, report, keeping, replaced)) = DOWNLOADS.with(|downloads| {
+    downloads.borrow().get(&id).map(|running| {
+      (running.operation.clone(), running.path.clone(), running.report.clone(), running.keeping.is_some(), running.replaced)
+    })
   }) else {
     return;
   };
@@ -1568,7 +1597,7 @@ fn check_download(id: u64) {
   if silent < DOWNLOAD_SILENT_CHECKS {
     return;
   }
-  let on_disk = file_size(Path::new(&update.path));
+  let on_disk = written(Path::new(&update.path), replaced);
   let full = update.total > 0 && on_disk >= update.total;
   if on_disk > update.received {
     if full {
@@ -1749,5 +1778,23 @@ mod tests {
     assert_eq!(renamed_from("звіт (чернетка).pdf"), None);
     assert_eq!(renamed_from(" (1).pdf"), None);
     assert_eq!(renamed_from("звіт ().pdf"), None);
+  }
+
+  #[test]
+  fn a_file_being_replaced_is_not_taken_for_the_download() {
+    let folder = std::env::temp_dir().join(format!("astra-replaced-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).expect("folder");
+    let path = folder.join("звіт.zip");
+    std::fs::write(&path, vec![0; 100]).expect("old file");
+    let replaced = snapshot(&path);
+    // Старий файл, навіть більший за завантаження, — ще не воно.
+    assert_eq!(written(&path, replaced), 0);
+    // WebView2 замінив його — тепер на диску завантаження, хоч і того самого розміру.
+    std::thread::sleep(Duration::from_millis(50));
+    std::fs::write(&path, vec![1; 100]).expect("new file");
+    assert_eq!(written(&path, replaced), 100);
+    // На місці, де файла не було, — скільки вже записано.
+    assert_eq!(written(&folder.join("новий.zip"), None), 0);
+    let _ = std::fs::remove_dir_all(&folder);
   }
 }

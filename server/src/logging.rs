@@ -4,7 +4,10 @@
 //! «Відкрити журнал» у довідці показує файл у Провіднику.
 
 use std::{
-  sync::{mpsc, Mutex},
+  sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Mutex,
+  },
   time::{Duration, Instant},
 };
 
@@ -22,6 +25,23 @@ const MAIN_THREAD_STALL: Duration = Duration::from_secs(3);
 
 /// Команда інтерфейсу, яку зараз виконує головний потік, і коли вона почалася.
 static RUNNING: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+/// Головний потік показує модальне вікно системи (modal).
+static MODAL: AtomicBool = AtomicBool::new(false);
+
+/// Показує в головному потоці модальне вікно системи («Зберегти як»). Поки воно відкрите, решта справ головного потоку
+/// чекає в черзі, тож сторож (watch_main_thread) не вважає це зависанням.
+#[cfg(windows)]
+pub fn modal<T>(show: impl FnOnce() -> T) -> T {
+  struct Shown;
+  impl Drop for Shown {
+    fn drop(&mut self) {
+      MODAL.store(false, Ordering::SeqCst);
+    }
+  }
+  MODAL.store(true, Ordering::SeqCst);
+  let _shown = Shown;
+  show()
+}
 
 fn set_running(command: Option<(String, Instant)>) -> Option<(String, Instant)> {
   std::mem::replace(&mut *RUNNING.lock().unwrap_or_else(|poisoned| poisoned.into_inner()), command)
@@ -58,6 +78,13 @@ pub fn watch_main_thread(app: AppHandle) {
       return;
     }
     if answered.recv_timeout(MAIN_THREAD_STALL).is_ok() {
+      continue;
+    }
+    if MODAL.load(Ordering::SeqCst) {
+      // Головний потік чекає на користувача у вікні системи — це не зависання.
+      if answered.recv().is_err() {
+        return;
+      }
       continue;
     }
     let doing = match RUNNING.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref() {

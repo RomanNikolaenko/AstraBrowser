@@ -10,10 +10,11 @@
         [class.tab--pinned]="tab.pinned"
         [class.tab--drop-before]="dropIndex() === index"
         [class.tab--drop-after]="dropIndex() === tabs().length && index === tabs().length - 1"
+        [style.max-width.px]="tab.pinned ? null : lockedTabWidth()"
         (dragstart)="onTabDragStart($event, tab)"
         (dragend)="onTabDragEnd($event, tab)"
         (contextmenu)="showTabMenu($event, tab)"
-        (appMiddleClick)="closeTab(tab.id, { neighbour: $event.ctrlKey })">
+        (appMiddleClick)="closeTabWithMouse($event, tab.id)">
         <button
           class="tab__select"
           type="button"
@@ -52,7 +53,7 @@
             type="button"
             [attr.aria-label]="'Закрити вкладку «{0}»' | t: [tabTitle(tab)]"
             [title]="'Закрити вкладку' | t"
-            (click)="closeTab(tab.id, { neighbour: $event.ctrlKey })">
+            (click)="closeTabWithMouse($event, tab.id)">
             <app-icon icon="close" />
           </button>
         }
@@ -101,11 +102,13 @@
         (click)="goForward()">
         <app-icon icon="arrow-right" />
       </button>
+      <!-- Поки сторінка вантажиться — «Стоп» (хрестик), як у Chrome. -->
       <button
-        class="toolbar__button toolbar__button--reload"
+        class="toolbar__button"
         type="button"
-        [attr.aria-label]="'Оновити сторінку' | t"
-        [title]="'Оновити (утримуйте — інші види оновлення)' | t"
+        [class.toolbar__button--reload]="!stoppable()"
+        [attr.aria-label]="stoppable() ? ('Зупинити завантаження' | t) : ('Оновити сторінку' | t)"
+        [title]="stoppable() ? ('Зупинити завантаження' | t) : ('Оновити (утримуйте — інші види оновлення)' | t)"
         popovertarget="reload-menu"
         [disabled]="activeTab().page !== 'web'"
         (click)="onReloadClick($event)"
@@ -114,7 +117,7 @@
         (pointerleave)="cancelReloadHold()"
         (pointercancel)="cancelReloadHold()"
         (contextmenu)="openReloadMenu($event)">
-        <app-icon icon="reload" />
+        <app-icon [icon]="stoppable() ? 'close' : 'reload'" />
       </button>
       <app-reload-menu (reload)="reloadWith($event)" />
     </div>

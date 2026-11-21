@@ -80,6 +80,8 @@ describe('Browser', () => {
     await fixture.whenStable();
   });
 
+  afterEach(() => vi.restoreAllMocks());
+
   it('should start with a single new tab', () => {
     expect(tabs().length).toBe(1);
     expect(element.querySelector('.tab__title')?.textContent?.trim()).toBe('Нова вкладка');
@@ -152,6 +154,73 @@ describe('Browser', () => {
     await mouseClick(element.querySelectorAll('.tab__title')[1], 1, { ctrlKey: true });
     expect(tabs().length).toBe(3);
     expect(activeIndex()).toBe(1);
+  });
+
+  it('should keep tab widths after closing tabs with the mouse until the pointer leaves the title bar', async () => {
+    await openTab();
+    await openTab();
+    await openTab();
+    await openTab();
+    // jsdom розмірів не рахує: вкладки по 98 px через 4 px.
+    const layout = () =>
+      tabs().forEach((tab, index) => {
+        tab.getBoundingClientRect = () => new DOMRect(index * 102, 0, 98, 44);
+      });
+    const getComputedStyle = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((target) =>
+      target.matches('.tab-list') ? ({ columnGap: '4px' } as CSSStyleDeclaration) : getComputedStyle(target)
+    );
+    const widths = () => tabs().map((tab) => (tab as HTMLElement).style.maxWidth);
+    const move = async (target: Element | null, init: MouseEventInit = {}) => {
+      target?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, ...init }));
+      await fixture.whenStable();
+    };
+
+    // Остання, поки нічого не закріплено, — решта й так займе її місце.
+    layout();
+    await mouseClick(element.querySelectorAll('.tab__close')[4], 0, { detail: 1 });
+    expect(widths()).toEqual(['', '', '', '']);
+
+    // Друга коліщатком — решта лишається по 98 px, а не розширюється.
+    layout();
+    await mouseClick(element.querySelectorAll('.tab__title')[1], 1, { detail: 1 });
+    expect(widths()).toEqual(['98px', '98px', '98px']);
+
+    // Курсор ходить по заголовку — ширина та сама.
+    await move(element.querySelector('.tab__title'));
+    await move(element.querySelector('.titlebar__spacer'));
+    expect(widths()).toEqual(['98px', '98px', '98px']);
+
+    // Тепер остання хрестиком: решта розширюється так, щоб правий край (2 · 102 + 98 = 302 px) лишився на місці.
+    layout();
+    await mouseClick(element.querySelectorAll('.tab__close')[2], 0, { detail: 1 });
+    expect(widths()).toEqual(['149px', '149px']);
+
+    // Курсор пішов на панель — вкладки знову ділять місце порівну.
+    await move(element.querySelector('.chrome'));
+    expect(widths()).toEqual(['', '']);
+
+    // І коли курсор іде з інтерфейсу (на сайт чи за вікно).
+    await openTab();
+    layout();
+    await mouseClick(element.querySelectorAll('.tab__close')[0], 0, { detail: 1 });
+    expect(widths()).toEqual(['98px', '98px']);
+    element.querySelector('.tab__title')?.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    await fixture.whenStable();
+    expect(widths()).toEqual(['', '']);
+
+    // Нова вкладка теж знімає закріплення.
+    await openTab();
+    layout();
+    await mouseClick(element.querySelectorAll('.tab__title')[0], 1, { detail: 1 });
+    expect(widths()).toEqual(['98px', '98px']);
+    await openTab();
+    expect(widths()).toEqual(['', '', '']);
+
+    // З клавіатури (Enter на хрестику) — нічого не закріплює.
+    layout();
+    await closeTab(0);
+    expect(widths()).toEqual(['', '']);
   });
 
   it('should keep the active tab when another tab is closed', async () => {

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { commands, TabDirection } from '../../bindings';
+import { commands, SavePath, SaveTarget, TabDirection } from '../../bindings';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { AddressPromptRequest, AutofillKind } from '../data/addresses';
@@ -127,6 +127,11 @@ export interface PageNavigationEvent {
   readonly canGoForward: boolean;
 }
 
+/** Сторінка почала перехід, адреса ще стара (лише Windows: server/src/pages.rs, on_navigation). */
+export interface PageNavigatingEvent {
+  readonly label: string;
+}
+
 /** Особливе оновлення з меню кнопки «Оновити» (server/src/webview2.rs, ReloadMode). */
 export type ReloadMode = 'hard' | 'cache' | 'site-data' | 'cookies' | 'all';
 
@@ -223,6 +228,7 @@ interface PageEvents {
   'app://open': AppOpenEvent;
   'page://load': PageLoadEvent;
   'page://navigation': PageNavigationEvent;
+  'page://navigating': PageNavigatingEvent;
   'page://audio': PageAudioEvent;
   'page://media': PageMediaEvent;
   'page://fullscreen': PageFullscreenEvent;
@@ -302,6 +308,10 @@ export class PageViews {
 
   async reload(label: string): Promise<void> {
     await commands.pageReload(label);
+  }
+
+  async stop(label: string): Promise<void> {
+    await commands.pageStop(label);
   }
 
   /**
@@ -462,9 +472,12 @@ export class PageViews {
     await commands.pageSetAutoplay(label, autoplay);
   }
 
-  /** Відповідь «куди зберегти»: тека чи null — не завантажувати; `replace` — наявний файл із такою назвою замінити. */
-  async resolveDownload(id: number, folder: string | null, replace = false): Promise<void> {
-    await commands.downloadResolve(id, folder, replace);
+  /**
+   * Відповідь «куди зберегти»: тека й назва (`replace` — наявний файл із такою назвою замінити) чи null — не
+   * завантажувати.
+   */
+  async resolveDownload(id: number, target: SaveTarget | null): Promise<void> {
+    await commands.downloadResolve(id, target);
   }
 
   /** Чи є вже в теці файл із такою назвою. */
@@ -472,9 +485,9 @@ export class PageViews {
     return commands.downloadsFileExists(folder, fileName);
   }
 
-  /** Вікно вибору теки Windows для одного файла; null — теку не вибрали. */
-  pickDownloadFolder(current: string): Promise<string | null> {
-    return commands.downloadsPickFolder(current);
+  /** Вікно «Зберегти як» Windows для одного файла: тека й назва чи null — нічого не вибрали. */
+  saveDownloadAs(folder: string, fileName: string): Promise<SavePath | null> {
+    return commands.downloadsSaveAs(folder, fileName);
   }
 
   async cancelDownload(id: number): Promise<void> {

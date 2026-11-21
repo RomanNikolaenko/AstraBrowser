@@ -211,29 +211,63 @@ fn free_path(folder: &Path, file_name: &str) -> PathBuf {
   (1..).map(|number| folder.join(format!("{stem} ({number}){extension}"))).find(|path| !path.exists()).unwrap_or(candidate)
 }
 
-/// Відповідь на «куди зберегти»: зберегти в теку `folder` чи скасувати завантаження (None). `replace` — файл із такою
-/// назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf».
+/// Назва, під якою файл можна зберегти в Windows (а отже, й деінде): не порожня, без шляху, без \ / : * ? " < > | і
+/// керівних символів, без крапки чи пробілу в кінці, не назва пристрою (CON, NUL, COM1…) і не довша за 255 символів.
+fn is_valid_file_name(name: &str) -> bool {
+  let stem = name.split('.').next().unwrap_or_default().trim_end().to_ascii_uppercase();
+  let device = ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str())
+    || (stem.len() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT")) && matches!(stem.as_bytes()[3], b'1'..=b'9'));
+  !name.trim().is_empty()
+    && name.encode_utf16().count() <= 255
+    && !name.chars().any(|character| character.is_control() || r#"\/:*?"<>|"#.contains(character))
+    && !name.ends_with(['.', ' '])
+    && !device
+}
+
+/// Куди зберегти файл із «куди зберегти»: тека й назва (своя чи запропонована сайтом).
+#[derive(Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTarget {
+  folder: String,
+  file_name: String,
+  /// Файл із такою назвою, що вже є в теці, замінити; інакше новий ляже поряд: «звіт (1).pdf».
+  replace: bool,
+}
+
+/// Що вибрали у вікні «Зберегти як».
+#[derive(Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SavePath {
+  folder: String,
+  file_name: String,
+}
+
+/// Відповідь на «куди зберегти»: зберегти туди, куди вибрали, чи скасувати завантаження (None).
 #[tauri::command]
 #[specta::specta]
 pub fn download_resolve(
   app: AppHandle,
   downloads: State<'_, Downloads>,
   id: u64,
-  folder: Option<String>,
-  replace: bool,
+  target: Option<SaveTarget>,
 ) -> Result<(), String> {
-  let file_name = downloads.prompts.lock().map_err(|error| error.to_string())?.remove(&id);
-  let path = match (folder, file_name) {
-    (Some(folder), Some(file_name)) => {
+  let asked = downloads.prompts.lock().map_err(|error| error.to_string())?.remove(&id).is_some();
+  let (path, replace) = match target.filter(|_| asked) {
+    Some(SaveTarget { folder, file_name, replace }) => {
       let folder = PathBuf::from(folder);
       if !folder.is_dir() {
         return Err(format!("{} {}", crate::i18n::text("Немає теки", "Folder not found:"), folder.display()));
       }
-      Some(if replace { folder.join(&file_name) } else { free_path(&folder, &file_name) })
+      if !is_valid_file_name(&file_name) {
+        return Err(format!("{} {file_name}", crate::i18n::text("Недопустима назва файла:", "Invalid file name:")));
+      }
+      (Some(if replace { folder.join(&file_name) } else { free_path(&folder, &file_name) }), replace)
     }
-    _ => None,
+    None => (None, false),
   };
   // WebView2 файл за явно заданим шляхом і так перезаписує, а WebKit — лише з дозволом.
+  #[cfg(windows)]
+  let _ = replace;
   #[cfg(windows)]
   return app.run_on_main_thread(move || webview2::resolve_download(id, path)).map_err(|error| error.to_string());
   #[cfg(target_os = "linux")]
@@ -242,31 +276,55 @@ pub fn download_resolve(
     .map_err(|error| error.to_string());
 }
 
-/// Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли для файла вибрали іншу теку.
+/// Чи є вже в теці `folder` файл `file_name` — для вікна «куди зберегти», коли файлу дали іншу назву.
 #[tauri::command]
 #[specta::specta]
 pub fn downloads_file_exists(folder: String, file_name: String) -> bool {
   // Лише назва файла, без шляхів: питають саме про цю теку.
-  Path::new(&file_name).file_name().is_some_and(|name| name == file_name.as_str())
-    && Path::new(&folder).join(&file_name).is_file()
+  is_valid_file_name(&file_name) && Path::new(&folder).join(&file_name).is_file()
 }
 
-/// Вікно вибору теки Windows лише для одного завантаження — налаштування не змінюються.
+/// Вікно «Зберегти як» системи лише для одного завантаження: у ньому видно файли теки, можна дати свою назву чи
+/// вибрати наявний файл, щоб замінити його (заміну система підтверджує сама). Налаштування не змінюються.
 #[tauri::command]
 #[specta::specta]
-pub async fn downloads_pick_folder(app: AppHandle, window: Window, current: Option<String>) -> Result<Option<String>, String> {
-  let mut dialog =
-    app.dialog().file().set_parent(&window).set_title(crate::i18n::text("Куди зберегти файл", "Where to save the file"));
-  if let Some(current) = current.map(PathBuf::from).filter(|folder| folder.is_dir()) {
-    dialog = dialog.set_directory(current);
-  }
+pub async fn downloads_save_as(
+  app: AppHandle,
+  window: Window,
+  folder: String,
+  file_name: String,
+) -> Result<Option<SavePath>, String> {
+  let title = crate::i18n::text("Зберегти файл як", "Save file as");
+  let folder = Some(PathBuf::from(folder)).filter(|folder| folder.is_dir());
   let (sender, receiver) = mpsc::channel();
-  dialog.pick_folder(move |picked| {
-    let _ = sender.send(picked.and_then(|path| path.into_path().ok()));
-  });
+  // У головному потоці, як у звичайних програмах. З окремого потоку (так відкриває вікна плагін діалогів) вікно,
+  // прив'язане до вікна браузера, зависає ще до появи, якщо в теці є zip, завантажений з інтернету: Windows перевіряє
+  // його й чекає на потік вікна-власника. Вибір теки й збереження скріншота (лише PNG) файлів zip не показують.
+  #[cfg(windows)]
+  app
+    .run_on_main_thread(move || {
+      let mut dialog = rfd::FileDialog::new().set_title(title).set_file_name(file_name).set_parent(&window);
+      if let Some(folder) = folder {
+        dialog = dialog.set_directory(folder);
+      }
+      let _ = sender.send(crate::logging::modal(|| dialog.save_file()));
+    })
+    .map_err(|error| error.to_string())?;
+  #[cfg(not(windows))]
+  {
+    let mut dialog = app.dialog().file().set_parent(&window).set_title(title).set_file_name(file_name);
+    if let Some(folder) = folder {
+      dialog = dialog.set_directory(folder);
+    }
+    dialog.save_file(move |picked| {
+      let _ = sender.send(picked.and_then(|path| path.into_path().ok()));
+    });
+  }
   let picked =
     tauri::async_runtime::spawn_blocking(move || receiver.recv().ok().flatten()).await.map_err(|error| error.to_string())?;
-  Ok(picked.map(|folder| folder.display().to_string()))
+  Ok(picked.and_then(|path| {
+    Some(SavePath { folder: path.parent()?.display().to_string(), file_name: path.file_name()?.to_string_lossy().into_owned() })
+  }))
 }
 
 #[tauri::command]
@@ -411,6 +469,34 @@ mod tests {
     // Лише назва в цій теці — не шлях деінде.
     assert!(!downloads_file_exists(path, format!("..{}звіт.pdf", std::path::MAIN_SEPARATOR)));
     let _ = fs::remove_dir_all(&folder);
+  }
+
+  #[test]
+  fn accepts_only_file_names_windows_allows() {
+    for name in ["звіт.pdf", "мій звіт за травень.pdf", "README", ".gitignore", "con-notes.txt", "COM10.txt", "a.b.c"]
+    {
+      assert!(is_valid_file_name(name), "{name}");
+    }
+    let long = "я".repeat(256);
+    for name in [
+      "",
+      "   ",
+      "звіт: травень.pdf",
+      "a/b.pdf",
+      "a\\b.pdf",
+      "що?.pdf",
+      "\"цитата\".txt",
+      "звіт.",
+      "звіт ",
+      "CON",
+      "con.txt",
+      "Nul .txt",
+      "LPT1.log",
+      "a\tb",
+      long.as_str(),
+    ] {
+      assert!(!is_valid_file_name(name), "{name}");
+    }
   }
 
   #[test]

@@ -48,6 +48,8 @@ windows = { version = "0.62", features = ["Foundation", "Security_Credentials_UI
 windows-core = "0.62"
 # Дочекатися відповіді Windows Hello (hello.rs) — та сама версія, що й у windows.
 windows-future = "0.3"
+# «Зберегти як» для завантаження — у головному потоці (downloads.rs); та сама версія й можливості, що в плагіні діалогів.
+rfd = { version = "0.17", default-features = false, features = ["common-controls-v6"] }
 
 # Linux: PBKDF2 і випадкові числа — без CNG Windows, а ключ, яким шифруються дані на диску, — у сховищі
 # секретів системи (secure.rs).

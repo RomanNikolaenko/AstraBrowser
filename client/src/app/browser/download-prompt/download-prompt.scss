@@ -105,23 +105,24 @@
   &__text {
     display: grid;
     flex: 1 1 auto;
+    gap: 0.25rem;
     min-width: 0;
   }
 
-  &__name,
+  &__name {
+    --input-background: var(--browser-field);
+    --input-background-focus: var(--browser-popover);
+    --input-border: var(--browser-chrome-border);
+    --input-icon: var(--browser-icon);
+    --input-text: var(--browser-text);
+    --input-placeholder: var(--browser-placeholder);
+  }
+
   &__path {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__name {
-    font-size: 0.9375rem;
-    font-weight: 600;
-  }
-
-  &__path {
     font-size: 0.875rem;
+    white-space: nowrap;
   }
 
   &__meta {
