@@ -1610,6 +1610,90 @@ describe('Browser with sites', () => {
     expect(scroll.defaultPrevented).toBe(false);
   });
 
+  it('should keep its own zoom in every tab', async () => {
+    const badge = () => element.querySelector('.zoom-badge')?.textContent?.trim();
+    const press = async (code: string, key: string) => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, code, key, cancelable: true }));
+      await stable();
+    };
+    const selectTab = async (index: number) => {
+      element.querySelectorAll<HTMLButtonElement>('.tab__select')[index].click();
+      await stable();
+    };
+
+    // Перша вкладка — 110%.
+    await typeInOmnibox('angular.dev');
+    pages.emit('page://shortcut', { label: label(1), shortcut: 'zoom-in' });
+    await stable();
+    expect(badge()).toBe('110%');
+
+    // Нова вкладка — своя, 100%; сайт у ній зменшили до 90%.
+    await press('KeyT', 'е');
+    expect(badge()).toBeUndefined();
+    expect(element.querySelector<HTMLElement>('.content')?.style.zoom).toBe('1');
+    await typeInOmnibox('github.com');
+    await press('Minus', '-');
+    expect(badge()).toBe('90%');
+    expect(pages.called('zoom').at(-1)).toEqual([label(2), 0.9]);
+
+    // Назад на першу — її 110%, і саме її сайту; на другій — знову 90%.
+    await selectTab(0);
+    expect(badge()).toBe('110%');
+    expect(pages.called('zoom').at(-1)).toEqual([label(1), 1.1]);
+    await selectTab(1);
+    expect(badge()).toBe('90%');
+    expect(pages.called('zoom').at(-1)).toEqual([label(2), 0.9]);
+
+    // Масштаб зберігається з вкладками, а копія вкладки — з тим самим масштабом.
+    expect(JSON.parse(localStorage.getItem('astra.session.web') ?? 'null').tabs).toEqual([
+      { page: 'web', url: 'https://angular.dev/', title: '', zoom: 110 },
+      { page: 'web', url: 'https://github.com/', title: '', zoom: 90 },
+    ]);
+    element.querySelectorAll('.tab')[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    await stable();
+    [...element.querySelectorAll<HTMLButtonElement>('.tab-menu__item')]
+      .find((item) => item.textContent?.includes('Дублювати'))
+      ?.click();
+    await stable();
+    expect(titles().length).toBe(3);
+    expect(badge()).toBe('110%');
+  });
+
+  it('should restore the zoom of each tab and apply it once its site is created', async () => {
+    fixture.destroy();
+    pages.calls.length = 0;
+    localStorage.setItem(
+      'astra.session.web',
+      JSON.stringify({
+        tabs: [
+          { page: 'web', url: 'https://angular.dev/', title: 'Angular', zoom: 125 },
+          { page: 'history', zoom: 150 },
+          { page: 'web', url: 'https://github.com/', title: 'GitHub', zoom: 123 },
+        ],
+        active: 0,
+      })
+    );
+    fixture = TestBed.createComponent(Host);
+    element = fixture.nativeElement as HTMLElement;
+    await stable();
+
+    // Сайт активної вкладки отримав її масштаб, щойно його webview створився.
+    const calls = pages.calls.map(([name, page, value]) => `${name} ${String(page)} ${String(value)}`);
+    expect(calls.lastIndexOf(`zoom ${label(2)} 1.25`)).toBeGreaterThan(
+      calls.findIndex((call) => call.startsWith(`open ${label(2)}`))
+    );
+    expect(element.querySelector('.zoom-badge')?.textContent?.trim()).toBe('125%');
+
+    element.querySelectorAll<HTMLButtonElement>('.tab__select')[1].click();
+    await stable();
+    expect(element.querySelector<HTMLElement>('.content')?.style.zoom).toBe('1.5');
+
+    // Не крок масштабу (123%) — 100%.
+    element.querySelectorAll<HTMLButtonElement>('.tab__select')[2].click();
+    await stable();
+    expect(element.querySelector('.zoom-badge')?.textContent?.trim()).toBeUndefined();
+  });
+
   it('should offer to translate a site from the address bar and mark a translated page', async () => {
     const translate = () => element.querySelector('.omnibox__translate') as HTMLButtonElement | null;
     expect(translate()).toBeNull();

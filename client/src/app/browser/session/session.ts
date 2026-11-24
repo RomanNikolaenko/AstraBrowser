@@ -8,6 +8,8 @@ export interface SavedTab {
   readonly title?: string;
   /** Закріплена вкладка. */
   readonly pinned?: boolean;
+  /** Масштаб вкладки у відсотках, якщо не 100%. */
+  readonly zoom?: number;
 }
 
 /** Вкладки вікна й номер активної. */

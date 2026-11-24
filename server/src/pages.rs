@@ -798,13 +798,13 @@ pub fn page_set_bounds(window: Window, label: String, bounds: Bounds) -> Result<
 }
 
 /// Вивести сайт із повного екрана, хоч сторінка його й не покидала (інша вкладка, модальне вікно): вікно й webview —
-/// як були до нього.
+/// як були до нього, і сторінка теж виходить із повного екрана.
 #[tauri::command]
 #[specta::specta]
 pub fn page_exit_fullscreen(window: Window, label: String) -> Result<(), String> {
   #[cfg(windows)]
   {
-    crate::fullscreen::dismiss(&page(&window, &label)?);
+    crate::fullscreen::exit(&page(&window, &label)?);
     Ok(())
   }
   #[cfg(not(windows))]
@@ -818,8 +818,15 @@ pub fn page_exit_fullscreen(window: Window, label: String) -> Result<(), String>
 pub fn page_set_visible(window: Window, label: String, visible: bool) -> Result<(), String> {
   let webview = page(&window, &label)?;
   if !visible {
+    // Сайт виходить із повного екрана — сховається, щойно перемалюється (fullscreen::hide_later).
+    #[cfg(windows)]
+    if crate::fullscreen::hide_later(&webview) {
+      return Ok(());
+    }
     return webview.hide().map_err(|error| error.to_string());
   }
+  #[cfg(windows)]
+  crate::fullscreen::keep_shown(&label);
   // Показаний сайт — над рештою сайтів вікна (під інтерфейсом). Кожен новий лягає в самий низ, тож вкладку, відкриту
   // пізніше за попередню, інакше було б видно, лише коли та сховається (інтерфейс ховає її вже після показу нової).
   #[cfg(windows)]

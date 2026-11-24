@@ -96,13 +96,36 @@ fn mark_dismissed(label: &str) {
   }
 }
 
-/// Вікно й інтерфейс до повного екрана — запам'ятані ще в події, до того як Tauri, що теж просить повний екран, їх
-/// змінить.
+/// Сайти, яких інтерфейс виводить із повного екрана (exit) і, може, вже просить сховати (інша вкладка). Прихована
+/// вкладка не малює кадрів, тож Chromium відклав би і вихід сторінки, і її перебудову (YouTube — до секунди) до
+/// повернення на неї, а доти на місці сайту було б чорно. Тож сайт ховається, лише коли перемалювався вже не на весь
+/// екран (painted), а доти лежить під новим, — чи за EXIT_WAIT, хоч би що.
+struct Exiting {
+  label: String,
+  /// Щоб запізнілий таймер не завершив новіший вихід того ж сайту.
+  id: u64,
+  /// Інтерфейс просив сховати сайт (page_set_visible) — сховати, щойно вийде.
+  hide: bool,
+}
+
+static EXITING: Mutex<Vec<Exiting>> = Mutex::new(Vec::new());
+static EXIT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Найдовше, скільки сайт, що виходить із повного екрана, лишається показаним під іншим.
+const EXIT_WAIT: Duration = Duration::from_millis(2500);
+
+fn exiting() -> std::sync::MutexGuard<'static, Vec<Exiting>> {
+  EXITING.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Вікно, інтерфейс і сайт до повного екрана — запам'ятані ще в події, до того як Tauri, що теж просить повний екран,
+/// їх змінить.
 #[derive(Clone, Copy)]
 struct Before {
   was_fullscreen: bool,
   maximized: Option<RECT>,
   interface: Option<RECT>,
+  /// Місце сайту: поки вікно розгортається, інтерфейс ще не знає, що сайт на весь екран, і тягне його за собою.
+  site: Option<RECT>,
 }
 
 /// Перехід під затемненням.
@@ -194,6 +217,77 @@ pub fn dismiss(page: &Webview) {
   sync(page, false);
 }
 
+/// Інтерфейс виводить сайт із повного екрана (інша вкладка, модальне вікно): вікно й сайт — одразу як були (dismiss),
+/// а тоді з нього виходить і сама сторінка, як у Chrome. Інакше, повернувшись на вкладку, відео лишалося б «на весь
+/// екран» у звичайному вікні, а кнопка повного екрана плеєра спершу лише виводила б із нього.
+pub fn exit(page: &Webview) {
+  begin_exit(page, false);
+  dismiss(page);
+  // Після dismiss, у тій самій черзі головного потоку: сайт уже не на весь екран, тож сторінка вийде одразу, без
+  // затемнення (fullscreen-page.js → prepare_exit).
+  let script_page = page.clone();
+  let _ = page.window().run_on_main_thread(move || {
+    let _ = script_page.eval("document.fullscreenElement && document.exitFullscreen().catch(() => {})");
+  });
+}
+
+/// Інтерфейс ховає сайт (page_set_visible). Повертає, чи сховати пізніше: сайт виходить із повного екрана (exit) чи
+/// ось-ось вийде (ще на весь екран — exit іде слідом) і ще не перемалювався. Викликати з головного потоку.
+pub fn hide_later(page: &Webview) -> bool {
+  let label = page.label();
+  if let Some(item) = exiting().iter_mut().find(|item| item.label == label) {
+    item.hide = true;
+    return true;
+  }
+  if !holds(label) {
+    return false;
+  }
+  begin_exit(page, true);
+  true
+}
+
+/// Інтерфейс знову показує сайт: ховати його вже не треба. Викликати з головного потоку.
+pub fn keep_shown(label: &str) {
+  if let Some(item) = exiting().iter_mut().find(|item| item.label == label) {
+    item.hide = false;
+  }
+}
+
+/// Сайт виходить із повного екрана: до painted чи EXIT_WAIT. Уже виходить — лише чи ховати.
+fn begin_exit(page: &Webview, hide: bool) {
+  let id = {
+    let mut exiting = exiting();
+    if let Some(item) = exiting.iter_mut().find(|item| item.label == page.label()) {
+      item.hide |= hide;
+      return;
+    }
+    let id = EXIT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    exiting.push(Exiting { label: page.label().to_string(), id, hide });
+    id
+  };
+  let page = page.clone();
+  std::thread::spawn(move || {
+    std::thread::sleep(EXIT_WAIT);
+    let window = page.window();
+    let _ = window.run_on_main_thread(move || finish_exit(&page, Some(id)));
+  });
+}
+
+/// Сайт вийшов і перемалювався (чи вже годі чекати, `id` — таймера): якщо інтерфейс просив, — ховається. Викликати з
+/// головного потоку, як і page_set_visible, — щоб не сховати сайт, який інтерфейс тим часом показав знову.
+fn finish_exit(page: &Webview, id: Option<u64>) {
+  let item = {
+    let mut exiting = exiting();
+    let Some(index) = exiting.iter().position(|item| item.label == page.label() && id.is_none_or(|id| id == item.id)) else {
+      return;
+    };
+    exiting.remove(index)
+  };
+  if item.hide {
+    let _ = page.hide();
+  }
+}
+
 /// Сторінка зараз вийде з повного екрана (кнопка плеєра, F): спершу затемнення, вікно й сайт на місце, а тоді їй
 /// дозвіл (fullscreen-ready). Повертає, чи дозвіл прийде пізніше; ні — сайт і не на весь екран, можна одразу.
 pub fn prepare_exit(page: &Webview) -> bool {
@@ -217,10 +311,18 @@ pub fn exit_by_key(page: &Webview) {
   begin(page, false, 255);
 }
 
-/// Сторінка перемалювалась (fullscreen-page.js): якщо вже такою, як після переходу, — екран світлішає.
+/// Сторінка перемалювалась (fullscreen-page.js): якщо вже такою, як після переходу, — екран світлішає; сайт, що
+/// виходив, — вже не на весь екран і свого розміру, — може ховатися.
 pub fn painted(page: &Webview, fullscreen: bool, width: i32, height: i32) {
   let label = page.label().to_string();
+  let page = page.clone();
   let _ = page.window().run_on_main_thread(move || {
+    if !fullscreen && exiting().iter().any(|item| item.label == label) {
+      let size = site_size(&page);
+      if (size.0 - width).abs() <= 3 && (size.1 - height).abs() <= 3 {
+        finish_exit(&page, None);
+      }
+    }
     FADE.with(|cell| {
       let mut fade = cell.borrow_mut();
       let Some(current) = fade.as_mut().filter(|current| current.page.label() == label) else {
@@ -535,10 +637,27 @@ fn prepare(page: &Webview) -> Before {
     rect
   });
   let interface = interface_bounds(&window, None);
+  let site = site_bounds(page);
   if !was_fullscreen {
     let _ = window.set_fullscreen(true);
   }
-  Before { was_fullscreen, maximized, interface }
+  Before { was_fullscreen, maximized, interface, site }
+}
+
+/// Місце webview сайту у вікні (у координатах вікна).
+fn site_bounds(page: &Webview) -> Option<RECT> {
+  let result = Arc::new(Mutex::new(None));
+  let out = Arc::clone(&result);
+  let _ = page.with_webview(move |platform| {
+    let mut site = HWND::default();
+    if unsafe { platform.controller().ParentWindow(&mut site) }.is_ok() {
+      if let Ok(window) = unsafe { GetParent(site) } {
+        *out.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(rect_in(window, site));
+      }
+    }
+  });
+  let value = *result.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+  value
 }
 
 /// Межі webview інтерфейсу вікна (у координатах вікна), а з `keep` — повернути їх: інтерфейс на час повного екрана
@@ -582,7 +701,8 @@ fn enter(page: &Webview, before: Before) {
     let Ok(window) = (unsafe { GetParent(site) }) else {
       return;
     };
-    let bounds = rect_in(window, site);
+    // Місце до повного екрана — з події: зараз вікно, може, вже розгорнулось, а з ним і сайт.
+    let bounds = before.site.unwrap_or_else(|| rect_in(window, site));
     // Сайт тепер на весь екран — ще до змін вікна: межі з інтерфейсу його вже не стосуються.
     held().push(Held {
       label,

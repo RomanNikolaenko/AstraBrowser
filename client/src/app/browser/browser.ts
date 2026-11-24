@@ -41,7 +41,7 @@ import { Screenshot } from './screenshot/screenshot';
 import { isTranslated } from './translator/translate-urls';
 import { SyncService } from './sync/sync';
 import { TranslateLanguageStore } from './translator/translate-language';
-import { DEFAULT_ZOOM, WheelZoom, zoomIn, zoomOut } from './zoom';
+import { DEFAULT_ZOOM, WheelZoom, isZoomLevel, zoomIn, zoomOut } from './zoom';
 import { Translator } from './translator/translator';
 import { ZoomBadge } from './zoom-badge/zoom-badge';
 import { PasswordPrompt } from './password-prompt/password-prompt';
@@ -190,6 +190,8 @@ interface BrowserTab {
   readonly back?: TabPage;
   /** Сайт, з якого «Назад» повернув на внутрішню сторінку: «Вперед» відкриває його знову. */
   readonly forward?: string;
+  /** Масштаб у відсотках, якщо не 100%: свій у кожної вкладки, хоч би який сайт у ній відкривали. */
+  readonly zoom?: number;
 }
 
 @Component({
@@ -404,8 +406,8 @@ export class Browser {
   /** Коли востаннє натиснули «Оновити»: другий клік подвійного — не «Стоп» (кнопка вже стала хрестиком). */
   private reloadedAt = 0;
 
-  /** Масштаб вмісту сторінки у відсотках; змінюється в головному меню. */
-  protected readonly zoom = signal(DEFAULT_ZOOM);
+  /** Масштаб активної вкладки у відсотках (значок у адресному рядку, головне меню, Ctrl + коліщатко чи +/−/0). */
+  protected readonly zoom = computed(() => this.activeTab().zoom ?? DEFAULT_ZOOM);
   private readonly wheelZoom = new WheelZoom();
 
   /** Панель «Знайти на сторінці» шукає в поточній сторінці, тож закривається, щойно сторінка інша. */
@@ -876,8 +878,10 @@ export class Browser {
     this.tabs.set([...rest.slice(0, pinnedCount), { ...tab, pinned }, ...rest.slice(pinnedCount)]);
   }
 
+  /** Копія — разом із масштабом вкладки. */
   private duplicateTab(tab: BrowserTab, index: number): void {
-    const copy: BrowserTab = tab.site ? this.createNewTab() : { id: this.nextTabId++, page: tab.page };
+    const zoom = tab.zoom ? { zoom: tab.zoom } : {};
+    const copy: BrowserTab = { ...(tab.site ? this.createNewTab() : { id: this.nextTabId++, page: tab.page }), ...zoom };
     this.insertTab(copy, index + 1);
     this.activeTabId.set(copy.id);
     if (tab.site) {
@@ -908,19 +912,22 @@ export class Browser {
 
   /** Вкладка як її переносять між вікнами й зберігають між запусками. */
   private savedTab(tab: BrowserTab): SavedTab {
-    const pinned = tab.pinned ? { pinned: true } : {};
-    return tab.site ? { page: 'web', url: tab.site.url, title: tab.site.title, ...pinned } : { page: tab.page, ...pinned };
+    // Закріплення й масштаб — лише якщо вони є.
+    const kept = { ...(tab.pinned ? { pinned: true } : {}), ...(tab.zoom ? { zoom: tab.zoom } : {}) };
+    return tab.site ? { page: 'web', url: tab.site.url, title: tab.site.title, ...kept } : { page: tab.page, ...kept };
   }
 
   /** Вкладка з перенесеної (з іншого вікна чи з минулого запуску): сайт завантажиться, щойно її відкриють. */
   private tabFromSaved(item: SavedTab): BrowserTab | null {
     const id = this.nextTabId++;
-    const pinned = item.pinned ? { pinned: true } : {};
+    // Масштаб — лише один із кроків (ZOOM_LEVELS): збережене могли й зіпсувати.
+    const zoom = typeof item.zoom === 'number' && isZoomLevel(item.zoom) && item.zoom !== DEFAULT_ZOOM;
+    const kept = { ...(item.pinned ? { pinned: true } : {}), ...(zoom ? { zoom: item.zoom } : {}) };
     if (item.page === 'web' && item.url && isOpenableUrl(item.url)) {
       const label = this.newPageLabel({ id, page: 'web' });
-      return { id, page: 'web', site: { ...emptySite(label, item.url), title: item.title ?? '', pending: true }, ...pinned };
+      return { id, page: 'web', site: { ...emptySite(label, item.url), title: item.title ?? '', pending: true }, ...kept };
     }
-    return item.page in TAB_PAGES ? { id, page: item.page as TabPage, ...pinned } : null;
+    return item.page in TAB_PAGES ? { id, page: item.page as TabPage, ...kept } : null;
   }
 
   /** Вкладка — у нове вікно (з меню вкладки чи перетягнута за межі вікна). Сайт у ньому відкриється наново. */
@@ -1462,14 +1469,24 @@ export class Browser {
   }
 
   protected changeZoom(change: 'zoom-in' | 'zoom-out' | 'zoom-reset'): void {
-    this.zoom.update((zoom) => (change === 'zoom-in' ? zoomIn(zoom) : change === 'zoom-out' ? zoomOut(zoom) : DEFAULT_ZOOM));
+    const zoom = this.zoom();
+    this.setZoom(change === 'zoom-in' ? zoomIn(zoom) : change === 'zoom-out' ? zoomOut(zoom) : DEFAULT_ZOOM);
+  }
+
+  /** Масштаб лише активної вкладки: інші лишаються, як були (сайту його ставить ефект у конструкторі). */
+  protected setZoom(zoom: number): void {
+    const active = this.activeTab();
+    if (zoom === (active.zoom ?? DEFAULT_ZOOM)) {
+      return;
+    }
+    this.replaceTab({ ...active, zoom: zoom === DEFAULT_ZOOM ? undefined : zoom });
   }
 
   /** Ctrl + коліщатко над сторінкою браузера (нова вкладка, налаштування…); над сайтом — його скрипт (zoom-page.js). */
   protected onViewportWheel(event: WheelEvent): void {
     if (event.ctrlKey && !event.altKey && !event.metaKey) {
       event.preventDefault();
-      this.zoom.update((zoom) => this.wheelZoom.apply(zoom, event.deltaY));
+      this.setZoom(this.wheelZoom.apply(this.zoom(), event.deltaY));
     }
   }
 
@@ -1727,6 +1744,12 @@ export class Browser {
     this.pageViews
       .open(label, url, this.pageBounds(), { autoplay: this.autoplay.rules() })
       .then(() => {
+        // Поки webview створювався, масштаб вкладки до нього не доходив (вкладка з минулого запуску, сайт на місці
+        // сторінки браузера).
+        const zoom = this.tabByLabel(label)?.zoom;
+        if (zoom) {
+          this.ignore(this.pageViews.setZoom(label, zoom / 100));
+        }
         if (!this.onPageCreated(label)) {
           this.ignore(this.pageViews.setVisible(label, false));
         }
@@ -2533,8 +2556,10 @@ export class Browser {
     return created ? `${label}-${created + 1}` : label;
   }
 
+  /** Масштаб вкладки лишається (сайт замість сторінки, «Назад» на сторінку…), якщо нова вкладка не задає свого. */
   private replaceTab(tab: BrowserTab): void {
-    this.tabs.update((tabs) => tabs.map((item) => (item.id === tab.id ? tab : item)));
+    const keepZoom = (item: BrowserTab) => ('zoom' in tab || !item.zoom ? tab : { ...tab, zoom: item.zoom });
+    this.tabs.update((tabs) => tabs.map((item) => (item.id === tab.id ? keepZoom(item) : item)));
   }
 
   /** Область вмісту в координатах вікна, без смуги пошуку на сторінці (padding-top). */

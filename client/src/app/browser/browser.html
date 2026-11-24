@@ -200,7 +200,7 @@
           </button>
         }
         <!-- Масштаб — лише коли він не 100%. -->
-        <app-zoom-badge [(zoom)]="zoom" />
+        <app-zoom-badge [zoom]="zoom()" (zoomChange)="setZoom($event)" />
         <button
           class="omnibox__action"
           type="button"
@@ -278,7 +278,8 @@
         }
       </button>
       <app-browser-menu
-        [(zoom)]="zoom"
+        [zoom]="zoom()"
+        (zoomChange)="setZoom($event)"
         (newTab)="openNewTab()"
         (newWindow)="openWindow()"
         (privateWindow)="openWindow(true)"

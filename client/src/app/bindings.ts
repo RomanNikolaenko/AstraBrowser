@@ -202,7 +202,7 @@ export const commands = {
 	interfaceSetInputRegion: (page: Area | null, keep: Area[], options?: InvokeOptions) => __TAURI_INVOKE<null>("interface_set_input_region", { page, keep }, options),
 	/**
 	 *  Вивести сайт із повного екрана, хоч сторінка його й не покидала (інша вкладка, модальне вікно): вікно й webview —
-	 *  як були до нього.
+	 *  як були до нього, і сторінка теж виходить із повного екрана.
 	 */
 	pageExitFullscreen: (label: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("page_exit_fullscreen", { label }, options),
 	/**  Особливе оновлення з меню кнопки «Оновити»: без кешу, з очищенням даних чи cookies сайту. */

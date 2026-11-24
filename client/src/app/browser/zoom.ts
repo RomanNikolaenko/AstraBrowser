@@ -4,6 +4,11 @@ export const ZOOM_LEVELS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175,
 /** Масштаб за замовчуванням. */
 export const DEFAULT_ZOOM = 100;
 
+/** Один із кроків масштабу (ZOOM_LEVELS). */
+export function isZoomLevel(zoom: number): boolean {
+  return (ZOOM_LEVELS as readonly number[]).includes(zoom);
+}
+
 /** Наступний більший крок (на найбільшому — той самий). */
 export function zoomIn(zoom: number): number {
   return ZOOM_LEVELS.find((level) => level > zoom) ?? zoom;
