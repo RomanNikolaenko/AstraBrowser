@@ -71,12 +71,12 @@
     top: 0.125rem;
     right: 1rem;
     display: grid;
+    visibility: hidden;
     place-items: center;
     width: 1.75rem;
     height: 1.75rem;
     padding: 0;
     color: var(--browser-icon);
-    visibility: hidden;
     background: transparent;
     border: 0;
     border-radius: 0.5rem;

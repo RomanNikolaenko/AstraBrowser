@@ -98,9 +98,9 @@ $caret-min-offset: 1.25rem;
   &--side {
     margin: -0.5rem 0 0 0.25rem;
     position-area: right span-bottom;
-    transform-origin: top left;
 
     // Праворуч немає місця (меню «»» панелі закладок у кінці вікна) — ліворуч від пункту.
     position-try-fallbacks: flip-inline;
+    transform-origin: top left;
   }
 }
