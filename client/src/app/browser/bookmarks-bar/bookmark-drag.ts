@@ -71,6 +71,16 @@ export class BookmarkDrag {
     this.accept(event, { folder, index: length });
   }
 
+  /** Над кнопкою «»» панелі: у кінець панелі, а якщо потримати — розкривається меню `menu` (id теки), як у Firefox. */
+  overMenuButton(event: DragEvent, length: number, menu: string): void {
+    event.stopPropagation();
+    if (!this.dragging()) {
+      return;
+    }
+    this.accept(event, { folder: null, index: length });
+    this.springOpen(menu);
+  }
+
   /** Курсор вийшов за межі `container` — місця падіння більше немає. */
   leave(event: DragEvent, container: HTMLElement): void {
     if (!(event.relatedTarget instanceof Node) || !container.contains(event.relatedTarget)) {

@@ -568,4 +568,122 @@ describe('BookmarksBar', () => {
       expect(element.querySelector('[class*="--drop-"]')).toBeNull();
     });
   });
+
+  describe('overflow', () => {
+    // jsdom без розмітки: панель 400 px, пункти по 100 px від 16 px, «»» — 356…384 px (у правому полі панелі).
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400);
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const index = this.matches('.bookmarks__item') ? [...(this.parentElement?.children ?? [])].indexOf(this) : -1;
+        const [left, right] = this.matches('.bookmarks__more')
+          ? [356, 384]
+          : index >= 0
+            ? [16 + index * 100, 116 + index * 100]
+            : [0, 400];
+        return { left, right, top: 0, bottom: 28, width: right - left, height: 28, x: left, y: 0, toJSON: () => ({}) };
+      });
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    const overflowMenu = (element: HTMLElement) => element.querySelector('#bookmark-folder-bar-overflow') as HTMLElement;
+    const overflowItems = (element: HTMLElement) =>
+      [...overflowMenu(element).querySelectorAll(':scope > .bookmark-folder-menu__list > li')].map((item) =>
+        item.matches('[role="separator"]') ? '|' : item.querySelector('.bookmark-folder-menu__label')?.textContent
+      );
+
+    it('should hide what does not fit behind a » button, as Firefox does', async () => {
+      const { fixture, element, itemAt } = await setup((store) => {
+        for (const title of ['A', 'B', 'C']) {
+          store.add(title, `https://${title.toLowerCase()}.example/`);
+        }
+        store.addFolder('Тека');
+        store.add('X', 'https://x.example/', { folder: store.bar()[3].id });
+        store.add('E', 'https://e.example/');
+      });
+      const more = element.querySelector('.bookmarks__more') as HTMLButtonElement;
+      const hidden = () => [0, 1, 2, 3, 4].filter((index) => itemAt(index).classList.contains('bookmarks__item--overflow'));
+
+      // C кінчається на 316 — перед «»»; тека (до 416) вже не вміщається, а за нею й E.
+      expect(hidden()).toEqual([3, 4]);
+      expect(more.classList).toContain('bookmarks__more--shown');
+      expect(more.getAttribute('popovertarget')).toBe(overflowMenu(element).id);
+      // Меню схованої теки — лише всередині «»» (той самий id), а не на панелі.
+      expect(itemAt(3).querySelector('.bookmark-folder-menu')).toBeNull();
+
+      openFolder(overflowMenu(element));
+      expect(overflowItems(element)).toEqual(['Тека', 'E']);
+      // «Відкрити всі» — лише в теках, не в меню «»».
+      expect(overflowMenu(element).querySelector('.bookmark-folder-menu__footer')).toBeNull();
+
+      overflowMenu(element).querySelectorAll<HTMLButtonElement>('[role="menuitem"]')[1].click();
+      await fixture.whenStable();
+      expect(fixture.componentInstance.opened).toEqual([['open', 'E']]);
+    });
+
+    it('should edit the bar itself from the » menu', async () => {
+      const { fixture, element, shape, rightClick, choose } = await setup((store) => {
+        for (const title of ['A', 'B', 'C', 'D', 'E']) {
+          store.add(title, `https://${title.toLowerCase()}.example/`);
+        }
+      });
+      openFolder(overflowMenu(element));
+      await fixture.whenStable();
+      expect(overflowItems(element)).toEqual(['D', 'E']);
+
+      // Правий клік на E у «»» — роздільник стає перед E на самій панелі.
+      await rightClick(overflowMenu(element).querySelectorAll('[role="menuitem"]')[1]);
+      await choose('Додати роздільник');
+      expect(shape()).toEqual(['A', 'B', 'C', 'D', '|', 'E']);
+      expect(overflowItems(element)).toEqual(['D', '|', 'E']);
+
+      // Видалили те, що на панелі, — сховане підтягується, а «»» зникає, коли все вміщається.
+      await rightClick(element.querySelector('.bookmarks__item'));
+      await choose('Видалити');
+      await rightClick(element.querySelector('.bookmarks__item'));
+      await choose('Видалити');
+      await rightClick(element.querySelector('.bookmarks__item'));
+      await choose('Видалити');
+      expect(shape()).toEqual(['D', '|', 'E']);
+      expect(element.querySelector('.bookmarks__item--overflow')).toBeNull();
+      expect(element.querySelector('.bookmarks__more--shown')).toBeNull();
+      expect(overflowMenu(element)).toBeNull();
+    });
+
+    it('should spring-open the » menu while dragging over it and drop at the end of the bar', async () => {
+      const { fixture, element, shape, itemAt } = await setup((store) => {
+        for (const title of ['A', 'B', 'C', 'D', 'E']) {
+          store.add(title, `https://${title.toLowerCase()}.example/`);
+        }
+      });
+      const dragEvent = (type: string) =>
+        Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+          clientX: 370,
+          clientY: 10,
+          dataTransfer: { setData: () => undefined, effectAllowed: '', dropEffect: '' },
+        });
+      const panel = overflowMenu(element);
+      const show = vi.fn(() => openFolder(panel));
+      panel.showPopover = show;
+      const more = element.querySelector('.bookmarks__more') as HTMLElement;
+      const source = itemAt(0).querySelector('.bookmark') as HTMLElement;
+
+      vi.useFakeTimers();
+      try {
+        source.dispatchEvent(dragEvent('dragstart'));
+        const over = dragEvent('dragover');
+        more.dispatchEvent(over);
+        expect(over.defaultPrevented).toBe(true);
+        vi.advanceTimersByTime(300);
+        more.dispatchEvent(dragEvent('dragover'));
+        vi.advanceTimersByTime(300);
+        expect(show).toHaveBeenCalledOnce();
+        more.dispatchEvent(dragEvent('drop'));
+        source.dispatchEvent(dragEvent('dragend'));
+      } finally {
+        vi.useRealTimers();
+      }
+      await fixture.whenStable();
+      expect(shape()).toEqual(['B', 'C', 'D', 'E', 'A']);
+    });
+  });
 });

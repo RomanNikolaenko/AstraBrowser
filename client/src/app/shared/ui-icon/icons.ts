@@ -13,6 +13,7 @@ import checkSvg from '../../../assets/icons/check.svg';
 import chevronDownSvg from '../../../assets/icons/chevron-down.svg';
 import chevronRightSvg from '../../../assets/icons/chevron-right.svg';
 import chevronUpSvg from '../../../assets/icons/chevron-up.svg';
+import chevronsRightSvg from '../../../assets/icons/chevrons-right.svg';
 import clipboardSvg from '../../../assets/icons/clipboard.svg';
 import clockSvg from '../../../assets/icons/clock.svg';
 import closeSvg from '../../../assets/icons/close.svg';
@@ -93,6 +94,7 @@ export const ICONS: Readonly<Record<string, string>> = {
   'chevron-down': chevronDownSvg,
   'chevron-right': chevronRightSvg,
   'chevron-up': chevronUpSvg,
+  'chevrons-right': chevronsRightSvg,
   clipboard: clipboardSvg,
   clock: clockSvg,
   close: closeSvg,

@@ -6,6 +6,9 @@
 }
 
 .bookmarks {
+  // Відлік для кнопки «»».
+  position: relative;
+
   &__list {
     display: flex;
     align-items: center;
@@ -55,6 +58,52 @@
       outline-offset: -0.125rem;
       background: var(--browser-hover);
     }
+
+    // Не вміщається — схований (і не фокусується), але місце тримає: за ним рахується, що вміщається.
+    &--overflow {
+      visibility: hidden;
+    }
+  }
+
+  // «»» у правому кінці панелі, на рівні закладок; поки все вміщається — невидима.
+  &__more {
+    position: absolute;
+    top: 0.125rem;
+    right: 1rem;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    color: var(--browser-icon);
+    visibility: hidden;
+    background: transparent;
+    border: 0;
+    border-radius: 0.5rem;
+    transition:
+      background-color $motion,
+      outline-color $motion,
+      outline-offset $motion;
+
+    @include focus-ring(0.125rem);
+
+    &--shown {
+      visibility: visible;
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--browser-hover);
+    }
+
+    &:active {
+      background: var(--browser-pressed);
+    }
+  }
+
+  &__more-icon {
+    width: 1rem;
+    height: 1rem;
   }
 
   // Роздільник додає сам користувач (контекстне меню панелі). Лінія тонка, а взяти його можна ширше.

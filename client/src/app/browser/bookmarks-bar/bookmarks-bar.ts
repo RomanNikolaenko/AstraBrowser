@@ -1,9 +1,11 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
+  afterRenderEffect,
   computed,
   inject,
   input,
@@ -38,11 +40,15 @@ const DIALOG_TITLES = {
   folder: [tr('Нова тека'), tr('Редагувати теку')],
 } as const;
 
+/** Тимчасова «тека» меню «»»: закладки панелі, що на неї не вмістилися. */
+const OVERFLOW_FOLDER = 'bar-overflow';
+
 /**
  * Панель закладок під адресним рядком: закладки, теки (випадні меню) й роздільники.
  * Правий клік відкриває контекстне меню, як у Firefox: відкрити всі закладки, додати закладку, теку чи
  * роздільник (поруч із тим, на чому клацнули), а на самому елементі — ще відкрити, змінити чи видалити.
  * Порядок змінюється перетягуванням — і на панелі, і в теки та з них (BookmarkDrag).
+ * Що не вміщається на панелі повністю, ховається в меню кнопки «»» в її кінці, як у Firefox.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -65,6 +71,17 @@ export class BookmarksBar implements BookmarkActions {
   protected readonly bookmarks = inject(BookmarksStore);
   protected readonly drag = inject(BookmarkDrag);
   private readonly injector = inject(Injector);
+
+  /** З якого пункту панелі закладки вже не вміщаються (null — вміщаються всі). */
+  protected readonly overflowFrom = signal<number | null>(null);
+  /** Те, що показує меню «»»: пункти панелі від `overflowFrom` до кінця. */
+  protected readonly overflowFolder = computed<BookmarkFolder | null>(() => {
+    const from = this.overflowFrom();
+    return from === null
+      ? null
+      : { type: 'folder', id: OVERFLOW_FOLDER, title: translate('Більше закладок'), children: this.bookmarks.bar().slice(from) };
+  });
+  protected readonly overflowMenuId = folderMenuId({ id: OVERFLOW_FOLDER });
 
   protected readonly target = signal<BookmarkMenuTarget>({ item: null, folder: null, index: 0 });
   protected readonly dialog = signal<BookmarkDialog>({ kind: 'bookmark' });
@@ -96,6 +113,25 @@ export class BookmarksBar implements BookmarkActions {
   private readonly titleInput = viewChild.required<UiInput>('titleInput');
   /** Невидима точка, від якої відкриваються меню й форма, — там, де клацнули. */
   private readonly anchor = viewChild.required<ElementRef<HTMLElement>>('anchor');
+  private readonly bar = viewChild.required<ElementRef<HTMLElement>>('bar');
+  private readonly list = viewChild<ElementRef<HTMLElement>>('list');
+  private readonly more = viewChild.required<ElementRef<HTMLElement>>('more');
+
+  constructor() {
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.fitBar());
+    inject(DestroyRef).onDestroy(() => observer?.disconnect());
+    // Після кожної зміни закладок: стежимо за шириною панелі й кожного пункту (назва, шрифт) — і перераховуємо.
+    afterRenderEffect(() => {
+      this.bookmarks.bar();
+      const list = this.list()?.nativeElement;
+      observer?.disconnect();
+      observer?.observe(this.bar().nativeElement);
+      for (const item of list?.children ?? []) {
+        observer?.observe(item);
+      }
+      this.fitBar();
+    });
+  }
 
   open(bookmark: Bookmark): void {
     this.openBookmark.emit(bookmark);
@@ -135,6 +171,17 @@ export class BookmarksBar implements BookmarkActions {
 
   protected showItemMenu(event: MouseEvent, item: BookmarkItem, index: number): void {
     this.showMenu(event, { item, folder: null, index });
+  }
+
+  /** Пункт панелі `index` не вміщається — схований (його показує меню «»»). */
+  protected overflows(index: number): boolean {
+    const from = this.overflowFrom();
+    return from !== null && index >= from;
+  }
+
+  /** Закладку тягнуть над «»»: у кінець панелі, а якщо потримати — меню розкривається. */
+  protected dragOverMore(event: DragEvent): void {
+    this.drag.overMenuButton(event, this.bookmarks.bar().length, OVERFLOW_FOLDER);
   }
 
   /** Стрілки, Home і End ходять пунктами меню. */
@@ -249,7 +296,7 @@ export class BookmarksBar implements BookmarkActions {
     );
   }
 
-  /** Контекстне меню й меню тек, з якого його відкрили. */
+  /** Контекстне меню й меню тек, з якого його відкрили (зокрема меню «»»). */
   private closeMenus(): void {
     this.menu().hide();
     const folder = this.target().folder;
@@ -257,6 +304,30 @@ export class BookmarksBar implements BookmarkActions {
     if (root) {
       document.getElementById(folderMenuId(root))?.hidePopover?.();
     }
+    document.getElementById(this.overflowMenuId)?.hidePopover?.();
+  }
+
+  /**
+   * Як у Firefox: пункт, що не вміщається на панелі повністю, і всі за ним ховаються, а в кінці панелі з'являється «»»
+   * з ними в меню. Пункти не стискаються (flex: none), тож їхні місця не залежать від того, які сховано.
+   * Кнопка «»» стоїть на місці завжди, правим краєм там, де кінчається місце для закладок.
+   */
+  private fitBar(): void {
+    const list = this.list()?.nativeElement;
+    // Без розмітки (панель не показана) рахувати нічого.
+    if (!list?.clientWidth) {
+      this.overflowFrom.set(null);
+      return;
+    }
+    const items = [...list.children];
+    const firstPast = (limit: number) => items.findIndex((item) => item.getBoundingClientRect().right > limit + 0.5);
+    const more = this.more().nativeElement.getBoundingClientRect();
+    let from = firstPast(more.right);
+    // Щось не вмістилося — з'являється «»», і місця стає ще менше.
+    if (from !== -1) {
+      from = firstPast(more.left);
+    }
+    this.overflowFrom.set(from === -1 ? null : from);
   }
 
   /** Тека на самій панелі, в якій (на будь-якій глибині) лежить тека `id`. */

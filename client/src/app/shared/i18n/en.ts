@@ -114,6 +114,7 @@ export const EN: Readonly<Record<string, string>> = {
   'в адресному рядку': 'in the address bar',
   'Відкрити в новій вкладці': 'Open in new tab',
   'Відкрити всі закладки': 'Open all bookmarks',
+  'Більше закладок': 'More bookmarks',
   'Редагувати…': 'Edit…',
   'Додати закладку…': 'Add bookmark…',
   'Додати теку…': 'Add folder…',

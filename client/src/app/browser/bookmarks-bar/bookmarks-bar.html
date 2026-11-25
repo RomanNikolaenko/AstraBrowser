@@ -8,7 +8,7 @@
   (drop)="drag.drop($event)"
   (dragend)="drag.end()">
   @if (bookmarks.bar().length) {
-    <ul class="bookmarks__list">
+    <ul #list class="bookmarks__list">
       @for (item of bookmarks.bar(); track item.id; let index = $index) {
         <li
           class="bookmarks__item"
@@ -16,6 +16,7 @@
           [class.bookmarks__item--drop-before]="drag.before(null, index)"
           [class.bookmarks__item--drop-after]="drag.after(null, index, bookmarks.bar().length)"
           [class.bookmarks__item--drop-into]="drag.into(item.id)"
+          [class.bookmarks__item--overflow]="overflows(index)"
           (contextmenu)="showItemMenu($event, item, index)"
           (dragover)="drag.overItem($event, item, null, index, 'x')">
           @switch (item.type) {
@@ -49,7 +50,10 @@
                   [style.color]="folderColor(item)" />
                 <span class="bookmark__label">{{ item.title }}</span>
               </button>
-              <app-bookmark-folder-menu [folder]="item" />
+              <!-- Сховану теку показує меню «»» — з тим самим id меню, тож тут її меню немає. -->
+              @if (!overflows(index)) {
+                <app-bookmark-folder-menu [folder]="item" />
+              }
             }
             @case ('separator') {
               <span
@@ -68,6 +72,21 @@
       {{ 'Щоб додати закладку, натисніть' | t }} <app-icon class="bookmarks__empty-icon" icon="star" />
       {{ 'в адресному рядку' | t }}
     </p>
+  }
+  <!-- Завжди на місці (лише невидима, поки все вміщається): за нею рахується, скільки місця для закладок. -->
+  <button
+    #more
+    class="bookmarks__more"
+    type="button"
+    aria-haspopup="menu"
+    [class.bookmarks__more--shown]="overflowFrom() !== null"
+    [appTooltip]="'Більше закладок' | t"
+    [attr.popovertarget]="overflowMenuId"
+    (dragover)="dragOverMore($event)">
+    <app-icon class="bookmarks__more-icon" icon="chevrons-right" />
+  </button>
+  @if (overflowFolder(); as folder) {
+    <app-bookmark-folder-menu [folder]="folder" [barOffset]="overflowFrom() ?? 0" />
   }
   <span #anchor class="bookmarks__anchor"></span>
 </nav>

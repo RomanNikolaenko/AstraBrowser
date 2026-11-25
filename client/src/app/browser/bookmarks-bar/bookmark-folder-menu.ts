@@ -37,6 +37,11 @@ export class BookmarkFolderMenu {
   readonly nested = input(false, { transform: booleanAttribute });
   /** Меню верхньої теки: закриваючи його, браузер закриває й усі вкладені. */
   readonly rootId = input<string>();
+  /**
+   * Меню «»» в кінці панелі: у `folder` — пункти самої панелі, що на неї не вмістилися, починаючи з цього місця.
+   * Тоді перетягування й контекстне меню працюють із панеллю, а не з текою.
+   */
+  readonly barOffset = input<number>();
 
   protected readonly actions = inject(BookmarkActions);
   protected readonly drag = inject(BookmarkDrag);
@@ -45,8 +50,13 @@ export class BookmarkFolderMenu {
 
   protected readonly menuId = computed(() => folderMenuId(this.folder()));
   protected readonly root = computed(() => this.rootId() ?? this.menuId());
-  /** Закладки самої теки — для «Відкрити всі». */
-  protected readonly bookmarks = computed(() => folderBookmarks(this.folder()));
+  /** Де насправді лежать пункти: тека чи панель (null), і місце першого з них там. */
+  protected readonly parent = computed(() => (this.barOffset() === undefined ? this.folder().id : null));
+  protected readonly offset = computed(() => this.barOffset() ?? 0);
+  /** Меню «»» стоїть у правому кінці панелі — розкривається ліворуч. */
+  protected readonly align = computed(() => (this.barOffset() === undefined ? 'start' : 'end'));
+  /** Закладки самої теки — для «Відкрити всі»; у меню «»», як у Firefox, цього пункту немає. */
+  protected readonly bookmarks = computed(() => (this.barOffset() === undefined ? folderBookmarks(this.folder()) : []));
   protected readonly folderMenuId = folderMenuId;
   protected readonly folderIcon = folderIcon;
   protected readonly folderColor = folderColor;
@@ -59,12 +69,13 @@ export class BookmarkFolderMenu {
 
   /** Лінія перед чи після пункту, підсвічена тека й напівпрозорий пункт, який зараз тягнуть. */
   protected dropClasses(item: BookmarkItem, index: number): Record<string, boolean> {
-    const folder = this.folder();
+    const parent = this.parent();
+    const offset = this.offset();
     return {
       'bookmark-folder-menu__entry': true,
       'bookmark-folder-menu__entry--dragging': this.drag.dragging() === item.id,
-      'bookmark-folder-menu__entry--drop-before': this.drag.before(folder.id, index),
-      'bookmark-folder-menu__entry--drop-after': this.drag.after(folder.id, index, folder.children.length),
+      'bookmark-folder-menu__entry--drop-before': this.drag.before(parent, offset + index),
+      'bookmark-folder-menu__entry--drop-after': this.drag.after(parent, offset + index, offset + this.folder().children.length),
       'bookmark-folder-menu__entry--drop-into': this.drag.into(item.id),
     };
   }
@@ -75,6 +86,10 @@ export class BookmarkFolderMenu {
   }
 
   protected showMenu(event: MouseEvent, item: BookmarkItem | null, index: number): void {
-    this.actions.showMenu(event, { item, folder: this.folder().id, index }, event.currentTarget as HTMLElement);
+    this.actions.showMenu(
+      event,
+      { item, folder: this.parent(), index: this.offset() + index },
+      event.currentTarget as HTMLElement
+    );
   }
 }

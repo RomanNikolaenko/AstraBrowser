@@ -1,11 +1,11 @@
 <app-popover
   class="bookmark-folder-menu"
   [popoverId]="menuId()"
-  align="start"
+  [align]="align()"
   [placement]="nested() ? 'side' : 'below'"
   (opening)="showContents()"
   (closed)="contentsVisible.set(false)"
-  (dragover)="drag.overEnd($event, folder().id, folder().children.length)">
+  (dragover)="drag.overEnd($event, parent(), offset() + folder().children.length)">
   @if (contentsVisible()) {
     <ul
       class="bookmark-folder-menu__list"
@@ -18,7 +18,7 @@
             <li
               role="none"
               [class]="dropClasses(child, index)"
-              (dragover)="drag.overItem($event, child, folder().id, index, 'y')">
+              (dragover)="drag.overItem($event, child, parent(), offset() + index, 'y')">
               <button
                 class="bookmark-folder-menu__item"
                 type="button"
@@ -41,7 +41,7 @@
             <li
               role="none"
               [class]="dropClasses(child, index)"
-              (dragover)="drag.overItem($event, child, folder().id, index, 'y')">
+              (dragover)="drag.overItem($event, child, parent(), offset() + index, 'y')">
               <button
                 class="bookmark-folder-menu__item"
                 type="button"
@@ -70,7 +70,7 @@
               [class]="dropClasses(child, index)"
               [class.bookmark-folder-menu__separator]="true"
               (dragstart)="drag.start($event, child)"
-              (dragover)="drag.overItem($event, child, folder().id, index, 'y')"
+              (dragover)="drag.overItem($event, child, parent(), offset() + index, 'y')"
               (contextmenu)="showMenu($event, child, index)"></li>
           }
         }

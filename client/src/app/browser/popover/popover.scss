@@ -58,6 +58,11 @@ $caret-min-offset: 1.25rem;
   &--start {
     position-area: bottom span-right;
     transform-origin: top left;
+
+    // Біля правого краю вікна (тека в кінці панелі закладок) — розкривається ліворуч. Зі стрілкою — ні: та б з'їхала.
+    &:not(.popover--caret) {
+      position-try-fallbacks: flip-inline;
+    }
   }
 
   &--caret {
@@ -94,5 +99,8 @@ $caret-min-offset: 1.25rem;
     margin: -0.5rem 0 0 0.25rem;
     position-area: right span-bottom;
     transform-origin: top left;
+
+    // Праворуч немає місця (меню «»» панелі закладок у кінці вікна) — ліворуч від пункту.
+    position-try-fallbacks: flip-inline;
   }
 }
